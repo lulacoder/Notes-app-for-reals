@@ -1,0 +1,18 @@
+{
+  "name": "Notes App",
+  "short_name": "Notes",
+  "description": "A simple note-taking app with Markdown support",
+  "start_url": "/notes",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

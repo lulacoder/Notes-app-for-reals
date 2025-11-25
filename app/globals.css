@@ -123,19 +123,19 @@
 
 /* Markdown prose styling */
 .prose {
-  @apply text-gray-900;
+  @apply text-foreground;
 }
 
 .prose h1 {
-  @apply text-2xl font-bold mt-6 mb-4;
+  @apply text-2xl font-bold mt-6 mb-4 text-foreground;
 }
 
 .prose h2 {
-  @apply text-xl font-bold mt-5 mb-3;
+  @apply text-xl font-bold mt-5 mb-3 text-foreground;
 }
 
 .prose h3 {
-  @apply text-lg font-semibold mt-4 mb-2;
+  @apply text-lg font-semibold mt-4 mb-2 text-foreground;
 }
 
 .prose p {
@@ -159,11 +159,11 @@
 }
 
 .prose code {
-  @apply bg-gray-100 px-1.5 py-0.5 rounded text-sm font-mono;
+  @apply bg-muted px-1.5 py-0.5 rounded text-sm font-mono;
 }
 
 .prose pre {
-  @apply bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-4;
+  @apply bg-zinc-900 text-zinc-100 p-4 rounded-lg overflow-x-auto mb-4;
 }
 
 .prose pre code {
@@ -171,11 +171,11 @@
 }
 
 .prose blockquote {
-  @apply border-l-4 border-gray-300 pl-4 italic text-gray-600 my-4;
+  @apply border-l-4 border-muted-foreground/30 pl-4 italic text-muted-foreground my-4;
 }
 
 .prose a {
-  @apply text-blue-600 hover:underline;
+  @apply text-blue-500 hover:underline;
 }
 
 .prose strong {
@@ -187,5 +187,34 @@
 }
 
 .prose hr {
-  @apply border-gray-200 my-6;
+  @apply border-border my-6;
+}
+
+/* Mobile bottom navigation */
+@media (max-width: 768px) {
+  .mobile-nav {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Swipe gesture hints */
+.swipe-hint {
+  @apply absolute inset-y-0 w-12 pointer-events-none opacity-0 transition-opacity;
+}
+
+.swipe-hint.active {
+  @apply opacity-100;
+}
+
+/* PWA standalone mode */
+@media (display-mode: standalone) {
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  
+  .note-content {
+    -webkit-user-select: text;
+    user-select: text;
+  }
 }
