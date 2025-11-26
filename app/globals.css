@@ -218,3 +218,36 @@
     user-select: text;
   }
 }
+
+/* tldraw integration styles */
+.tl-container {
+  background: var(--background) !important;
+}
+
+/* Make tldraw respect our theme */
+[data-color-mode="dark"] .tl-theme__dark,
+.dark .tl-theme__dark {
+  --color-background: var(--background);
+}
+
+[data-color-mode="light"] .tl-theme__light,
+:root .tl-theme__light {
+  --color-background: var(--background);
+}
+
+/* Canvas note card styles */
+.tl-canvas {
+  touch-action: none;
+}
+
+/* Improve touch handling on mobile for canvas */
+@media (pointer: coarse) {
+  .tl-canvas {
+    touch-action: none;
+  }
+  
+  .tl-container button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

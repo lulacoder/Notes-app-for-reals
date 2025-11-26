@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
+import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Input } from "@/components/ui/input";
@@ -9,18 +10,28 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { TagFilter } from "@/components/TagManager";
-import { Plus, Search, Trash2, FileText, Pin } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Trash2,
+  FileText,
+  Pin,
+  Layers,
+  ChevronDown,
+  ChevronRight,
+  MoreHorizontal,
+  Send,
+} from "lucide-react";
 import { getRelativeTime } from "@/lib/relative-time";
 import { createNotesSearchIndex } from "@/lib/fuse";
 
@@ -31,13 +42,23 @@ interface SidebarProps {
 }
 
 export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarProps) {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTagId, setSelectedTagId] = useState<Id<"tags"> | null>(null);
+  const [canvasesExpanded, setCanvasesExpanded] = useState(true);
 
-  const notes = useQuery(api.notes.listNotes) || [];
-  const tags = useQuery(api.tags.listTags) || [];
-  const trash = useQuery(api.notes.listTrash) || [];
+  const notesQuery = useQuery(api.notes.listNotes);
+  const tagsQuery = useQuery(api.tags.listTags);
+  const trashQuery = useQuery(api.notes.listTrash);
+  const canvasesQuery = useQuery(api.canvases.listCanvases);
+  
+  const notes = useMemo(() => notesQuery || [], [notesQuery]);
+  const tags = useMemo(() => tagsQuery || [], [tagsQuery]);
+  const trash = useMemo(() => trashQuery || [], [trashQuery]);
+  const canvases = useMemo(() => canvasesQuery || [], [canvasesQuery]);
+  
   const createNote = useMutation(api.notes.createNote);
+  const createCanvas = useMutation(api.canvases.createCanvas);
   const softDeleteNote = useMutation(api.notes.softDeleteNote);
   const togglePin = useMutation(api.notes.togglePin);
 
@@ -77,6 +98,33 @@ export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarPr
   const handleCreateNote = async () => {
     const noteId = await createNote({});
     onSelectNote(noteId);
+  };
+
+  const handleCreateCanvas = async () => {
+    const canvasId = await createCanvas({ title: "Untitled Canvas" });
+    router.push(`/canvas/${canvasId}`);
+  };
+
+  const handleOpenCanvas = (id: Id<"canvases">) => {
+    router.push(`/canvas/${id}`);
+  };
+
+  const handleSendToCanvas = (
+    note: (typeof notes)[0],
+    canvasId: Id<"canvases">
+  ) => {
+    // Dispatch event to add note card to canvas
+    window.dispatchEvent(
+      new CustomEvent(`add-note-to-canvas-${canvasId}`, {
+        detail: {
+          noteId: note._id,
+          noteTitle: note.title,
+          noteContent: note.content,
+        },
+      })
+    );
+    // Navigate to the canvas
+    router.push(`/canvas/${canvasId}`);
   };
 
   const handleDeleteNote = async (id: Id<"notes">) => {
@@ -152,36 +200,51 @@ export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarPr
           >
             <Pin className={`h-3.5 w-3.5 ${note.isPinned ? "fill-current" : ""}`} />
           </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
+          
+          {/* More options dropdown with "Send to canvas" */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                className="h-7 w-7 p-0 text-muted-foreground"
                 onClick={(e) => e.stopPropagation()}
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <MoreHorizontal className="h-3.5 w-3.5" />
               </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Move to trash?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  &quot;{note.title || "Untitled"}&quot; will be moved to trash.
-                  You can restore it within 30 days.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => handleDeleteNote(note._id)}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  Move to Trash
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+              {canvases.length > 0 && (
+                <>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      <Send className="h-4 w-4 mr-2" />
+                      Send to Canvas
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      {canvases.map((canvas) => (
+                        <DropdownMenuItem
+                          key={canvas._id}
+                          onClick={() => handleSendToCanvas(note, canvas._id)}
+                        >
+                          <Layers className="h-4 w-4 mr-2" />
+                          {canvas.title}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              <DropdownMenuItem
+                onClick={() => handleDeleteNote(note._id)}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Move to Trash
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     );
@@ -207,13 +270,13 @@ export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarPr
 
       {/* Notes list */}
       <ScrollArea className="flex-1">
-        {filteredNotes.length === 0 ? (
+        {filteredNotes.length === 0 && canvases.length === 0 ? (
           <div className="p-4 text-center text-muted-foreground text-sm">
             {searchQuery || selectedTagId ? "No notes found" : "No notes yet"}
           </div>
         ) : (
           <div className="p-2 space-y-1">
-            {/* Pinned section */}
+            {/* Pinned notes section */}
             {pinnedNotes.length > 0 && (
               <>
                 <div className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
@@ -230,19 +293,67 @@ export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarPr
             )}
             {/* Regular notes */}
             {regularNotes.map(renderNoteItem)}
+
+            {/* Canvases collapsible section */}
+            {canvases.length > 0 && (
+              <div className="mt-4 pt-2 border-t">
+                <button
+                  onClick={() => setCanvasesExpanded(!canvasesExpanded)}
+                  className="w-full px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1 hover:text-foreground transition-colors"
+                >
+                  {canvasesExpanded ? (
+                    <ChevronDown className="h-3 w-3" />
+                  ) : (
+                    <ChevronRight className="h-3 w-3" />
+                  )}
+                  <Layers className="h-3 w-3" />
+                  Canvases
+                  <Badge variant="secondary" className="ml-auto text-[10px] h-4 px-1">
+                    {canvases.length}
+                  </Badge>
+                </button>
+                {canvasesExpanded && (
+                  <div className="mt-1 space-y-0.5">
+                    {canvases.map((canvas) => (
+                      <div
+                        key={canvas._id}
+                        onClick={() => handleOpenCanvas(canvas._id)}
+                        className="group flex items-center gap-2 p-2 rounded-lg cursor-pointer hover:bg-accent transition-colors"
+                      >
+                        <Layers className="h-4 w-4 text-muted-foreground" />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">
+                            {canvas.title}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {getRelativeTime(canvas.updatedAt)}
+                          </div>
+                        </div>
+                        {canvas.isPinned && (
+                          <Pin className="h-3 w-3 text-amber-500 fill-amber-500" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </ScrollArea>
 
       {/* Footer */}
       <div className="p-3 border-t space-y-2">
-        <Button
-          onClick={handleCreateNote}
-          className="w-full"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          New Note
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={handleCreateNote} className="flex-1">
+            <Plus className="h-4 w-4 mr-2" />
+            Note
+          </Button>
+          <Button onClick={handleCreateCanvas} variant="outline" className="flex-1">
+            <Layers className="h-4 w-4 mr-2" />
+            Canvas
+          </Button>
+        </div>
         <Button
           variant="ghost"
           size="sm"

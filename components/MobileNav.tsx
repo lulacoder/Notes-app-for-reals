@@ -3,13 +3,14 @@
 import { useState, useEffect, useRef } from "react";
 import { useConvexAuth } from "convex/react";
 import { Button } from "@/components/ui/button";
-import { Plus, FileText, Trash2, Search, Settings } from "lucide-react";
+import { Plus, FileText, Trash2, Search, Layers } from "lucide-react";
 
 interface MobileNavProps {
   onToggleSidebar: () => void;
   onNewNote: () => void;
   onOpenTrash: () => void;
   onOpenSearch?: () => void;
+  onOpenCanvas?: () => void;
 }
 
 export function MobileNav({
@@ -17,6 +18,7 @@ export function MobileNav({
   onNewNote,
   onOpenTrash,
   onOpenSearch,
+  onOpenCanvas,
 }: MobileNavProps) {
   const { isAuthenticated } = useConvexAuth();
 
@@ -39,10 +41,10 @@ export function MobileNav({
           variant="ghost"
           size="sm"
           className="flex-col gap-0.5 h-auto py-2"
-          onClick={onOpenSearch}
+          onClick={onOpenCanvas}
         >
-          <Search className="h-5 w-5" />
-          <span className="text-xs">Search</span>
+          <Layers className="h-5 w-5" />
+          <span className="text-xs">Canvas</span>
         </Button>
 
         <Button
@@ -58,20 +60,20 @@ export function MobileNav({
           variant="ghost"
           size="sm"
           className="flex-col gap-0.5 h-auto py-2"
-          onClick={onOpenTrash}
+          onClick={onOpenSearch}
         >
-          <Trash2 className="h-5 w-5" />
-          <span className="text-xs">Trash</span>
+          <Search className="h-5 w-5" />
+          <span className="text-xs">Search</span>
         </Button>
 
         <Button
           variant="ghost"
           size="sm"
           className="flex-col gap-0.5 h-auto py-2"
-          onClick={() => {}}
+          onClick={onOpenTrash}
         >
-          <Settings className="h-5 w-5" />
-          <span className="text-xs">More</span>
+          <Trash2 className="h-5 w-5" />
+          <span className="text-xs">Trash</span>
         </Button>
       </div>
     </div>

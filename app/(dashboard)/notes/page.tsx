@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
+import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Sidebar } from "@/components/Sidebar";
@@ -12,6 +13,7 @@ import { TrashView } from "@/components/TrashView";
 import { MobileNav, useSwipeGesture } from "@/components/MobileNav";
 
 export default function NotesPage() {
+  const router = useRouter();
   const [selectedNoteId, setSelectedNoteId] = useState<Id<"notes"> | null>(null);
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
@@ -159,6 +161,7 @@ export default function NotesPage() {
         onNewNote={handleNewNote}
         onOpenTrash={handleOpenTrash}
         onOpenSearch={() => setShowQuickSwitcher(true)}
+        onOpenCanvas={() => router.push("/canvas")}
       />
     </div>
   );

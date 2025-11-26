@@ -9,6 +9,7 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as canvases from "../canvases.js";
 import type * as http from "../http.js";
 import type * as notes from "../notes.js";
 import type * as tags from "../tags.js";
@@ -22,6 +23,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  canvases: typeof canvases;
   http: typeof http;
   notes: typeof notes;
   tags: typeof tags;
