@@ -160,7 +160,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="py-12 border-t border-border/40 bg-background">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col items-center gap-4 text-center">
           <div className="flex items-center gap-2">
             <Image
               src="/logo.png"
@@ -171,12 +171,14 @@ export default function Home() {
             />
             <span className="font-semibold text-lg">Noteworthy</span>
           </div>
-          <div className="flex gap-8 text-sm text-muted-foreground">
-            <a href="#" className="hover:text-primary transition-colors">Privacy</a>
-            <a href="#" className="hover:text-primary transition-colors">Terms</a>
-            <a href="#" className="hover:text-primary transition-colors">Twitter</a>
-            <a href="#" className="hover:text-primary transition-colors">GitHub</a>
-          </div>
+          <a 
+            href="https://github.com/lulacoder/Notes-app-for-reals" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-sm text-muted-foreground hover:text-primary transition-colors"
+          >
+            GitHub
+          </a>
           <p className="text-sm text-muted-foreground">
             © 2025 Noteworthy App. All rights reserved.
           </p>
