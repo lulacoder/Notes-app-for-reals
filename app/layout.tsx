@@ -15,13 +15,21 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Notes App",
-  description: "A simple note-taking app with Markdown support",
+  title: "Noteworthy",
+  description: "A beautiful note-taking app with Markdown support and infinite canvas",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Notes",
+    title: "Noteworthy",
+  },
+  icons: {
+    icon: [
+      { url: "/logo.png", sizes: "any" },
+    ],
+    apple: [
+      { url: "/logo.png", sizes: "180x180" },
+    ],
   },
 };
 

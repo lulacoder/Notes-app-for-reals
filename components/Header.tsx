@@ -18,11 +18,11 @@ import { ShortcutHints } from "@/components/KeyboardShortcuts";
 import { usePWAInstall } from "@/components/MobileNav";
 import {
   LogOut,
-  StickyNote,
   Keyboard,
   Download,
   Command,
 } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   Popover,
@@ -50,11 +50,17 @@ export function Header({ onOpenSearch }: HeaderProps) {
   const userInitial = (userName || userEmail).charAt(0).toUpperCase() || "U";
 
   return (
-    <header className="border-b bg-background">
+    <header className="border-b border-border/40 bg-background/80 backdrop-blur-md sticky top-0 z-10">
       <div className="flex h-14 items-center justify-between px-4">
         <div className="flex items-center gap-2">
-          <StickyNote className="h-6 w-6 text-blue-500" />
-          <span className="font-semibold text-lg">Notes</span>
+          <Image
+            src="/logo.png"
+            alt="Noteworthy"
+            width={28}
+            height={28}
+            className="rounded-md"
+          />
+          <span className="font-semibold text-lg">Noteworthy</span>
         </div>
 
         {isAuthenticated && currentUser && (

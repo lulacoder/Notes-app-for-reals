@@ -51,12 +51,12 @@ export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarPr
   const tagsQuery = useQuery(api.tags.listTags);
   const trashQuery = useQuery(api.notes.listTrash);
   const canvasesQuery = useQuery(api.canvases.listCanvases);
-  
+
   const notes = useMemo(() => notesQuery || [], [notesQuery]);
   const tags = useMemo(() => tagsQuery || [], [tagsQuery]);
   const trash = useMemo(() => trashQuery || [], [trashQuery]);
   const canvases = useMemo(() => canvasesQuery || [], [canvasesQuery]);
-  
+
   const createNote = useMutation(api.notes.createNote);
   const createCanvas = useMutation(api.canvases.createCanvas);
   const softDeleteNote = useMutation(api.notes.softDeleteNote);
@@ -150,13 +150,15 @@ export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarPr
     return (
       <div
         key={note._id}
-        className={`group flex items-start gap-2 p-2 rounded-lg cursor-pointer transition-colors ${
-          selectedNoteId === note._id
-            ? "bg-primary/10 text-primary"
-            : "hover:bg-accent"
-        }`}
+        className={`group flex items-start gap-2 p-2 rounded-lg cursor-pointer transition-all duration-200 relative overflow-hidden ${selectedNoteId === note._id
+            ? "bg-primary/10 text-primary font-medium"
+            : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+          }`}
         onClick={() => onSelectNote(note._id)}
       >
+        {selectedNoteId === note._id && (
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full" />
+        )}
         <div className="flex-shrink-0 mt-0.5">
           {note.isPinned ? (
             <Pin className="h-4 w-4 text-amber-500 fill-amber-500" />
@@ -193,14 +195,13 @@ export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarPr
           <Button
             variant="ghost"
             size="sm"
-            className={`h-7 w-7 p-0 ${
-              note.isPinned ? "text-amber-500" : "text-muted-foreground"
-            }`}
+            className={`h-7 w-7 p-0 ${note.isPinned ? "text-amber-500" : "text-muted-foreground"
+              }`}
             onClick={(e) => handleTogglePin(e, note._id)}
           >
             <Pin className={`h-3.5 w-3.5 ${note.isPinned ? "fill-current" : ""}`} />
           </Button>
-          
+
           {/* More options dropdown with "Send to canvas" */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

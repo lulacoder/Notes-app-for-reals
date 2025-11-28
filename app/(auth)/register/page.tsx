@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { StickyNote, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import Image from "next/image";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -49,11 +50,17 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-2">
-            <StickyNote className="h-10 w-10 text-blue-600" />
+            <Image
+              src="/logo.png"
+              alt="Noteworthy"
+              width={48}
+              height={48}
+              className="rounded-lg"
+            />
           </div>
           <CardTitle className="text-2xl">Create an account</CardTitle>
           <CardDescription>Start organizing your notes today</CardDescription>
@@ -112,7 +119,7 @@ export default function RegisterPage() {
                 "Create account"
               )}
             </Button>
-            <p className="text-sm text-gray-600 text-center">
+            <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
               Already have an account?{" "}
               <Link href="/login" className="text-blue-600 hover:underline">
                 Sign in
