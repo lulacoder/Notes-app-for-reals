@@ -63,7 +63,7 @@ export default function CanvasListPage() {
   const unpinnedCanvases = filteredCanvases.filter((c) => !c.isPinned);
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-background">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-background">
       {/* Header */}
       <div className="border-b p-4 space-y-4">
         <div className="flex items-center justify-between">

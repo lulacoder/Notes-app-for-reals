@@ -20,40 +20,17 @@ export function CanvasEditor({ canvasId, onOpenNote }: CanvasEditorProps) {
   const isLoadingRef = useRef(true);
   const [TldrawModule, setTldrawModule] = useState<typeof import("@tldraw/tldraw") | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [cssLoaded, setCssLoaded] = useState(false);
 
   // Convex queries and mutations
   const canvas = useQuery(api.canvases.getCanvas, { id: canvasId });
   const updateCanvas = useMutation(api.canvases.updateCanvas);
 
-  // Load CSS first, then tldraw module
+  // Load tldraw module (CSS is imported globally in app/globals.css)
   useEffect(() => {
     let cancelled = false;
     
     const loadTldraw = async () => {
       try {
-        // Load CSS dynamically in the browser
-        if (typeof window !== "undefined") {
-          const existingLink = document.querySelector('link[href*="tldraw"]');
-          if (!existingLink) {
-            // Load from local public folder to avoid CDN blocking
-            const link = document.createElement("link");
-            link.rel = "stylesheet";
-            link.href = "/tldraw.css";
-            document.head.appendChild(link);
-            
-            await new Promise<void>((resolve) => {
-              link.onload = () => resolve();
-              link.onerror = () => {
-                console.warn("Failed to load tldraw CSS");
-                resolve();
-              };
-            });
-          }
-          setCssLoaded(true);
-        }
-
-        // Then load the module
         const mod = await import("@tldraw/tldraw");
         if (!cancelled) {
           setTldrawModule(mod);
@@ -160,7 +137,7 @@ export function CanvasEditor({ canvasId, onOpenNote }: CanvasEditorProps) {
     );
   }
 
-  if (!TldrawModule || !cssLoaded) {
+  if (!TldrawModule) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4 text-muted-foreground">

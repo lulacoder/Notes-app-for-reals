@@ -5,35 +5,13 @@ import { useEffect, useState } from "react";
 export default function CanvasTestPage() {
   const [TldrawModule, setTldrawModule] = useState<typeof import("@tldraw/tldraw") | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [cssLoaded, setCssLoaded] = useState(false);
 
-  // Load CSS and tldraw module
+  // Load tldraw module (CSS is imported globally in app/globals.css)
   useEffect(() => {
     let cancelled = false;
     
     const loadTldraw = async () => {
       try {
-        // Load CSS dynamically from local public folder
-        const existingLink = document.querySelector('link[href*="tldraw"]');
-        if (!existingLink) {
-          const link = document.createElement("link");
-          link.rel = "stylesheet";
-          link.href = "/tldraw.css";
-          document.head.appendChild(link);
-          
-          await new Promise<void>((resolve) => {
-            link.onload = () => resolve();
-            link.onerror = () => {
-              console.warn("Failed to load tldraw CSS");
-              resolve();
-            };
-          });
-        }
-        
-        if (!cancelled) {
-          setCssLoaded(true);
-        }
-
         // Load module
         const mod = await import("@tldraw/tldraw");
         if (!cancelled) {
@@ -65,7 +43,7 @@ export default function CanvasTestPage() {
     );
   }
 
-  if (!TldrawModule || !cssLoaded) {
+  if (!TldrawModule) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">

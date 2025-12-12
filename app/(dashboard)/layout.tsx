@@ -35,7 +35,7 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
-      <main className="flex-1 flex overflow-hidden">{children}</main>
+      <main className="flex-1 flex min-h-0 overflow-hidden">{children}</main>
     </div>
   );
 }
