@@ -15,9 +15,12 @@ interface CanvasEditorProps {
 export function CanvasEditor({ canvasId, onOpenNote }: CanvasEditorProps) {
   const { resolvedTheme } = useTheme();
   const editorRef = useRef<any>(null);
+  const tldrawRef = useRef<typeof import("@tldraw/tldraw") | null>(null);
+  const unsubscribeRef = useRef<null | (() => void)>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedRef = useRef<string>("");
   const isLoadingRef = useRef(true);
+  const didInitialHydrateRef = useRef(false);
   const [TldrawModule, setTldrawModule] = useState<typeof import("@tldraw/tldraw") | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -25,7 +28,7 @@ export function CanvasEditor({ canvasId, onOpenNote }: CanvasEditorProps) {
   const canvas = useQuery(api.canvases.getCanvas, { id: canvasId });
   const updateCanvas = useMutation(api.canvases.updateCanvas);
 
-  // Load tldraw module (CSS is imported globally in app/globals.css)
+  // Load tldraw module (CSS is imported globally in app/layout.tsx)
   useEffect(() => {
     let cancelled = false;
     
@@ -33,6 +36,7 @@ export function CanvasEditor({ canvasId, onOpenNote }: CanvasEditorProps) {
       try {
         const mod = await import("@tldraw/tldraw");
         if (!cancelled) {
+          tldrawRef.current = mod;
           setTldrawModule(mod);
         }
       } catch (error) {
@@ -76,35 +80,60 @@ export function CanvasEditor({ canvasId, onOpenNote }: CanvasEditorProps) {
     (editor: any) => {
       editorRef.current = editor;
 
-      // Load existing content if available
-      if (canvas?.content && canvas.content !== "{}" && TldrawModule) {
-        try {
-          const snapshot = JSON.parse(canvas.content);
-          TldrawModule.loadSnapshot(editor.store, snapshot);
-          lastSavedRef.current = canvas.content;
-        } catch (error) {
-          console.error("Failed to load canvas content:", error);
-        }
+      // Make sure we only have one active listener (defensive; avoids stacking)
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
       }
 
-      isLoadingRef.current = false;
+      // Start in loading mode until we hydrate from Convex (or decide there's nothing to load)
+      isLoadingRef.current = true;
 
-      // Listen for changes
-      const unsubscribe = editor.store.listen(
+      // Listen for user-driven document changes and persist them (debounced)
+      unsubscribeRef.current = editor.store.listen(
         () => {
-          if (!isLoadingRef.current && TldrawModule) {
-            const snapshot = TldrawModule.getSnapshot(editor.store);
+          const mod = tldrawRef.current;
+          if (!mod || isLoadingRef.current) return;
+          try {
+            const snapshot = mod.getSnapshot(editor.store);
             const content = JSON.stringify(snapshot);
             saveContent(content);
+          } catch (error) {
+            console.error("Failed to snapshot canvas:", error);
           }
         },
         { source: "user", scope: "document" }
       );
-
-      return unsubscribe;
     },
-    [canvas?.content, saveContent, TldrawModule]
+    [saveContent]
   );
+
+  // Hydrate editor store from Convex once (and when remote content changes)
+  useEffect(() => {
+    const editor = editorRef.current;
+    const mod = tldrawRef.current;
+    if (!editor || !mod) return;
+    if (canvas === undefined || canvas === null) return;
+
+    const remoteContent = canvas.content || "{}";
+
+    // Initial hydrate
+    if (!didInitialHydrateRef.current) {
+      try {
+        if (remoteContent && remoteContent !== "{}") {
+          const snapshot = JSON.parse(remoteContent);
+          mod.loadSnapshot(editor.store, snapshot);
+        }
+        lastSavedRef.current = remoteContent;
+      } catch (error) {
+        console.error("Failed to load canvas content:", error);
+      } finally {
+        didInitialHydrateRef.current = true;
+        isLoadingRef.current = false;
+      }
+      return;
+    }
+  }, [canvas]);
 
   // Sync theme with tldraw
   useEffect(() => {
@@ -118,6 +147,10 @@ export function CanvasEditor({ canvasId, onOpenNote }: CanvasEditorProps) {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }

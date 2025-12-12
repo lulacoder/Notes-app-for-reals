@@ -3,6 +3,8 @@
 ## Problem
 New canvases (and sometimes existing ones) rendered a blank area on `/canvas/[id]` even though notes and the rest of the app worked.
 
+After the initial rendering fix, there was a second issue: **the canvas could disappear (blank again) after interacting** (e.g. clicking toolbar buttons / drawing).
+
 ## Root causes (most likely)
 1. **tldraw CSS was not reliably loaded**
    - The app previously tried to load CSS via a runtime `<link href="/tldraw.css">` injection.
@@ -11,6 +13,10 @@ New canvases (and sometimes existing ones) rendered a blank area on `/canvas/[id
 2. **Flex layout height collapse**
    - Some wrappers used `overflow-hidden` + flex children without `min-h-0`.
    - In that situation, the canvas container can end up with an effective height of `0px`, which looks like “blank canvas”.
+
+3. **Snapshot re-hydration + listener stacking during interaction**
+   - `CanvasEditor` was re-creating the `onMount` callback when `canvas.content` changed.
+   - That can cause extra store listeners and/or repeated snapshot loads while the user is actively interacting, which can destabilize the editor and look like it “blanks out”.
 
 ## Fix implemented
 ### 1) Load tldraw CSS via the package (reliable)
@@ -39,6 +45,12 @@ Now the canvas loads based on the module import + data readiness, not on a best-
 - `next.config.ts`: removed `serverExternalPackages` that attempted to externalize `@tldraw/tldraw`.
   - This can trigger warnings because CSS imports don’t work with Node-style externals.
 
+### 6) Stabilize `CanvasEditor` mounting + persistence
+- Updated `components/CanvasEditor.tsx` to avoid interaction-triggered blanking:
+   - Keep a single active `editor.store.listen(...)` subscription (defensive unsubscribe on remount/unmount).
+   - Hydrate the editor store from Convex **once** on initial load, instead of re-loading snapshots whenever `canvas.content` updates.
+   - Use refs to avoid stale closures and to keep save/listen logic stable.
+
 ## Files changed
 - `app/layout.tsx`
 - `components/CanvasEditor.tsx`
@@ -61,3 +73,7 @@ Now the canvas loads based on the module import + data readiness, not on a best-
 ## Notes
 - A production build previously succeeded after the canvas/layout/CSS changes.
 - After the `next.config.ts` cleanup, you can re-run `npm run build` to confirm the earlier tldraw externalization warning is gone.
+
+## Extra verification (interaction)
+- Open a canvas and click multiple toolbar buttons / draw / pan/zoom.
+- The editor should remain visible and responsive (no blanking).
