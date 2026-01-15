@@ -23,8 +23,8 @@ interface QuickSwitcherProps {
 }
 
 export function QuickSwitcher({ open, onOpenChange, onSelectNote, onOpenTrash }: QuickSwitcherProps) {
-  const notes = useQuery(api.notes.listNotes) || [];
-  const tags = useQuery(api.tags.listTags) || [];
+  const notesQuery = useQuery(api.notes.listNotes);
+  const tagsQuery = useQuery(api.tags.listTags);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -52,13 +52,15 @@ export function QuickSwitcher({ open, onOpenChange, onSelectNote, onOpenTrash }:
   }, [onOpenTrash, onOpenChange]);
 
   const notesWithTags = useMemo(() => {
+    const notes = notesQuery || [];
+    const tags = tagsQuery || [];
     return notes.map((note) => ({
       ...note,
       tags: note.tagIds
         ?.map((tagId) => tags.find((t) => t._id === tagId))
         .filter(Boolean) || [],
     }));
-  }, [notes, tags]);
+  }, [notesQuery, tagsQuery]);
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>

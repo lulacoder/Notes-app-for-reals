@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import type { Id } from "@/convex/_generated/dataModel";
 import {
   Layers,
   MousePointer2,
@@ -18,6 +18,11 @@ import {
   Download,
   Undo2,
   Redo2,
+  StickyNote,
+  FileText,
+  GitBranch,
+  Plus,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,9 +31,20 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { motion, AnimatePresence } from "framer-motion";
+
+// Sticky note color options
+const STICKY_COLORS = [
+  { bg: "#fef3c7", border: "#f59e0b", text: "#78350f" }, // Yellow
+  { bg: "#fce7f3", border: "#ec4899", text: "#831843" }, // Pink
+  { bg: "#dbeafe", border: "#3b82f6", text: "#1e3a8a" }, // Blue
+  { bg: "#dcfce7", border: "#22c55e", text: "#14532d" }, // Green
+  { bg: "#f3e8ff", border: "#a855f7", text: "#581c87" }, // Purple
+  { bg: "#ffedd5", border: "#f97316", text: "#7c2d12" }, // Orange
+];
 
 // Types for canvas shapes
-type Tool = "select" | "pen" | "rectangle" | "circle" | "line" | "text" | "eraser";
+type Tool = "select" | "pen" | "rectangle" | "circle" | "line" | "text" | "eraser" | "sticky" | "noteEmbed" | "mindmap";
 
 interface Point {
   x: number;
@@ -72,7 +88,41 @@ interface TextShape extends BaseShape {
   fontSize: number;
 }
 
-type Shape = RectangleShape | CircleShape | LineShape | FreehandShape | TextShape;
+interface StickyNoteShape extends BaseShape {
+  type: "sticky";
+  width: number;
+  height: number;
+  text: string;
+  colorIndex: number;
+}
+
+interface NoteEmbedShape extends BaseShape {
+  type: "noteEmbed";
+  width: number;
+  height: number;
+  noteId: string;
+  noteTitle: string;
+  notePreview: string;
+}
+
+interface MindMapNodeShape extends BaseShape {
+  type: "mindmapNode";
+  width: number;
+  height: number;
+  text: string;
+  parentId: string | null;
+  isRoot: boolean;
+  collapsed: boolean;
+}
+
+interface ConnectorShape extends BaseShape {
+  type: "connector";
+  fromId: string;
+  toId: string;
+  points: number[];
+}
+
+type Shape = RectangleShape | CircleShape | LineShape | FreehandShape | TextShape | StickyNoteShape | NoteEmbedShape | MindMapNodeShape | ConnectorShape;
 
 interface CanvasEditorProps {
   canvasId: Id<"canvases">;
@@ -101,12 +151,10 @@ export function CanvasPreview({
     const isDark = resolvedTheme === "dark";
     const bgColor = isDark ? "#1a1a1a" : "#ffffff";
 
-    // Set canvas size
     const rect = container.getBoundingClientRect();
     canvas.width = rect.width;
     canvas.height = rect.height;
 
-    // Clear canvas
     ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -115,7 +163,6 @@ export function CanvasPreview({
       const shapes: Shape[] = parsed.shapes || [];
 
       if (shapes.length === 0) {
-        // Draw empty state
         ctx.fillStyle = isDark ? "#444" : "#ccc";
         ctx.font = "12px sans-serif";
         ctx.textAlign = "center";
@@ -123,12 +170,14 @@ export function CanvasPreview({
         return;
       }
 
-      // Calculate scale to fit all shapes
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       
       shapes.forEach((shape) => {
         switch (shape.type) {
           case "rectangle":
+          case "sticky":
+          case "noteEmbed":
+          case "mindmapNode":
             minX = Math.min(minX, shape.x);
             minY = Math.min(minY, shape.y);
             maxX = Math.max(maxX, shape.x + shape.width);
@@ -142,6 +191,7 @@ export function CanvasPreview({
             break;
           case "line":
           case "freehand":
+          case "connector":
             for (let i = 0; i < shape.points.length; i += 2) {
               minX = Math.min(minX, shape.points[i]);
               maxX = Math.max(maxX, shape.points[i]);
@@ -172,7 +222,6 @@ export function CanvasPreview({
       ctx.translate(offsetX, offsetY);
       ctx.scale(scale, scale);
 
-      // Draw shapes
       shapes.forEach((shape) => {
         ctx.strokeStyle = shape.stroke;
         ctx.lineWidth = shape.strokeWidth;
@@ -199,9 +248,12 @@ export function CanvasPreview({
             ctx.stroke();
             break;
           case "line":
+          case "connector":
             ctx.beginPath();
             ctx.moveTo(shape.points[0], shape.points[1]);
-            ctx.lineTo(shape.points[2], shape.points[3]);
+            for (let i = 2; i < shape.points.length; i += 2) {
+              ctx.lineTo(shape.points[i], shape.points[i + 1]);
+            }
             ctx.stroke();
             break;
           case "freehand":
@@ -219,12 +271,33 @@ export function CanvasPreview({
             ctx.fillStyle = shape.stroke;
             ctx.fillText(shape.text, shape.x, shape.y);
             break;
+          case "sticky":
+            const stickyColor = STICKY_COLORS[shape.colorIndex % STICKY_COLORS.length];
+            ctx.fillStyle = stickyColor.bg;
+            ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
+            ctx.strokeStyle = stickyColor.border;
+            ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+            break;
+          case "noteEmbed":
+            ctx.fillStyle = isDark ? "#2a2a2a" : "#f8f8f8";
+            ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
+            ctx.strokeStyle = isDark ? "#444" : "#ddd";
+            ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+            break;
+          case "mindmapNode":
+            ctx.fillStyle = shape.isRoot ? "#3b82f6" : (isDark ? "#2a2a2a" : "#f8f8f8");
+            const radius = 8;
+            ctx.beginPath();
+            ctx.roundRect(shape.x, shape.y, shape.width, shape.height, radius);
+            ctx.fill();
+            ctx.strokeStyle = shape.isRoot ? "#2563eb" : (isDark ? "#444" : "#ddd");
+            ctx.stroke();
+            break;
         }
       });
 
       ctx.restore();
-    } catch (error) {
-      // Draw error state
+    } catch {
       ctx.fillStyle = isDark ? "#444" : "#ccc";
       ctx.font = "12px sans-serif";
       ctx.textAlign = "center";
@@ -261,8 +334,14 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
   const [history, setHistory] = useState<Shape[][]>([[]]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
+  const [editingSticky, setEditingSticky] = useState<string | null>(null);
+  const [stickyText, setStickyText] = useState("");
+  const [showMindMapPanel, setShowMindMapPanel] = useState(false);
+  const [mindMapRootId, setMindMapRootId] = useState<string | null>(null);
 
-  // Convex queries and mutations
+  // Query user's notes for embedding
+  const notes = useQuery(api.notes.listNotes);
+  
   const canvas = useQuery(api.canvases.getCanvas, { id: canvasId });
   const updateCanvas = useMutation(api.canvases.updateCanvas);
 
@@ -371,25 +450,26 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
     setShapes(newShapes);
     addToHistory(newShapes);
     setSelectedId(null);
+    setMindMapRootId(null);
   }, [addToHistory]);
 
   // Export canvas as PNG
   const exportCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const canvasEl = canvasRef.current;
+    if (!canvasEl) return;
 
     const link = document.createElement("a");
     link.download = "canvas.png";
-    link.href = canvas.toDataURL("image/png");
+    link.href = canvasEl.toDataURL("image/png");
     link.click();
   }, []);
 
   // Get mouse position relative to canvas
   const getMousePos = useCallback((e: React.MouseEvent<HTMLCanvasElement>): Point => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
+    const canvasEl = canvasRef.current;
+    if (!canvasEl) return { x: 0, y: 0 };
     
-    const rect = canvas.getBoundingClientRect();
+    const rect = canvasEl.getBoundingClientRect();
     return {
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
@@ -398,12 +478,14 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
 
   // Find shape at position
   const findShapeAtPosition = useCallback((pos: Point): Shape | null => {
-    // Iterate in reverse to get top-most shape first
     for (let i = shapes.length - 1; i >= 0; i--) {
       const shape = shapes[i];
       
       switch (shape.type) {
         case "rectangle":
+        case "sticky":
+        case "noteEmbed":
+        case "mindmapNode":
           if (
             pos.x >= shape.x &&
             pos.x <= shape.x + shape.width &&
@@ -422,7 +504,7 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
           break;
         case "freehand":
         case "line":
-          // Simple bounding box check for lines
+        case "connector":
           const points = shape.points;
           let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
           for (let j = 0; j < points.length; j += 2) {
@@ -432,16 +514,15 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
             maxY = Math.max(maxY, points[j + 1]);
           }
           if (
-            pos.x >= shape.x + minX - 10 &&
-            pos.x <= shape.x + maxX + 10 &&
-            pos.y >= shape.y + minY - 10 &&
-            pos.y <= shape.y + maxY + 10
+            pos.x >= minX - 10 &&
+            pos.x <= maxX + 10 &&
+            pos.y >= minY - 10 &&
+            pos.y <= maxY + 10
           ) {
             return shape;
           }
           break;
         case "text":
-          // Approximate text bounds
           const textWidth = shape.text.length * shape.fontSize * 0.6;
           const textHeight = shape.fontSize;
           if (
@@ -458,6 +539,147 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
     return null;
   }, [shapes]);
 
+  // Create sticky note
+  const createStickyNote = useCallback((pos: Point, colorIndex: number = 0) => {
+    const newShape: StickyNoteShape = {
+      id: generateId(),
+      type: "sticky",
+      x: pos.x,
+      y: pos.y,
+      width: 200,
+      height: 150,
+      text: "",
+      colorIndex,
+      stroke: STICKY_COLORS[colorIndex].border,
+      strokeWidth: 2,
+      fill: STICKY_COLORS[colorIndex].bg,
+    };
+    const newShapes = [...shapes, newShape];
+    setShapes(newShapes);
+    addToHistory(newShapes);
+    setEditingSticky(newShape.id);
+    setStickyText("");
+  }, [shapes, addToHistory]);
+
+  // Create note embed
+  const createNoteEmbed = useCallback((pos: Point, note: { _id: string; title: string; content: string }) => {
+    // Extract preview text
+    const tempDiv = document.createElement("div");
+    tempDiv.innerHTML = note.content;
+    const preview = (tempDiv.textContent || "").substring(0, 100);
+
+    const newShape: NoteEmbedShape = {
+      id: generateId(),
+      type: "noteEmbed",
+      x: pos.x,
+      y: pos.y,
+      width: 250,
+      height: 120,
+      noteId: note._id,
+      noteTitle: note.title,
+      notePreview: preview,
+      stroke: isDark ? "#444" : "#ddd",
+      strokeWidth: 1,
+    };
+    const newShapes = [...shapes, newShape];
+    setShapes(newShapes);
+    addToHistory(newShapes);
+  }, [shapes, addToHistory, isDark]);
+
+  // Create mind map root node
+  const createMindMapRoot = useCallback((pos: Point) => {
+    const text = prompt("Enter root topic:");
+    if (!text) return;
+
+    const newShape: MindMapNodeShape = {
+      id: generateId(),
+      type: "mindmapNode",
+      x: pos.x - 75,
+      y: pos.y - 25,
+      width: 150,
+      height: 50,
+      text,
+      parentId: null,
+      isRoot: true,
+      collapsed: false,
+      stroke: "#2563eb",
+      strokeWidth: 2,
+      fill: "#3b82f6",
+    };
+    const newShapes = [...shapes, newShape];
+    setShapes(newShapes);
+    addToHistory(newShapes);
+    setMindMapRootId(newShape.id);
+    setShowMindMapPanel(true);
+  }, [shapes, addToHistory]);
+
+  // Add child to mind map node
+  const addMindMapChild = useCallback((parentId: string) => {
+    const parent = shapes.find(s => s.id === parentId) as MindMapNodeShape | undefined;
+    if (!parent || parent.type !== "mindmapNode") return;
+
+    const text = prompt("Enter node text:");
+    if (!text) return;
+
+    // Find siblings
+    const siblings = shapes.filter(s => s.type === "mindmapNode" && (s as MindMapNodeShape).parentId === parentId);
+    const offsetY = siblings.length * 70;
+
+    const newNode: MindMapNodeShape = {
+      id: generateId(),
+      type: "mindmapNode",
+      x: parent.x + parent.width + 100,
+      y: parent.y + offsetY,
+      width: 120,
+      height: 40,
+      text,
+      parentId,
+      isRoot: false,
+      collapsed: false,
+      stroke: isDark ? "#444" : "#ddd",
+      strokeWidth: 1,
+      fill: isDark ? "#2a2a2a" : "#f8f8f8",
+    };
+
+    // Create connector
+    const connector: ConnectorShape = {
+      id: generateId(),
+      type: "connector",
+      x: 0,
+      y: 0,
+      fromId: parentId,
+      toId: newNode.id,
+      points: [
+        parent.x + parent.width,
+        parent.y + parent.height / 2,
+        newNode.x,
+        newNode.y + newNode.height / 2,
+      ],
+      stroke: isDark ? "#666" : "#999",
+      strokeWidth: 2,
+    };
+
+    const newShapes = [...shapes, newNode, connector];
+    setShapes(newShapes);
+    addToHistory(newShapes);
+  }, [shapes, addToHistory, isDark]);
+
+  // Update sticky text
+  const updateStickyText = useCallback(() => {
+    if (!editingSticky) return;
+    
+    const newShapes = shapes.map(s => {
+      if (s.id === editingSticky && s.type === "sticky") {
+        return { ...s, text: stickyText };
+      }
+      return s;
+    });
+    setShapes(newShapes);
+    addToHistory(newShapes);
+    setEditingSticky(null);
+    setStickyText("");
+  }, [editingSticky, stickyText, shapes, addToHistory]);
+
   // Mouse down handler
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const pos = getMousePos(e);
@@ -467,16 +689,53 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
     if (tool === "select") {
       const shape = findShapeAtPosition(pos);
       setSelectedId(shape?.id || null);
+      
+      // Double-click to edit sticky
+      if (shape?.type === "sticky") {
+        if (e.detail === 2) {
+          setEditingSticky(shape.id);
+          setStickyText((shape as StickyNoteShape).text);
+        }
+      }
       return;
     }
 
     if (tool === "eraser") {
       const shape = findShapeAtPosition(pos);
       if (shape) {
-        const newShapes = shapes.filter((s) => s.id !== shape.id);
+        // Also remove connectors attached to this shape
+        const newShapes = shapes.filter((s) => {
+          if (s.id === shape.id) return false;
+          if (s.type === "connector") {
+            const conn = s as ConnectorShape;
+            if (conn.fromId === shape.id || conn.toId === shape.id) return false;
+          }
+          return true;
+        });
         setShapes(newShapes);
         addToHistory(newShapes);
       }
+      return;
+    }
+
+    if (tool === "sticky") {
+      createStickyNote(pos, Math.floor(Math.random() * STICKY_COLORS.length));
+      setIsDrawing(false);
+      setTool("select");
+      return;
+    }
+
+    if (tool === "mindmap") {
+      if (!mindMapRootId) {
+        createMindMapRoot(pos);
+      } else {
+        // Find if clicking on a node
+        const shape = findShapeAtPosition(pos);
+        if (shape?.type === "mindmapNode") {
+          addMindMapChild(shape.id);
+        }
+      }
+      setIsDrawing(false);
       return;
     }
 
@@ -555,7 +814,7 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
     }
 
     setCurrentShape(newShape);
-  }, [tool, getMousePos, findShapeAtPosition, shapes, strokeColor, addToHistory]);
+  }, [tool, getMousePos, findShapeAtPosition, shapes, strokeColor, addToHistory, createStickyNote, createMindMapRoot, mindMapRootId, addMindMapChild]);
 
   // Mouse move handler
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -614,17 +873,15 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
 
   // Draw shapes on canvas
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const canvasEl = canvasRef.current;
+    if (!canvasEl) return;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvasEl.getContext("2d");
     if (!ctx) return;
 
-    // Clear canvas
     ctx.fillStyle = bgColor;
     ctx.fillRect(0, 0, stageSize.width, stageSize.height);
 
-    // Draw all shapes
     const allShapes = currentShape ? [...shapes, currentShape] : shapes;
 
     allShapes.forEach((shape) => {
@@ -676,6 +933,85 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
           ctx.fillStyle = shape.stroke;
           ctx.fillText(shape.text, shape.x, shape.y);
           break;
+
+        case "sticky": {
+          const stickyColor = STICKY_COLORS[shape.colorIndex % STICKY_COLORS.length];
+          // Shadow
+          ctx.shadowColor = "rgba(0,0,0,0.1)";
+          ctx.shadowBlur = 8;
+          ctx.shadowOffsetY = 4;
+          // Background
+          ctx.fillStyle = stickyColor.bg;
+          ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
+          ctx.shadowColor = "transparent";
+          // Border
+          ctx.strokeStyle = stickyColor.border;
+          ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+          // Text
+          ctx.fillStyle = stickyColor.text;
+          ctx.font = "14px sans-serif";
+          const lines = shape.text.split("\n");
+          lines.forEach((line, i) => {
+            ctx.fillText(line, shape.x + 12, shape.y + 28 + i * 20);
+          });
+          break;
+        }
+
+        case "noteEmbed": {
+          // Background
+          ctx.fillStyle = isDark ? "#2a2a2a" : "#ffffff";
+          ctx.shadowColor = "rgba(0,0,0,0.1)";
+          ctx.shadowBlur = 10;
+          ctx.shadowOffsetY = 4;
+          ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
+          ctx.shadowColor = "transparent";
+          // Border
+          ctx.strokeStyle = isDark ? "#444" : "#e5e5e5";
+          ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+          // Icon
+          ctx.fillStyle = "#3b82f6";
+          ctx.fillRect(shape.x, shape.y, 4, shape.height);
+          // Title
+          ctx.fillStyle = isDark ? "#fff" : "#000";
+          ctx.font = "bold 14px sans-serif";
+          ctx.fillText(shape.noteTitle || "Untitled", shape.x + 16, shape.y + 24);
+          // Preview
+          ctx.fillStyle = isDark ? "#888" : "#666";
+          ctx.font = "12px sans-serif";
+          ctx.fillText(shape.notePreview.substring(0, 35) + "...", shape.x + 16, shape.y + 48);
+          break;
+        }
+
+        case "mindmapNode": {
+          const radius = 8;
+          ctx.beginPath();
+          ctx.roundRect(shape.x, shape.y, shape.width, shape.height, radius);
+          ctx.fillStyle = shape.isRoot ? "#3b82f6" : (isDark ? "#2a2a2a" : "#ffffff");
+          ctx.fill();
+          ctx.strokeStyle = shape.isRoot ? "#2563eb" : (isDark ? "#555" : "#ddd");
+          ctx.stroke();
+          // Text
+          ctx.fillStyle = shape.isRoot ? "#fff" : (isDark ? "#fff" : "#000");
+          ctx.font = shape.isRoot ? "bold 14px sans-serif" : "13px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(shape.text, shape.x + shape.width / 2, shape.y + shape.height / 2 + 5);
+          ctx.textAlign = "left";
+          break;
+        }
+
+        case "connector": {
+          ctx.beginPath();
+          ctx.moveTo(shape.points[0], shape.points[1]);
+          // Curved line
+          const midX = (shape.points[0] + shape.points[2]) / 2;
+          ctx.bezierCurveTo(
+            midX, shape.points[1],
+            midX, shape.points[3],
+            shape.points[2], shape.points[3]
+          );
+          ctx.stroke();
+          break;
+        }
       }
 
       // Draw selection indicator
@@ -686,6 +1022,9 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
 
         switch (shape.type) {
           case "rectangle":
+          case "sticky":
+          case "noteEmbed":
+          case "mindmapNode":
             ctx.strokeRect(shape.x - 5, shape.y - 5, shape.width + 10, shape.height + 10);
             break;
           case "circle":
@@ -693,22 +1032,29 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
             ctx.arc(shape.x, shape.y, shape.radius + 5, 0, Math.PI * 2);
             ctx.stroke();
             break;
-          default:
-            // For other shapes, draw a simple indicator
-            break;
         }
 
         ctx.setLineDash([]);
       }
     });
-  }, [shapes, currentShape, selectedId, stageSize, bgColor]);
+  }, [shapes, currentShape, selectedId, stageSize, bgColor, isDark]);
 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when editing sticky
+      if (editingSticky) return;
+
       if (e.key === "Delete" || e.key === "Backspace") {
         if (selectedId) {
-          const newShapes = shapes.filter((s) => s.id !== selectedId);
+          const newShapes = shapes.filter((s) => {
+            if (s.id === selectedId) return false;
+            if (s.type === "connector") {
+              const conn = s as ConnectorShape;
+              if (conn.fromId === selectedId || conn.toId === selectedId) return false;
+            }
+            return true;
+          });
           setShapes(newShapes);
           addToHistory(newShapes);
           setSelectedId(null);
@@ -724,11 +1070,23 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
           }
         }
       }
+      // Tool shortcuts
+      switch (e.key.toLowerCase()) {
+        case "v": setTool("select"); break;
+        case "p": setTool("pen"); break;
+        case "r": setTool("rectangle"); break;
+        case "c": setTool("circle"); break;
+        case "l": setTool("line"); break;
+        case "t": setTool("text"); break;
+        case "e": setTool("eraser"); break;
+        case "s": if (!e.ctrlKey && !e.metaKey) setTool("sticky"); break;
+        case "m": setTool("mindmap"); break;
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedId, shapes, addToHistory, undo, redo]);
+  }, [selectedId, shapes, addToHistory, undo, redo, editingSticky]);
 
   // Cleanup save timeout on unmount
   useEffect(() => {
@@ -743,10 +1101,11 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
   if (canvas === undefined) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4 text-muted-foreground">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-          <span>Loading canvas...</span>
-        </div>
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+          className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full"
+        />
       </div>
     );
   }
@@ -771,12 +1130,18 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
     { id: "line", icon: Minus, label: "Line (L)" },
     { id: "text", icon: Type, label: "Text (T)" },
     { id: "eraser", icon: Eraser, label: "Eraser (E)" },
+    { id: "sticky", icon: StickyNote, label: "Sticky Note (S)" },
+    { id: "mindmap", icon: GitBranch, label: "Mind Map (M)" },
   ];
 
   return (
     <div className="absolute inset-0 flex flex-col">
       {/* Toolbar */}
-      <div className="flex items-center gap-1 p-2 border-b bg-background/80 backdrop-blur-sm">
+      <motion.div
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="flex items-center gap-1 p-2 border-b bg-background/80 backdrop-blur-sm"
+      >
         <TooltipProvider delayDuration={0}>
           {tools.map(({ id, icon: Icon, label }) => (
             <Tooltip key={id}>
@@ -856,10 +1221,10 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
             <TooltipContent side="bottom">Export as PNG</TooltipContent>
           </Tooltip>
         </TooltipProvider>
-      </div>
+      </motion.div>
 
       {/* Canvas */}
-      <div ref={containerRef} className="flex-1 overflow-hidden">
+      <div ref={containerRef} className="flex-1 overflow-hidden relative">
         <canvas
           ref={canvasRef}
           width={stageSize.width}
@@ -873,6 +1238,124 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
         />
+
+        {/* Sticky note editor overlay */}
+        <AnimatePresence>
+          {editingSticky && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="absolute inset-0 flex items-center justify-center bg-black/50 z-10"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) updateStickyText();
+              }}
+            >
+              <div className="bg-card rounded-xl shadow-xl p-4 w-80">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold">Edit Sticky Note</h3>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingSticky(null)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <textarea
+                  value={stickyText}
+                  onChange={(e) => setStickyText(e.target.value)}
+                  placeholder="Enter your note..."
+                  className="w-full h-32 p-3 rounded-lg border resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                  autoFocus
+                />
+                <div className="flex justify-end gap-2 mt-3">
+                  <Button variant="outline" onClick={() => setEditingSticky(null)}>Cancel</Button>
+                  <Button onClick={updateStickyText}>Save</Button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Note embed selector panel */}
+        <AnimatePresence>
+          {tool === "noteEmbed" && notes && notes.length > 0 && (
+            <motion.div
+              initial={{ x: 300, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 300, opacity: 0 }}
+              className="absolute right-0 top-0 bottom-0 w-72 bg-card border-l shadow-xl z-10 overflow-y-auto"
+            >
+              <div className="p-4 border-b sticky top-0 bg-card">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold">Embed Note</h3>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setTool("select")}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">Click a note to add to canvas</p>
+              </div>
+              <div className="p-2 space-y-1">
+                {notes.map((note) => (
+                  <button
+                    key={note._id}
+                    onClick={() => {
+                      createNoteEmbed(
+                        { x: stageSize.width / 2 - 125, y: stageSize.height / 2 - 60 },
+                        { _id: note._id, title: note.title, content: note.content }
+                      );
+                      setTool("select");
+                    }}
+                    className="w-full p-3 rounded-lg text-left hover:bg-accent transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium truncate">{note.title || "Untitled"}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Mind map helper panel */}
+        <AnimatePresence>
+          {showMindMapPanel && mindMapRootId && (
+            <motion.div
+              initial={{ y: 50, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 50, opacity: 0 }}
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-card rounded-xl shadow-xl p-4 z-10"
+            >
+              <div className="flex items-center gap-3">
+                <GitBranch className="h-5 w-5 text-primary" />
+                <span className="text-sm font-medium">Mind Map Mode</span>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const selected = shapes.find(s => s.id === selectedId);
+                    if (selected?.type === "mindmapNode") {
+                      addMindMapChild(selected.id);
+                    } else {
+                      addMindMapChild(mindMapRootId);
+                    }
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Node
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowMindMapPanel(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Select a node and click &quot;Add Node&quot; to create a child
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

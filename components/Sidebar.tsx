@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import type { Id } from "@/convex/_generated/dataModel";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -28,20 +28,31 @@ import {
   Pin,
   Layers,
   ChevronDown,
-  ChevronRight,
   MoreHorizontal,
   Send,
+  LayoutGrid,
+  LayoutList,
 } from "lucide-react";
 import { getRelativeTime } from "@/lib/relative-time";
 import { createNotesSearchIndex } from "@/lib/fuse";
+import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 interface SidebarProps {
   selectedNoteId: Id<"notes"> | null;
   onSelectNote: (id: Id<"notes">) => void;
   onOpenTrash: () => void;
+  viewMode?: "list" | "grid";
+  onViewModeChange?: (mode: "list" | "grid") => void;
 }
 
-export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarProps) {
+export function Sidebar({ 
+  selectedNoteId, 
+  onSelectNote, 
+  onOpenTrash,
+  viewMode = "list",
+  onViewModeChange,
+}: SidebarProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTagId, setSelectedTagId] = useState<Id<"tags"> | null>(null);
@@ -76,12 +87,10 @@ export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarPr
   const filteredNotes = useMemo(() => {
     let result = notes;
 
-    // Filter by tag
     if (selectedTagId) {
       result = result.filter((note) => note.tagIds?.includes(selectedTagId));
     }
 
-    // Filter by search
     if (searchQuery.trim()) {
       const searchResults = searchIndex.search(searchQuery);
       const searchIds = new Set(searchResults.map((r) => r.item._id));
@@ -91,7 +100,6 @@ export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarPr
     return result;
   }, [notes, searchQuery, searchIndex, selectedTagId]);
 
-  // Separate pinned and regular notes
   const pinnedNotes = filteredNotes.filter((note) => note.isPinned);
   const regularNotes = filteredNotes.filter((note) => !note.isPinned);
 
@@ -113,7 +121,6 @@ export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarPr
     note: (typeof notes)[0],
     canvasId: Id<"canvases">
   ) => {
-    // Dispatch event to add note card to canvas
     window.dispatchEvent(
       new CustomEvent(`add-note-to-canvas-${canvasId}`, {
         detail: {
@@ -123,7 +130,6 @@ export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarPr
         },
       })
     );
-    // Navigate to the canvas
     router.push(`/canvas/${canvasId}`);
   };
 
@@ -142,30 +148,52 @@ export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarPr
     await togglePin({ id });
   };
 
-  const renderNoteItem = (note: (typeof notes)[0]) => {
+  const renderNoteItem = (note: (typeof notes)[0], index: number) => {
     const noteTags = note.tagIds
       ?.map((tagId) => tags.find((t) => t._id === tagId))
       .filter(Boolean);
 
     return (
-      <div
+      <motion.div
         key={note._id}
-        className={`group flex items-start gap-2 p-2 rounded-lg cursor-pointer transition-all duration-200 relative overflow-hidden ${selectedNoteId === note._id
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: -20 }}
+        transition={{ delay: index * 0.03 }}
+        layout
+        className={cn(
+          "group flex items-start gap-2 p-2.5 rounded-lg cursor-pointer transition-all duration-200 relative overflow-hidden",
+          selectedNoteId === note._id
             ? "bg-primary/10 text-primary font-medium"
             : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-          }`}
+        )}
         onClick={() => onSelectNote(note._id)}
       >
-        {selectedNoteId === note._id && (
-          <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full" />
-        )}
+        <AnimatePresence>
+          {selectedNoteId === note._id && (
+            <motion.div
+              initial={{ scaleY: 0 }}
+              animate={{ scaleY: 1 }}
+              exit={{ scaleY: 0 }}
+              className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full origin-center"
+            />
+          )}
+        </AnimatePresence>
+        
         <div className="flex-shrink-0 mt-0.5">
           {note.isPinned ? (
-            <Pin className="h-4 w-4 text-amber-500 fill-amber-500" />
+            <motion.div
+              initial={{ rotate: -45 }}
+              animate={{ rotate: 0 }}
+              transition={{ type: "spring", stiffness: 300 }}
+            >
+              <Pin className="h-4 w-4 text-amber-500 fill-amber-500" />
+            </motion.div>
           ) : (
             <FileText className="h-4 w-4 text-muted-foreground" />
           )}
         </div>
+        
         <div className="flex-1 min-w-0">
           <div className="font-medium text-sm truncate">
             {note.title || "Untitled"}
@@ -174,11 +202,15 @@ export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarPr
             {getRelativeTime(note.updatedAt)}
           </div>
           {noteTags && noteTags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-1">
+            <div className="flex flex-wrap gap-1 mt-1.5">
               {noteTags.slice(0, 2).map((tag) => (
                 <span
                   key={tag!._id}
-                  className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full ${tag!.color} text-white`}
+                  className={cn(
+                    "inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full",
+                    tag!.color,
+                    "text-white"
+                  )}
                 >
                   {tag!.name}
                 </span>
@@ -191,18 +223,20 @@ export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarPr
             </div>
           )}
         </div>
+        
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <Button
             variant="ghost"
             size="sm"
-            className={`h-7 w-7 p-0 ${note.isPinned ? "text-amber-500" : "text-muted-foreground"
-              }`}
+            className={cn(
+              "h-7 w-7 p-0",
+              note.isPinned ? "text-amber-500" : "text-muted-foreground"
+            )}
             onClick={(e) => handleTogglePin(e, note._id)}
           >
-            <Pin className={`h-3.5 w-3.5 ${note.isPinned ? "fill-current" : ""}`} />
+            <Pin className={cn("h-3.5 w-3.5", note.isPinned && "fill-current")} />
           </Button>
 
-          {/* More options dropdown with "Send to canvas" */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -247,12 +281,16 @@ export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarPr
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </div>
+      </motion.div>
     );
   };
 
   return (
-    <div className="w-72 border-r bg-sidebar flex flex-col h-full">
+    <motion.div
+      initial={{ x: -20, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      className="w-72 border-r bg-sidebar flex flex-col h-full"
+    >
       {/* Search */}
       <div className="p-3 border-b">
         <div className="relative">
@@ -264,6 +302,30 @@ export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarPr
             className="pl-9 bg-background"
           />
         </div>
+        
+        {/* View mode toggle */}
+        {onViewModeChange && (
+          <div className="flex items-center gap-1 mt-2">
+            <Button
+              variant={viewMode === "list" ? "secondary" : "ghost"}
+              size="sm"
+              className="flex-1 h-8"
+              onClick={() => onViewModeChange("list")}
+            >
+              <LayoutList className="h-4 w-4 mr-1.5" />
+              List
+            </Button>
+            <Button
+              variant={viewMode === "grid" ? "secondary" : "ghost"}
+              size="sm"
+              className="flex-1 h-8"
+              onClick={() => onViewModeChange("grid")}
+            >
+              <LayoutGrid className="h-4 w-4 mr-1.5" />
+              Grid
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Tag filter */}
@@ -272,79 +334,112 @@ export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarPr
       {/* Notes list */}
       <ScrollArea className="flex-1">
         {filteredNotes.length === 0 && canvases.length === 0 ? (
-          <div className="p-4 text-center text-muted-foreground text-sm">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="p-4 text-center text-muted-foreground text-sm"
+          >
             {searchQuery || selectedTagId ? "No notes found" : "No notes yet"}
-          </div>
+          </motion.div>
         ) : (
           <div className="p-2 space-y-1">
             {/* Pinned notes section */}
-            {pinnedNotes.length > 0 && (
-              <>
-                <div className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                  <Pin className="h-3 w-3" />
-                  Pinned
-                </div>
-                {pinnedNotes.map(renderNoteItem)}
-                {regularNotes.length > 0 && (
-                  <div className="px-2 py-1 mt-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Notes
+            <AnimatePresence>
+              {pinnedNotes.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <div className="px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                    <Pin className="h-3 w-3" />
+                    Pinned
                   </div>
-                )}
-              </>
-            )}
+                  {pinnedNotes.map((note, i) => renderNoteItem(note, i))}
+                  {regularNotes.length > 0 && (
+                    <div className="px-2 py-1 mt-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Notes
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+            
             {/* Regular notes */}
-            {regularNotes.map(renderNoteItem)}
+            <AnimatePresence>
+              {regularNotes.map((note, i) => renderNoteItem(note, i))}
+            </AnimatePresence>
 
-            {/* Canvases collapsible section */}
+            {/* Canvases section */}
             {canvases.length > 0 && (
-              <div className="mt-4 pt-2 border-t">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="mt-4 pt-2 border-t"
+              >
                 <button
                   onClick={() => setCanvasesExpanded(!canvasesExpanded)}
                   className="w-full px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1 hover:text-foreground transition-colors"
                 >
-                  {canvasesExpanded ? (
+                  <motion.div
+                    animate={{ rotate: canvasesExpanded ? 0 : -90 }}
+                    transition={{ duration: 0.2 }}
+                  >
                     <ChevronDown className="h-3 w-3" />
-                  ) : (
-                    <ChevronRight className="h-3 w-3" />
-                  )}
+                  </motion.div>
                   <Layers className="h-3 w-3" />
                   Canvases
                   <Badge variant="secondary" className="ml-auto text-[10px] h-4 px-1">
                     {canvases.length}
                   </Badge>
                 </button>
-                {canvasesExpanded && (
-                  <div className="mt-1 space-y-0.5">
-                    {canvases.map((canvas) => (
-                      <div
-                        key={canvas._id}
-                        onClick={() => handleOpenCanvas(canvas._id)}
-                        className="group flex items-center gap-2 p-2 rounded-lg cursor-pointer hover:bg-accent transition-colors"
-                      >
-                        <Layers className="h-4 w-4 text-muted-foreground" />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate">
-                            {canvas.title}
+                <AnimatePresence>
+                  {canvasesExpanded && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="mt-1 space-y-0.5 overflow-hidden"
+                    >
+                      {canvases.map((canvas, index) => (
+                        <motion.div
+                          key={canvas._id}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          onClick={() => handleOpenCanvas(canvas._id)}
+                          className="group flex items-center gap-2 p-2 rounded-lg cursor-pointer hover:bg-accent transition-colors"
+                        >
+                          <Layers className="h-4 w-4 text-muted-foreground" />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate">
+                              {canvas.title}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {getRelativeTime(canvas.updatedAt)}
+                            </div>
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            {getRelativeTime(canvas.updatedAt)}
-                          </div>
-                        </div>
-                        {canvas.isPinned && (
-                          <Pin className="h-3 w-3 text-amber-500 fill-amber-500" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                          {canvas.isPinned && (
+                            <Pin className="h-3 w-3 text-amber-500 fill-amber-500" />
+                          )}
+                        </motion.div>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
             )}
           </div>
         )}
       </ScrollArea>
 
       {/* Footer */}
-      <div className="p-3 border-t space-y-2">
+      <motion.div
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.2 }}
+        className="p-3 border-t space-y-2"
+      >
         <div className="flex gap-2">
           <Button onClick={handleCreateNote} className="flex-1">
             <Plus className="h-4 w-4 mr-2" />
@@ -369,7 +464,7 @@ export function Sidebar({ selectedNoteId, onSelectNote, onOpenTrash }: SidebarPr
             </Badge>
           )}
         </Button>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

@@ -142,21 +142,29 @@ export function useSwipeGesture({
 }
 
 // PWA install prompt hook
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
 export function usePWAInstall() {
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstallable, setIsInstallable] = useState(false);
-  const [isInstalled, setIsInstalled] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(() => {
+    // Check if already installed during initialization
+    if (typeof window !== "undefined") {
+      return window.matchMedia("(display-mode: standalone)").matches;
+    }
+    return false;
+  });
 
   useEffect(() => {
-    // Check if already installed
-    if (window.matchMedia("(display-mode: standalone)").matches) {
-      setIsInstalled(true);
-      return;
-    }
+    // Skip if already installed
+    if (isInstalled) return;
 
     const handler = (e: Event) => {
       e.preventDefault();
-      setDeferredPrompt(e);
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
       setIsInstallable(true);
     };
 
@@ -165,7 +173,7 @@ export function usePWAInstall() {
     return () => {
       window.removeEventListener("beforeinstallprompt", handler);
     };
-  }, []);
+  }, [isInstalled]);
 
   const install = async () => {
     if (!deferredPrompt) return false;

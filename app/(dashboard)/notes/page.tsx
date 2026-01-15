@@ -1,16 +1,18 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, startTransition } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import type { Id } from "@/convex/_generated/dataModel";
 import { Sidebar } from "@/components/Sidebar";
 import { NoteEditor } from "@/components/NoteEditor";
+import { NotesGrid } from "@/components/NotesGrid";
 import { QuickSwitcher } from "@/components/QuickSwitcher";
 import { useKeyboardShortcuts } from "@/components/KeyboardShortcuts";
 import { TrashView } from "@/components/TrashView";
 import { MobileNav, useSwipeGesture } from "@/components/MobileNav";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function NotesPage() {
   const router = useRouter();
@@ -18,31 +20,62 @@ export default function NotesPage() {
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [showSidebarMobile, setShowSidebarMobile] = useState(false);
-  
+  const [viewMode, setViewMode] = useState<"list" | "grid">(() => {
+    // Load from localStorage on mount
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("notes-view-mode") as "list" | "grid") || "list";
+    }
+    return "list";
+  });
+
   const notes = useQuery(api.notes.listNotes);
+  const tags = useQuery(api.tags.listTags);
   const createNote = useMutation(api.notes.createNote);
   const softDeleteNote = useMutation(api.notes.softDeleteNote);
   const togglePin = useMutation(api.notes.togglePin);
 
-  // Auto-select first note when notes load
-  const hasAutoSelected = useRef(false);
-  useEffect(() => {
-    if (notes && notes.length > 0 && !selectedNoteId && !hasAutoSelected.current) {
-      hasAutoSelected.current = true;
-      setSelectedNoteId(notes[0]._id);
+  // Save view mode to localStorage
+  const handleViewModeChange = (mode: "list" | "grid") => {
+    setViewMode(mode);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("notes-view-mode", mode);
     }
-  }, [notes, selectedNoteId]);
+  };
 
-  // If selected note is deleted, select another
+  // Auto-select first note when notes load
+  const hasAutoSelectedRef = useRef(false);
+  const prevNotesLengthRef = useRef(0);
+  
+  // Handle auto-selection and note deletion in effect
+  // Using startTransition to avoid synchronous setState warnings
   useEffect(() => {
-    if (notes && selectedNoteId) {
-      const noteExists = notes.some((n) => n._id === selectedNoteId);
-      if (!noteExists && notes.length > 0) {
+    if (!notes) return;
+    
+    // Auto-select first note when notes load for the first time
+    if (notes.length > 0 && !selectedNoteId && !hasAutoSelectedRef.current) {
+      hasAutoSelectedRef.current = true;
+      startTransition(() => {
         setSelectedNoteId(notes[0]._id);
-      } else if (!noteExists) {
-        setSelectedNoteId(null);
+      });
+      prevNotesLengthRef.current = notes.length;
+      return;
+    }
+    
+    // If selected note was deleted, select another
+    if (selectedNoteId) {
+      const noteExists = notes.some((n) => n._id === selectedNoteId);
+      if (!noteExists) {
+        startTransition(() => {
+          if (notes.length > 0) {
+            setSelectedNoteId(notes[0]._id);
+          } else {
+            setSelectedNoteId(null);
+          }
+        });
       }
     }
+    
+    prevNotesLengthRef.current = notes.length;
   }, [notes, selectedNoteId]);
 
   // Keyboard shortcut handlers
@@ -85,7 +118,6 @@ export default function NotesPage() {
     onTogglePin: handleTogglePin,
     onQuickSwitcher: () => setShowQuickSwitcher(true),
     onSearch: () => {
-      // Focus sidebar search
       const searchInput = document.querySelector('input[placeholder="Search notes..."]') as HTMLInputElement;
       if (searchInput) searchInput.focus();
     },
@@ -116,7 +148,9 @@ export default function NotesPage() {
   return (
     <div ref={containerRef} className="flex flex-1 overflow-hidden relative">
       {/* Sidebar - hidden on mobile unless toggled */}
-      <div
+      <motion.div
+        initial={false}
+        animate={{ x: showSidebarMobile ? 0 : undefined }}
         className={`
           absolute md:relative inset-y-0 left-0 z-30
           transform transition-transform duration-200 ease-in-out
@@ -127,24 +161,64 @@ export default function NotesPage() {
           selectedNoteId={selectedNoteId}
           onSelectNote={handleSelectNote}
           onOpenTrash={handleOpenTrash}
+          viewMode={viewMode}
+          onViewModeChange={handleViewModeChange}
         />
-      </div>
+      </motion.div>
 
       {/* Mobile overlay */}
-      {showSidebarMobile && (
-        <div
-          className="fixed inset-0 bg-black/50 z-20 md:hidden"
-          onClick={() => setShowSidebarMobile(false)}
-        />
-      )}
+      <AnimatePresence>
+        {showSidebarMobile && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-20 md:hidden"
+            onClick={() => setShowSidebarMobile(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {showTrash ? (
-          <TrashView onClose={handleCloseTrash} onSelectNote={handleSelectNote} />
-        ) : (
-          <NoteEditor noteId={selectedNoteId} />
-        )}
+        <AnimatePresence mode="wait">
+          {showTrash ? (
+            <motion.div
+              key="trash"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="flex-1"
+            >
+              <TrashView onClose={handleCloseTrash} onSelectNote={handleSelectNote} />
+            </motion.div>
+          ) : viewMode === "grid" ? (
+            <motion.div
+              key="grid"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex-1 overflow-y-auto p-6 bg-background"
+            >
+              <NotesGrid
+                notes={notes || []}
+                tags={tags || []}
+                selectedNoteId={selectedNoteId}
+                onSelectNote={handleSelectNote}
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="editor"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex-1 flex flex-col overflow-hidden"
+            >
+              <NoteEditor noteId={selectedNoteId} />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Quick Switcher */}
