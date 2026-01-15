@@ -112,7 +112,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       editorProps: {
         attributes: {
           class: cn(
-            "prose prose-lg dark:prose-invert max-w-none focus:outline-none min-h-[300px] px-6 py-4",
+            "prose prose-lg dark:prose-invert max-w-none focus:outline-none min-h-[300px] px-4 sm:px-6 py-3 sm:py-4 pb-24 md:pb-6",
             "prose-headings:font-semibold prose-headings:tracking-tight",
             "prose-h1:text-3xl prose-h1:mt-8 prose-h1:mb-4",
             "prose-h2:text-2xl prose-h2:mt-6 prose-h2:mb-3",

@@ -224,7 +224,7 @@ export function Sidebar({
           )}
         </div>
         
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
           <Button
             variant="ghost"
             size="sm"
@@ -289,7 +289,7 @@ export function Sidebar({
     <motion.div
       initial={{ x: -20, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
-      className="w-72 border-r bg-sidebar flex flex-col h-full"
+      className="w-72 border-r bg-sidebar flex flex-col h-full min-h-0"
     >
       {/* Search */}
       <div className="p-3 border-b">
@@ -332,7 +332,7 @@ export function Sidebar({
       <TagFilter selectedTagId={selectedTagId} onSelectTag={setSelectedTagId} />
 
       {/* Notes list */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         {filteredNotes.length === 0 && canvases.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
@@ -438,7 +438,7 @@ export function Sidebar({
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.2 }}
-        className="p-3 border-t space-y-2"
+        className="p-3 border-t space-y-2 flex-shrink-0"
       >
         <div className="flex gap-2">
           <Button onClick={handleCreateNote} className="flex-1">

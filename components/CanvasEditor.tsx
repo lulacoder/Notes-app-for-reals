@@ -539,15 +539,28 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
     return null;
   }, [shapes]);
 
+  const getStickyDimensions = useCallback(() => {
+    const width = Math.max(140, Math.min(260, Math.floor(stageSize.width * 0.45)));
+    const height = Math.max(110, Math.min(190, Math.floor(stageSize.height * 0.35)));
+    return { width, height };
+  }, [stageSize]);
+
+  const getEmbedDimensions = useCallback(() => {
+    const width = Math.max(200, Math.min(320, Math.floor(stageSize.width * 0.6)));
+    const height = Math.max(110, Math.min(180, Math.floor(stageSize.height * 0.3)));
+    return { width, height };
+  }, [stageSize]);
+
   // Create sticky note
   const createStickyNote = useCallback((pos: Point, colorIndex: number = 0) => {
+    const { width, height } = getStickyDimensions();
     const newShape: StickyNoteShape = {
       id: generateId(),
       type: "sticky",
       x: pos.x,
       y: pos.y,
-      width: 200,
-      height: 150,
+      width,
+      height,
       text: "",
       colorIndex,
       stroke: STICKY_COLORS[colorIndex].border,
@@ -559,7 +572,7 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
     addToHistory(newShapes);
     setEditingSticky(newShape.id);
     setStickyText("");
-  }, [shapes, addToHistory]);
+  }, [shapes, addToHistory, getStickyDimensions]);
 
   // Create note embed
   const createNoteEmbed = useCallback((pos: Point, note: { _id: string; title: string; content: string }) => {
@@ -568,13 +581,15 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
     tempDiv.innerHTML = note.content;
     const preview = (tempDiv.textContent || "").substring(0, 100);
 
+    const { width, height } = getEmbedDimensions();
+
     const newShape: NoteEmbedShape = {
       id: generateId(),
       type: "noteEmbed",
       x: pos.x,
       y: pos.y,
-      width: 250,
-      height: 120,
+      width,
+      height,
       noteId: note._id,
       noteTitle: note.title,
       notePreview: preview,
@@ -584,7 +599,7 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
     const newShapes = [...shapes, newShape];
     setShapes(newShapes);
     addToHistory(newShapes);
-  }, [shapes, addToHistory, isDark]);
+  }, [shapes, addToHistory, isDark, getEmbedDimensions]);
 
   // Create mind map root node
   const createMindMapRoot = useCallback((pos: Point) => {
@@ -1140,7 +1155,7 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
       <motion.div
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className="flex items-center gap-1 p-2 border-b bg-background/80 backdrop-blur-sm"
+        className="flex items-center gap-1 p-2 border-b bg-background/80 backdrop-blur-sm overflow-x-auto flex-nowrap"
       >
         <TooltipProvider delayDuration={0}>
           {tools.map(({ id, icon: Icon, label }) => (
@@ -1251,7 +1266,7 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
                 if (e.target === e.currentTarget) updateStickyText();
               }}
             >
-              <div className="bg-card rounded-xl shadow-xl p-4 w-80">
+              <div className="bg-card rounded-xl shadow-xl p-4 w-[90vw] max-w-sm">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold">Edit Sticky Note</h3>
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingSticky(null)}>
@@ -1297,8 +1312,9 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
                   <button
                     key={note._id}
                     onClick={() => {
+                      const { width, height } = getEmbedDimensions();
                       createNoteEmbed(
-                        { x: stageSize.width / 2 - 125, y: stageSize.height / 2 - 60 },
+                        { x: stageSize.width / 2 - width / 2, y: stageSize.height / 2 - height / 2 },
                         { _id: note._id, title: note.title, content: note.content }
                       );
                       setTool("select");

@@ -262,9 +262,9 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.1 }}
-        className="px-6 py-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+        className="px-4 py-3 md:px-6 md:py-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <input
             type="text"
             value={title}

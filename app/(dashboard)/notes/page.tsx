@@ -29,6 +29,7 @@ export default function NotesPage() {
   });
 
   const notes = useQuery(api.notes.listNotes);
+  const canvases = useQuery(api.canvases.listCanvases);
   const tags = useQuery(api.tags.listTags);
   const createNote = useMutation(api.notes.createNote);
   const softDeleteNote = useMutation(api.notes.softDeleteNote);
@@ -137,6 +138,18 @@ export default function NotesPage() {
     setShowTrash(false);
   };
 
+  const handleOpenNote = (id: Id<"notes">) => {
+    setShowSidebarMobile(false);
+    setShowTrash(false);
+    router.push(`/notes/${id}`);
+  };
+
+  const handleOpenCanvas = (id: Id<"canvases">) => {
+    setShowSidebarMobile(false);
+    setShowTrash(false);
+    router.push(`/canvas/${id}`);
+  };
+
   const handleOpenTrash = () => {
     setShowTrash(true);
   };
@@ -152,7 +165,7 @@ export default function NotesPage() {
         initial={false}
         animate={{ x: showSidebarMobile ? 0 : undefined }}
         className={`
-          absolute md:relative inset-y-0 left-0 z-30
+          absolute md:relative inset-y-0 left-0 z-30 h-full
           transform transition-transform duration-200 ease-in-out
           ${showSidebarMobile ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
         `}
@@ -198,13 +211,15 @@ export default function NotesPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex-1 overflow-y-auto p-6 bg-background"
+              className="flex-1 overflow-y-auto bg-background px-4 py-4 md:p-6 pb-24 md:pb-6"
             >
               <NotesGrid
                 notes={notes || []}
+                canvases={canvases || []}
                 tags={tags || []}
                 selectedNoteId={selectedNoteId}
-                onSelectNote={handleSelectNote}
+                onOpenNote={handleOpenNote}
+                onOpenCanvas={handleOpenCanvas}
               />
             </motion.div>
           ) : (
