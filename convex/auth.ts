@@ -21,7 +21,19 @@ export const createAuth = (
       enabled: true,
       requireEmailVerification: false,
     },
-    plugins: [convex()],
+    session: {
+      expiresIn: 60 * 60 * 24 * 7, // 7 days
+      updateAge: 60 * 60 * 24, // Refresh session after 1 day of activity
+      cookieCache: {
+        enabled: true,
+        maxAge: 5 * 60, // 5 minute cache to reduce DB hits
+      },
+    },
+    plugins: [
+      convex({
+        jwtExpirationSeconds: 60 * 60, // 1 hour JWT for stable WebSocket connection
+      }),
+    ],
   });
 };
 
