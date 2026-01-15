@@ -6,6 +6,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
@@ -31,6 +32,7 @@ import {
   AlignLeft,
   RemoveFormatting,
   Pilcrow,
+  MoreHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRef } from "react";
@@ -79,9 +81,9 @@ export function EditorToolbar({ editor, onImageUpload }: EditorToolbarProps) {
   };
 
   return (
-    <div className="flex items-center gap-1 p-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 flex-wrap">
-      {/* Undo/Redo */}
-      <div className="flex items-center gap-0.5">
+    <div className="flex items-center gap-0.5 sm:gap-1 p-1.5 sm:p-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 overflow-x-auto">
+      {/* Undo/Redo - Always visible */}
+      <div className="flex items-center gap-0.5 shrink-0">
         <ToolbarButton
           onClick={() => editor.chain().focus().undo().run()}
           disabled={!editor.can().undo()}
@@ -98,21 +100,21 @@ export function EditorToolbar({ editor, onImageUpload }: EditorToolbarProps) {
         </ToolbarButton>
       </div>
 
-      <Separator orientation="vertical" className="h-6 mx-1" />
+      <Separator orientation="vertical" className="h-6 mx-0.5 sm:mx-1 shrink-0" />
 
-      {/* Text Style Dropdown */}
+      {/* Text Style Dropdown - Always visible */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="gap-1 h-8 px-2">
+          <Button variant="ghost" size="sm" className="gap-0.5 h-8 px-1.5 sm:px-2 shrink-0">
             <Pilcrow className="h-4 w-4" />
-            <span className="text-sm hidden sm:inline">
+            <span className="text-sm hidden md:inline">
               {editor.isActive("heading", { level: 1 })
-                ? "Heading 1"
+                ? "H1"
                 : editor.isActive("heading", { level: 2 })
-                ? "Heading 2"
+                ? "H2"
                 : editor.isActive("heading", { level: 3 })
-                ? "Heading 3"
-                : "Paragraph"}
+                ? "H3"
+                : "P"}
             </span>
             <ChevronDown className="h-3 w-3" />
           </Button>
@@ -143,10 +145,10 @@ export function EditorToolbar({ editor, onImageUpload }: EditorToolbarProps) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Separator orientation="vertical" className="h-6 mx-1" />
+      <Separator orientation="vertical" className="h-6 mx-0.5 sm:mx-1 shrink-0" />
 
-      {/* Text Formatting */}
-      <div className="flex items-center gap-0.5">
+      {/* Essential Text Formatting - Always visible */}
+      <div className="flex items-center gap-0.5 shrink-0">
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
           active={editor.isActive("bold")}
@@ -161,33 +163,29 @@ export function EditorToolbar({ editor, onImageUpload }: EditorToolbarProps) {
         >
           <Italic className="h-4 w-4" />
         </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleUnderline().run()}
-          active={editor.isActive("underline")}
-          title="Underline (Ctrl+U)"
-        >
-          <Underline className="h-4 w-4" />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleStrike().run()}
-          active={editor.isActive("strike")}
-          title="Strikethrough"
-        >
-          <Strikethrough className="h-4 w-4" />
-        </ToolbarButton>
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleCode().run()}
-          active={editor.isActive("code")}
-          title="Inline Code"
-        >
-          <Code className="h-4 w-4" />
-        </ToolbarButton>
+        {/* Underline & Strikethrough - hidden on very small screens */}
+        <div className="hidden xs:flex items-center gap-0.5">
+          <ToolbarButton
+            onClick={() => editor.chain().focus().toggleUnderline().run()}
+            active={editor.isActive("underline")}
+            title="Underline (Ctrl+U)"
+          >
+            <Underline className="h-4 w-4" />
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => editor.chain().focus().toggleStrike().run()}
+            active={editor.isActive("strike")}
+            title="Strikethrough"
+          >
+            <Strikethrough className="h-4 w-4" />
+          </ToolbarButton>
+        </div>
       </div>
 
-      <Separator orientation="vertical" className="h-6 mx-1" />
+      <Separator orientation="vertical" className="h-6 mx-0.5 sm:mx-1 shrink-0" />
 
-      {/* Lists & Blocks */}
-      <div className="flex items-center gap-0.5">
+      {/* Lists - Always visible but compact on mobile */}
+      <div className="flex items-center gap-0.5 shrink-0">
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBulletList().run()}
           active={editor.isActive("bulletList")}
@@ -202,6 +200,11 @@ export function EditorToolbar({ editor, onImageUpload }: EditorToolbarProps) {
         >
           <ListOrdered className="h-4 w-4" />
         </ToolbarButton>
+      </div>
+
+      {/* Desktop: Additional buttons visible */}
+      <div className="hidden sm:flex items-center gap-0.5 shrink-0">
+        <Separator orientation="vertical" className="h-6 mx-1" />
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
           active={editor.isActive("blockquote")}
@@ -210,17 +213,12 @@ export function EditorToolbar({ editor, onImageUpload }: EditorToolbarProps) {
           <Quote className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
-          onClick={() => editor.chain().focus().setHorizontalRule().run()}
-          title="Horizontal Rule"
+          onClick={() => editor.chain().focus().toggleCode().run()}
+          active={editor.isActive("code")}
+          title="Inline Code"
         >
-          <Minus className="h-4 w-4" />
+          <Code className="h-4 w-4" />
         </ToolbarButton>
-      </div>
-
-      <Separator orientation="vertical" className="h-6 mx-1" />
-
-      {/* Insert */}
-      <div className="flex items-center gap-0.5">
         <ToolbarButton onClick={addLink} active={editor.isActive("link")} title="Add Link">
           <Link className="h-4 w-4" />
         </ToolbarButton>
@@ -238,20 +236,73 @@ export function EditorToolbar({ editor, onImageUpload }: EditorToolbarProps) {
             />
           </>
         )}
-        <ToolbarButton onClick={insertTable} title="Insert Table">
-          <Table className="h-4 w-4" />
-        </ToolbarButton>
       </div>
 
-      <Separator orientation="vertical" className="h-6 mx-1" />
+      {/* More options dropdown - visible on all screens */}
+      <div className="ml-auto shrink-0">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            {/* Mobile-only items */}
+            <div className="sm:hidden">
+              <DropdownMenuItem onClick={() => editor.chain().focus().toggleUnderline().run()}>
+                <Underline className="h-4 w-4 mr-2" />
+                Underline
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => editor.chain().focus().toggleStrike().run()}>
+                <Strikethrough className="h-4 w-4 mr-2" />
+                Strikethrough
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => editor.chain().focus().toggleBlockquote().run()}>
+                <Quote className="h-4 w-4 mr-2" />
+                Quote
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => editor.chain().focus().toggleCode().run()}>
+                <Code className="h-4 w-4 mr-2" />
+                Inline Code
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={addLink}>
+                <Link className="h-4 w-4 mr-2" />
+                Add Link
+              </DropdownMenuItem>
+              {onImageUpload && (
+                <DropdownMenuItem onClick={handleImageClick}>
+                  <ImageIcon className="h-4 w-4 mr-2" />
+                  Insert Image
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+            </div>
+            {/* Always in dropdown */}
+            <DropdownMenuItem onClick={() => editor.chain().focus().setHorizontalRule().run()}>
+              <Minus className="h-4 w-4 mr-2" />
+              Horizontal Rule
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={insertTable}>
+              <Table className="h-4 w-4 mr-2" />
+              Insert Table
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}>
+              <RemoveFormatting className="h-4 w-4 mr-2" />
+              Clear Formatting
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
-      {/* Clear Formatting */}
-      <ToolbarButton
-        onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
-        title="Clear Formatting"
-      >
-        <RemoveFormatting className="h-4 w-4" />
-      </ToolbarButton>
+      {/* Hidden file input for image upload on mobile */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleImageChange}
+        className="hidden"
+      />
     </div>
   );
 }

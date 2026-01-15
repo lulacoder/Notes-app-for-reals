@@ -540,8 +540,25 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
   }, [shapes]);
 
   const getStickyDimensions = useCallback(() => {
-    const width = Math.max(140, Math.min(260, Math.floor(stageSize.width * 0.45)));
-    const height = Math.max(110, Math.min(190, Math.floor(stageSize.height * 0.35)));
+    // Better responsive sizing based on screen breakpoints
+    const screenWidth = stageSize.width;
+    let width: number;
+    let height: number;
+    
+    if (screenWidth < 400) {
+      // Small mobile: compact sticky notes
+      width = Math.max(120, Math.floor(screenWidth * 0.35));
+      height = Math.max(100, Math.floor(width * 0.8));
+    } else if (screenWidth < 768) {
+      // Mobile/tablet: medium sticky notes
+      width = Math.max(150, Math.min(200, Math.floor(screenWidth * 0.3)));
+      height = Math.max(120, Math.floor(width * 0.75));
+    } else {
+      // Desktop: larger sticky notes with more text space
+      width = Math.max(180, Math.min(280, Math.floor(screenWidth * 0.2)));
+      height = Math.max(140, Math.min(220, Math.floor(width * 0.7)));
+    }
+    
     return { width, height };
   }, [stageSize]);
 
@@ -952,22 +969,74 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
         case "sticky": {
           const stickyColor = STICKY_COLORS[shape.colorIndex % STICKY_COLORS.length];
           // Shadow
-          ctx.shadowColor = "rgba(0,0,0,0.1)";
-          ctx.shadowBlur = 8;
+          ctx.shadowColor = "rgba(0,0,0,0.15)";
+          ctx.shadowBlur = 12;
           ctx.shadowOffsetY = 4;
-          // Background
+          // Background with rounded corners
           ctx.fillStyle = stickyColor.bg;
-          ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
+          ctx.beginPath();
+          ctx.roundRect(shape.x, shape.y, shape.width, shape.height, 6);
+          ctx.fill();
           ctx.shadowColor = "transparent";
           // Border
           ctx.strokeStyle = stickyColor.border;
-          ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
-          // Text
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.roundRect(shape.x, shape.y, shape.width, shape.height, 6);
+          ctx.stroke();
+          ctx.lineWidth = shape.strokeWidth;
+          
+          // Text with word wrapping
           ctx.fillStyle = stickyColor.text;
-          ctx.font = "14px sans-serif";
-          const lines = shape.text.split("\n");
-          lines.forEach((line, i) => {
-            ctx.fillText(line, shape.x + 12, shape.y + 28 + i * 20);
+          const fontSize = Math.max(12, Math.min(14, shape.width / 12));
+          ctx.font = `${fontSize}px sans-serif`;
+          
+          const padding = 12;
+          const lineHeight = fontSize + 6;
+          const maxWidth = shape.width - padding * 2;
+          const maxLines = Math.floor((shape.height - padding * 2 - 8) / lineHeight);
+          
+          // Split by newlines first, then wrap each line
+          const paragraphs = shape.text.split("\n");
+          const wrappedLines: string[] = [];
+          
+          for (const paragraph of paragraphs) {
+            if (wrappedLines.length >= maxLines) break;
+            
+            const words = paragraph.split(" ");
+            let currentLine = "";
+            
+            for (const word of words) {
+              const testLine = currentLine ? `${currentLine} ${word}` : word;
+              const metrics = ctx.measureText(testLine);
+              
+              if (metrics.width > maxWidth && currentLine) {
+                wrappedLines.push(currentLine);
+                currentLine = word;
+                if (wrappedLines.length >= maxLines) break;
+              } else {
+                currentLine = testLine;
+              }
+            }
+            
+            if (currentLine && wrappedLines.length < maxLines) {
+              wrappedLines.push(currentLine);
+            }
+          }
+          
+          // Add ellipsis if text was truncated
+          if (wrappedLines.length === maxLines && 
+              (paragraphs.length > 1 || shape.text.length > wrappedLines.join(" ").length + 10)) {
+            const lastLine = wrappedLines[maxLines - 1];
+            if (lastLine) {
+              const truncated = lastLine.slice(0, -3) + "...";
+              wrappedLines[maxLines - 1] = truncated;
+            }
+          }
+          
+          // Render wrapped lines
+          wrappedLines.forEach((line, i) => {
+            ctx.fillText(line, shape.x + padding, shape.y + padding + 12 + i * lineHeight);
           });
           break;
         }

@@ -9,7 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { TagAssigner } from "@/components/TagManager";
 import { VersionHistory } from "@/components/VersionHistory";
 import { RichTextEditor } from "@/components/editor";
-import { Pin, History, Sparkles } from "lucide-react";
+import { Pin, History, Sparkles, MoreHorizontal, ArrowLeft } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useImageUpload } from "@/lib/use-image-upload";
 
@@ -18,6 +25,7 @@ interface NoteEditorProps {
 }
 
 export function NoteEditor({ noteId }: NoteEditorProps) {
+  const router = useRouter();
   const note = useQuery(api.notes.getNote, noteId ? { id: noteId } : "skip");
   const tags = useQuery(api.tags.listTags) || [];
   const updateNote = useMutation(api.notes.updateNote);
@@ -262,26 +270,37 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.1 }}
-        className="px-4 py-3 md:px-6 md:py-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+        className="px-3 py-3 sm:px-4 md:px-6 md:py-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
       >
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Back button - mobile only */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 shrink-0 md:hidden"
+            onClick={() => router.push("/notes")}
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Untitled"
-            className="flex-1 text-2xl font-bold outline-none border-none bg-transparent placeholder:text-muted-foreground/50 tracking-tight"
+            className="flex-1 min-w-0 text-xl sm:text-2xl font-bold outline-none border-none bg-transparent placeholder:text-muted-foreground/50 tracking-tight"
           />
           
-          <div className="flex items-center gap-1">
-            {/* Tags display */}
+          <div className="flex items-center gap-1 shrink-0">
+            {/* Tags display - hidden on very small screens */}
             <AnimatePresence>
-              {noteTags.slice(0, 3).map((tag) => (
+              {noteTags.slice(0, 2).map((tag) => (
                 <motion.div
                   key={tag._id}
                   initial={{ scale: 0.8, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.8, opacity: 0 }}
+                  className="hidden sm:block"
                 >
                   <Badge
                     className={`${tag.color} text-white text-xs px-2 py-0.5`}
@@ -291,9 +310,9 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
                 </motion.div>
               ))}
             </AnimatePresence>
-            {noteTags.length > 3 && (
-              <span className="text-xs text-muted-foreground ml-1">
-                +{noteTags.length - 3}
+            {noteTags.length > 2 && (
+              <span className="hidden sm:inline text-xs text-muted-foreground ml-1">
+                +{noteTags.length - 2}
               </span>
             )}
 
@@ -303,29 +322,55 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
               onUpdateTags={handleUpdateTags}
             />
 
-            {/* Pin button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className={`h-9 w-9 p-0 ${
-                note.isPinned ? "text-amber-500" : "text-muted-foreground hover:text-foreground"
-              }`}
-              onClick={handleTogglePin}
-              title={note.isPinned ? "Unpin note" : "Pin note"}
-            >
-              <Pin className={`h-4 w-4 transition-transform ${note.isPinned ? "fill-current scale-110" : ""}`} />
-            </Button>
+            {/* Desktop: Individual buttons */}
+            <div className="hidden sm:flex items-center gap-1">
+              {/* Pin button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`h-9 w-9 p-0 ${
+                  note.isPinned ? "text-amber-500" : "text-muted-foreground hover:text-foreground"
+                }`}
+                onClick={handleTogglePin}
+                title={note.isPinned ? "Unpin note" : "Pin note"}
+              >
+                <Pin className={`h-4 w-4 transition-transform ${note.isPinned ? "fill-current scale-110" : ""}`} />
+              </Button>
 
-            {/* Version history button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 w-9 p-0 text-muted-foreground hover:text-foreground"
-              onClick={() => setShowVersions(true)}
-              title="Version history"
-            >
-              <History className="h-4 w-4" />
-            </Button>
+              {/* Version history button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9 w-9 p-0 text-muted-foreground hover:text-foreground"
+                onClick={() => setShowVersions(true)}
+                title="Version history"
+              >
+                <History className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Mobile: Dropdown menu for actions */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 w-9 p-0 sm:hidden text-muted-foreground hover:text-foreground"
+                >
+                  <MoreHorizontal className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleTogglePin}>
+                  <Pin className={`h-4 w-4 mr-2 ${note.isPinned ? "fill-amber-500 text-amber-500" : ""}`} />
+                  {note.isPinned ? "Unpin note" : "Pin note"}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowVersions(true)}>
+                  <History className="h-4 w-4 mr-2" />
+                  Version history
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </motion.div>
