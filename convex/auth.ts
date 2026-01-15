@@ -4,17 +4,14 @@ import { components } from "./_generated/api";
 import { DataModel } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import { betterAuth } from "better-auth";
+import authConfig from "./auth.config";
 
 const siteUrl = process.env.SITE_URL!;
 
 export const authComponent = createClient<DataModel>(components.betterAuth);
 
-export const createAuth = (
-  ctx: GenericCtx<DataModel>,
-  { optionsOnly } = { optionsOnly: false }
-) => {
+export const createAuth = (ctx: GenericCtx<DataModel>) => {
   return betterAuth({
-    logger: { disabled: optionsOnly },
     baseURL: siteUrl,
     database: authComponent.adapter(ctx),
     emailAndPassword: {
@@ -31,7 +28,11 @@ export const createAuth = (
     },
     plugins: [
       convex({
-        jwtExpirationSeconds: 60 * 60, // 1 hour JWT for stable WebSocket connection
+        authConfig,
+        jwt: {
+          expirationSeconds: 60 * 60, // 1 hour JWT for stable WebSocket connection
+        },
+        jwksRotateOnTokenGenerationError: true, // For algorithm migration
       }),
     ],
   });

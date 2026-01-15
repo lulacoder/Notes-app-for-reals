@@ -55,11 +55,6 @@ export default function CanvasEditorPage() {
     router.push("/canvas");
   };
 
-  const handleOpenNote = (noteId: string) => {
-    // Navigate to notes page with the specific note
-    router.push(`/notes?note=${noteId}`);
-  };
-
   const handleSaveTitle = async () => {
     if (editedTitle.trim() && editedTitle !== canvas?.title) {
       await updateCanvas({ id: canvasId, title: editedTitle.trim() });
@@ -181,12 +176,9 @@ export default function CanvasEditorPage() {
         </DropdownMenu>
       </div>
 
-      {/* Canvas editor - needs explicit height for tldraw */}
+      {/* Canvas editor */}
       <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
-        <CanvasEditor
-          canvasId={canvasId}
-          onOpenNote={handleOpenNote}
-        />
+        <CanvasEditor canvasId={canvasId} />
       </div>
     </div>
   );
