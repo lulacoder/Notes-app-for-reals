@@ -433,12 +433,12 @@ export function Sidebar({
         )}
       </ScrollArea>
 
-      {/* Footer */}
+      {/* Footer - desktop only (mobile uses MobileNav) */}
       <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.2 }}
-        className="p-3 border-t space-y-2 flex-shrink-0"
+        className="hidden md:block p-3 border-t space-y-2 flex-shrink-0"
       >
         <div className="flex gap-2">
           <Button onClick={handleCreateNote} className="flex-1">
