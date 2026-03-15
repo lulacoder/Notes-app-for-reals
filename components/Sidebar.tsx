@@ -162,7 +162,7 @@ export function Sidebar({
         transition={{ delay: index * 0.03 }}
         layout
         className={cn(
-          "group flex items-start gap-2 p-2.5 rounded-lg cursor-pointer transition-all duration-200 relative overflow-hidden",
+          "group flex items-start gap-2 p-1.5 rounded-lg cursor-pointer transition-all duration-200 relative overflow-hidden",
           selectedNoteId === note._id
             ? "bg-primary/10 text-primary font-medium"
             : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
@@ -187,18 +187,18 @@ export function Sidebar({
               animate={{ rotate: 0 }}
               transition={{ type: "spring", stiffness: 300 }}
             >
-              <Pin className="h-4 w-4 text-amber-500 fill-amber-500" />
+              <Pin className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
             </motion.div>
           ) : (
-            <FileText className="h-4 w-4 text-muted-foreground" />
+            <FileText className="h-3.5 w-3.5 text-muted-foreground" />
           )}
         </div>
         
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-sm truncate">
+          <div className="font-medium text-xs truncate">
             {note.title || "Untitled"}
           </div>
-          <div className="text-xs text-muted-foreground">
+          <div className="text-[10px] text-muted-foreground">
             {getRelativeTime(note.updatedAt)}
           </div>
           {noteTags && noteTags.length > 0 && (
@@ -275,7 +275,7 @@ export function Sidebar({
                 onClick={() => handleDeleteNote(note._id)}
                 className="text-destructive focus:text-destructive"
               >
-                <Trash2 className="h-4 w-4 mr-2" />
+          <Trash2 className="h-3.5 w-3.5 mr-1.5" />
                 Move to Trash
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -292,7 +292,7 @@ export function Sidebar({
       className="w-72 border-r bg-sidebar flex flex-col h-full min-h-0 overflow-hidden"
     >
       {/* Search */}
-      <div className="p-3 border-b shrink-0 bg-sidebar">
+      <div className="p-2 border-b shrink-0 bg-sidebar">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -410,14 +410,14 @@ export function Sidebar({
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: index * 0.05 }}
                           onClick={() => handleOpenCanvas(canvas._id)}
-                          className="group flex items-center gap-2 p-2 rounded-lg cursor-pointer hover:bg-accent transition-colors"
+                          className="group flex items-center gap-2 p-1.5 rounded-lg cursor-pointer hover:bg-accent transition-colors"
                         >
-                          <Layers className="h-4 w-4 text-muted-foreground" />
+                          <Layers className="h-3.5 w-3.5 text-muted-foreground" />
                           <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm truncate">
+                            <div className="font-medium text-xs truncate">
                               {canvas.title}
                             </div>
-                            <div className="text-xs text-muted-foreground">
+                            <div className="text-[10px] text-muted-foreground">
                               {getRelativeTime(canvas.updatedAt)}
                             </div>
                           </div>
@@ -440,22 +440,22 @@ export function Sidebar({
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.2 }}
-        className="p-3 border-t space-y-2 flex-shrink-0 bg-sidebar"
+        className="p-2 border-t space-y-1.5 flex-shrink-0 bg-sidebar"
       >
         <div className="flex gap-2">
-          <Button onClick={handleCreateNote} className="flex-1">
-            <Plus className="h-4 w-4 mr-2" />
+          <Button onClick={handleCreateNote} className="flex-1 h-8 text-xs">
+            <Plus className="h-3.5 w-3.5 mr-1.5" />
             Note
           </Button>
-          <Button onClick={handleCreateCanvas} variant="outline" className="flex-1">
-            <Layers className="h-4 w-4 mr-2" />
+          <Button onClick={handleCreateCanvas} variant="outline" className="flex-1 h-8 text-xs">
+            <Layers className="h-3.5 w-3.5 mr-1.5" />
             Canvas
           </Button>
         </div>
         <Button
           variant="ghost"
           size="sm"
-          className="w-full text-muted-foreground"
+          className="w-full h-7 text-xs text-muted-foreground"
           onClick={onOpenTrash}
         >
           <Trash2 className="h-4 w-4 mr-2" />
