@@ -35,7 +35,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface EditorToolbarProps {
   editor: Editor;
@@ -44,6 +44,27 @@ interface EditorToolbarProps {
 
 export function EditorToolbar({ editor, onImageUpload }: EditorToolbarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [, setRenderTick] = useState(0);
+
+  useEffect(() => {
+    const rerender = () => {
+      setRenderTick((tick) => tick + 1);
+    };
+
+    editor.on("selectionUpdate", rerender);
+    editor.on("transaction", rerender);
+    editor.on("focus", rerender);
+    editor.on("blur", rerender);
+    editor.on("update", rerender);
+
+    return () => {
+      editor.off("selectionUpdate", rerender);
+      editor.off("transaction", rerender);
+      editor.off("focus", rerender);
+      editor.off("blur", rerender);
+      editor.off("update", rerender);
+    };
+  }, [editor]);
 
   const handleImageClick = () => {
     fileInputRef.current?.click();

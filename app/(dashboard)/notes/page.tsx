@@ -159,13 +159,13 @@ export default function NotesPage() {
   };
 
   return (
-    <div ref={containerRef} className="flex flex-1 overflow-hidden relative">
+    <div ref={containerRef} className="flex flex-1 overflow-hidden relative min-h-0 h-full">
       {/* Sidebar - hidden on mobile unless toggled */}
       <motion.div
         initial={false}
         animate={{ x: showSidebarMobile ? 0 : undefined }}
         className={`
-          absolute md:relative inset-y-0 left-0 z-30 h-full
+          absolute md:relative inset-y-0 left-0 z-30 h-full min-h-0
           transform transition-transform duration-200 ease-in-out
           ${showSidebarMobile ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
         `}
@@ -193,7 +193,7 @@ export default function NotesPage() {
       </AnimatePresence>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
         <AnimatePresence mode="wait">
           {showTrash ? (
             <motion.div

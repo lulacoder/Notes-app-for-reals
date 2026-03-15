@@ -289,10 +289,10 @@ export function Sidebar({
     <motion.div
       initial={{ x: -20, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
-      className="w-72 border-r bg-sidebar flex flex-col h-full min-h-0"
+      className="w-72 border-r bg-sidebar flex flex-col h-full min-h-0 overflow-hidden"
     >
       {/* Search */}
-      <div className="p-3 border-b">
+      <div className="p-3 border-b shrink-0 bg-sidebar">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -329,10 +329,12 @@ export function Sidebar({
       </div>
 
       {/* Tag filter */}
-      <TagFilter selectedTagId={selectedTagId} onSelectTag={setSelectedTagId} />
+      <div className="shrink-0 bg-sidebar">
+        <TagFilter selectedTagId={selectedTagId} onSelectTag={setSelectedTagId} />
+      </div>
 
       {/* Notes list */}
-      <ScrollArea className="flex-1 min-h-0">
+      <ScrollArea className="flex-1 min-h-0 overflow-hidden">
         {filteredNotes.length === 0 && canvases.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
@@ -433,12 +435,12 @@ export function Sidebar({
         )}
       </ScrollArea>
 
-      {/* Footer - desktop only (mobile uses MobileNav) */}
+      {/* Footer actions */}
       <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.2 }}
-        className="hidden md:block p-3 border-t space-y-2 flex-shrink-0"
+        className="p-3 border-t space-y-2 flex-shrink-0 bg-sidebar"
       >
         <div className="flex gap-2">
           <Button onClick={handleCreateNote} className="flex-1">

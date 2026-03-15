@@ -13,7 +13,7 @@ import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
-import { useEffect, forwardRef, useImperativeHandle, useState } from "react";
+import { useEffect, forwardRef, useImperativeHandle } from "react";
 import { EditorToolbar } from "./EditorToolbar";
 import { SlashCommandMenu } from "./SlashCommand";
 import { cn } from "@/lib/utils";
@@ -49,13 +49,6 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
     },
     ref
   ) {
-    const [isMounted, setIsMounted] = useState(false);
-
-    // Ensure we only render on client
-    useEffect(() => {
-      setIsMounted(true);
-    }, []);
-
     const editor = useEditor({
       immediatelyRender: false, // Disable SSR rendering to prevent hydration errors
       extensions: [
@@ -188,7 +181,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       clear: () => editor?.commands.clearContent(),
     }));
 
-    if (!isMounted || !editor) {
+    if (!editor) {
       return (
         <div className="flex items-center justify-center h-64 text-muted-foreground">
           Loading editor...
