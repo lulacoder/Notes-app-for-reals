@@ -1,12 +1,7 @@
-"use client";
-
-import { useConvexAuth } from "convex/react";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { 
-  Loader2, 
   Sparkles, 
   Zap, 
   Search, 
@@ -16,23 +11,11 @@ import {
   StickyNote
 } from "lucide-react";
 import Image from "next/image";
+import { isAuthenticated } from "@/lib/auth-server";
 
-export default function Home() {
-  const { isAuthenticated, isLoading } = useConvexAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      router.push("/notes");
-    }
-  }, [isAuthenticated, isLoading, router]);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+export default async function Home() {
+  if (await isAuthenticated()) {
+    redirect("/notes");
   }
 
   return (

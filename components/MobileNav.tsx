@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useConvexAuth } from "convex/react";
 import { Button } from "@/components/ui/button";
 import { Plus, FileText, Trash2, Search, Layers } from "lucide-react";
 
@@ -20,10 +19,6 @@ export function MobileNav({
   onOpenSearch,
   onOpenCanvas,
 }: MobileNavProps) {
-  const { isAuthenticated } = useConvexAuth();
-
-  if (!isAuthenticated) return null;
-
   return (
     <div className="md:hidden fixed bottom-0 left-0 right-0 bg-background border-t mobile-nav z-50">
       <div className="flex items-center justify-around py-2 px-4">

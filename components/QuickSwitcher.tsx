@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useCallback, useMemo } from "react";
-import { useQuery } from "convex/react";
+import type { Preloaded } from "convex/react";
+import { usePreloadedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import {
@@ -20,11 +21,20 @@ interface QuickSwitcherProps {
   onOpenChange: (open: boolean) => void;
   onSelectNote: (id: Id<"notes">) => void;
   onOpenTrash?: () => void;
+  preloadedNotes: Preloaded<typeof api.notes.listNotes>;
+  preloadedTags: Preloaded<typeof api.tags.listTags>;
 }
 
-export function QuickSwitcher({ open, onOpenChange, onSelectNote, onOpenTrash }: QuickSwitcherProps) {
-  const notesQuery = useQuery(api.notes.listNotes);
-  const tagsQuery = useQuery(api.tags.listTags);
+export function QuickSwitcher({
+  open,
+  onOpenChange,
+  onSelectNote,
+  onOpenTrash,
+  preloadedNotes,
+  preloadedTags,
+}: QuickSwitcherProps) {
+  const notesQuery = usePreloadedQuery(preloadedNotes);
+  const tagsQuery = usePreloadedQuery(preloadedTags);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -52,8 +62,8 @@ export function QuickSwitcher({ open, onOpenChange, onSelectNote, onOpenTrash }:
   }, [onOpenTrash, onOpenChange]);
 
   const notesWithTags = useMemo(() => {
-    const notes = notesQuery || [];
-    const tags = tagsQuery || [];
+    const notes = notesQuery;
+    const tags = tagsQuery;
     return notes.map((note) => ({
       ...note,
       tags: note.tagIds

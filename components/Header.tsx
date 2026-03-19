@@ -1,7 +1,7 @@
 "use client";
 
-import { useConvexAuth } from "convex/react";
-import { useQuery } from "convex/react";
+import type { Preloaded } from "convex/react";
+import { usePreloadedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { signOut } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
@@ -32,11 +32,11 @@ import {
 
 interface HeaderProps {
   onOpenSearch?: () => void;
+  preloadedCurrentUser: Preloaded<typeof api.auth.getCurrentUser>;
 }
 
-export function Header({ onOpenSearch }: HeaderProps) {
-  const { isAuthenticated } = useConvexAuth();
-  const currentUser = useQuery(api.auth.getCurrentUser);
+export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
+  const currentUser = usePreloadedQuery(preloadedCurrentUser);
   const router = useRouter();
   const { isInstallable, install } = usePWAInstall();
 
@@ -63,7 +63,7 @@ export function Header({ onOpenSearch }: HeaderProps) {
           <span className="font-semibold text-lg">Noteworthy</span>
         </div>
 
-        {isAuthenticated && currentUser && (
+        {currentUser && (
           <div className="flex items-center gap-2">
             {/* Quick search button */}
             <Button

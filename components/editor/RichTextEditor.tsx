@@ -54,6 +54,8 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       extensions: [
         StarterKit.configure({
           codeBlock: false, // We use CodeBlockLowlight instead
+          link: false,
+          underline: false,
           heading: {
             levels: [1, 2, 3],
           },

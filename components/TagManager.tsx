@@ -197,10 +197,16 @@ export function TagManager({ noteId, noteTagIds }: TagManagerProps) {
 interface TagFilterProps {
   selectedTagId: Id<"tags"> | null;
   onSelectTag: (tagId: Id<"tags"> | null) => void;
+  tags?: Array<{
+    _id: Id<"tags">;
+    name: string;
+    color: string;
+  }>;
 }
 
-export function TagFilter({ selectedTagId, onSelectTag }: TagFilterProps) {
-  const tags = useQuery(api.tags.listTags) || [];
+export function TagFilter({ selectedTagId, onSelectTag, tags: providedTags }: TagFilterProps) {
+  const queriedTags = useQuery(api.tags.listTags) || [];
+  const tags = providedTags ?? queriedTags;
 
   if (tags.length === 0) return null;
 
