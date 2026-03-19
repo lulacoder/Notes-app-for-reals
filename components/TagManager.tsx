@@ -205,7 +205,8 @@ interface TagFilterProps {
 }
 
 export function TagFilter({ selectedTagId, onSelectTag, tags: providedTags }: TagFilterProps) {
-  const queriedTags = useQuery(api.tags.listTags) || [];
+  const queriedTags =
+    useQuery(api.tags.listTags, providedTags ? "skip" : undefined) || [];
   const tags = providedTags ?? queriedTags;
 
   if (tags.length === 0) return null;
