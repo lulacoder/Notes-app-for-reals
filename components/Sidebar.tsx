@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "convex/react";
+import type { Preloaded } from "convex/react";
+import { useMutation, usePreloadedQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -44,6 +45,10 @@ interface SidebarProps {
   onOpenTrash: () => void;
   viewMode?: "list" | "grid";
   onViewModeChange?: (mode: "list" | "grid") => void;
+  preloadedNotes: Preloaded<typeof api.notes.listNotes>;
+  preloadedTags: Preloaded<typeof api.tags.listTags>;
+  preloadedTrash: Preloaded<typeof api.notes.listTrash>;
+  preloadedCanvases: Preloaded<typeof api.canvases.listCanvases>;
 }
 
 export function Sidebar({ 
@@ -52,21 +57,20 @@ export function Sidebar({
   onOpenTrash,
   viewMode = "list",
   onViewModeChange,
+  preloadedNotes,
+  preloadedTags,
+  preloadedTrash,
+  preloadedCanvases,
 }: SidebarProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTagId, setSelectedTagId] = useState<Id<"tags"> | null>(null);
   const [canvasesExpanded, setCanvasesExpanded] = useState(true);
 
-  const notesQuery = useQuery(api.notes.listNotes);
-  const tagsQuery = useQuery(api.tags.listTags);
-  const trashQuery = useQuery(api.notes.listTrash);
-  const canvasesQuery = useQuery(api.canvases.listCanvases);
-
-  const notes = useMemo(() => notesQuery || [], [notesQuery]);
-  const tags = useMemo(() => tagsQuery || [], [tagsQuery]);
-  const trash = useMemo(() => trashQuery || [], [trashQuery]);
-  const canvases = useMemo(() => canvasesQuery || [], [canvasesQuery]);
+  const notes = usePreloadedQuery(preloadedNotes);
+  const tags = usePreloadedQuery(preloadedTags);
+  const trash = usePreloadedQuery(preloadedTrash);
+  const canvases = usePreloadedQuery(preloadedCanvases);
 
   const createNote = useMutation(api.notes.createNote);
   const createCanvas = useMutation(api.canvases.createCanvas);
@@ -330,7 +334,7 @@ export function Sidebar({
 
       {/* Tag filter */}
       <div className="shrink-0 bg-sidebar">
-        <TagFilter selectedTagId={selectedTagId} onSelectTag={setSelectedTagId} />
+        <TagFilter selectedTagId={selectedTagId} onSelectTag={setSelectedTagId} tags={tags} />
       </div>
 
       {/* Notes list */}
