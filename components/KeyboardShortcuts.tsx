@@ -6,7 +6,6 @@ interface KeyboardShortcutsProps {
   onNewNote: () => void;
   onDeleteNote?: () => void;
   onTogglePin?: () => void;
-  onQuickSwitcher?: () => void;
   onSearch?: () => void;
   onNextNote?: () => void;
   onPrevNote?: () => void;
@@ -17,7 +16,6 @@ export function useKeyboardShortcuts({
   onNewNote,
   onDeleteNote,
   onTogglePin,
-  onQuickSwitcher,
   onSearch,
   onNextNote,
   onPrevNote,
@@ -36,13 +34,6 @@ export function useKeyboardShortcuts({
       if (modifier && e.key === "n") {
         e.preventDefault();
         onNewNote();
-        return;
-      }
-
-      // Cmd/Ctrl + K: Quick search (always works)
-      if (modifier && e.key === "k") {
-        e.preventDefault();
-        onQuickSwitcher?.();
         return;
       }
 
@@ -97,7 +88,7 @@ export function useKeyboardShortcuts({
         return;
       }
     },
-    [onNewNote, onDeleteNote, onTogglePin, onQuickSwitcher, onSearch, onNextNote, onPrevNote, onSave]
+    [onNewNote, onDeleteNote, onTogglePin, onSearch, onNextNote, onPrevNote, onSave]
   );
 
   useEffect(() => {

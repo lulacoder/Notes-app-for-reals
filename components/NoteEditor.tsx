@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import dynamic from "next/dynamic";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TagAssigner } from "@/components/TagManager";
-import { VersionHistory } from "@/components/VersionHistory";
 import { RichTextEditor } from "@/components/editor";
 import { Pin, History, Sparkles, MoreHorizontal, ArrowLeft } from "lucide-react";
 import {
@@ -19,15 +19,21 @@ import {
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useImageUpload } from "@/lib/use-image-upload";
+import { extractTitleFromHtml } from "@/lib/html-utils";
 
 interface NoteEditorProps {
   noteId: Id<"notes"> | null;
 }
 
+const VersionHistory = dynamic(
+  () => import("@/components/VersionHistory").then((mod) => mod.VersionHistory),
+  { ssr: false }
+);
+
 export function NoteEditor({ noteId }: NoteEditorProps) {
   const router = useRouter();
   const note = useQuery(api.notes.getNote, noteId ? { id: noteId } : "skip");
-  const tags = useQuery(api.tags.listTags) || [];
+  const tags = useQuery(api.tags.listTags);
   const updateNote = useMutation(api.notes.updateNote);
   const togglePin = useMutation(api.notes.togglePin);
   const updateNoteTags = useMutation(api.notes.updateNoteTags);
@@ -155,15 +161,8 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
   const handleContentChange = (newContent: string) => {
     setContent(newContent);
 
-    // Auto-extract title from first heading or text if title is empty
     if (!title || title === "Untitled") {
-      // Try to extract from HTML content
-      const tempDiv = document.createElement("div");
-      tempDiv.innerHTML = newContent;
-      const firstHeading = tempDiv.querySelector("h1, h2, h3");
-      const firstText = tempDiv.textContent?.trim().split("\n")[0];
-      
-      const extractedTitle = firstHeading?.textContent?.trim() || firstText;
+      const extractedTitle = extractTitleFromHtml(newContent);
       if (extractedTitle) {
         setTitle(extractedTitle.substring(0, 100));
       }
@@ -205,10 +204,16 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
     }
   };
 
-  // Get current note tags
-  const noteTags = (note?.tagIds || [])
-    .map((tagId: Id<"tags">) => tags.find((t) => t._id === tagId))
-    .filter((tag): tag is NonNullable<typeof tag> => tag !== undefined);
+  const tagsById = useMemo(() => {
+    const availableTags = tags ?? [];
+    return new Map(availableTags.map((tag) => [tag._id, tag]));
+  }, [tags]);
+
+  const noteTags = useMemo(() => {
+    return (note?.tagIds || [])
+      .map((tagId: Id<"tags">) => tagsById.get(tagId))
+      .filter((tag): tag is NonNullable<typeof tag> => tag !== undefined);
+  }, [note?.tagIds, tagsById]);
 
   if (!noteId) {
     return (

@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { ConvexClientProvider } from "@/providers/convex-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
 import "./globals.css";
 
@@ -60,7 +59,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <ConvexClientProvider>{children}</ConvexClientProvider>
+          {children}
         </ThemeProvider>
       </body>
     </html>

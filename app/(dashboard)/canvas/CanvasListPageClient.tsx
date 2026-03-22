@@ -24,7 +24,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { CanvasPreview } from "@/components/CanvasEditor";
+import { CanvasPreview } from "@/components/CanvasPreview";
 import { getRelativeTime } from "@/lib/relative-time";
 
 interface CanvasListPageClientProps {

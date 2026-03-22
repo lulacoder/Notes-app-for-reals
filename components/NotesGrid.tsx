@@ -4,7 +4,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { NoteCard } from "./NoteCard";
 import { motion, AnimatePresence } from "framer-motion";
 import { FileText, Layers } from "lucide-react";
-import { CanvasPreview } from "@/components/CanvasEditor";
+import { CanvasPreview } from "@/components/CanvasPreview";
 import { getRelativeTime } from "@/lib/relative-time";
 
 interface Note {

@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { stripHtmlToText } from "@/lib/html-utils";
 import {
   Layers,
   MousePointer2,
@@ -129,190 +130,6 @@ type Shape = RectangleShape | CircleShape | LineShape | FreehandShape | TextShap
 
 interface CanvasEditorProps {
   canvasId: Id<"canvases">;
-}
-
-// Canvas Preview component for thumbnails
-export function CanvasPreview({ 
-  content, 
-  className = "" 
-}: { 
-  content: string; 
-  className?: string;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const { resolvedTheme } = useTheme();
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const isDark = resolvedTheme === "dark";
-    const bgColor = isDark ? "#1a1a1a" : "#ffffff";
-
-    const rect = container.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    try {
-      const parsed = JSON.parse(content || '{"shapes":[]}');
-      const shapes: Shape[] = parsed.shapes || [];
-
-      if (shapes.length === 0) {
-        ctx.fillStyle = isDark ? "#444" : "#ccc";
-        ctx.font = "12px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("Empty canvas", canvas.width / 2, canvas.height / 2);
-        return;
-      }
-
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      
-      shapes.forEach((shape) => {
-        switch (shape.type) {
-          case "rectangle":
-          case "sticky":
-          case "noteEmbed":
-          case "mindmapNode":
-            minX = Math.min(minX, shape.x);
-            minY = Math.min(minY, shape.y);
-            maxX = Math.max(maxX, shape.x + shape.width);
-            maxY = Math.max(maxY, shape.y + shape.height);
-            break;
-          case "circle":
-            minX = Math.min(minX, shape.x - shape.radius);
-            minY = Math.min(minY, shape.y - shape.radius);
-            maxX = Math.max(maxX, shape.x + shape.radius);
-            maxY = Math.max(maxY, shape.y + shape.radius);
-            break;
-          case "line":
-          case "freehand":
-          case "connector":
-            for (let i = 0; i < shape.points.length; i += 2) {
-              minX = Math.min(minX, shape.points[i]);
-              maxX = Math.max(maxX, shape.points[i]);
-              minY = Math.min(minY, shape.points[i + 1]);
-              maxY = Math.max(maxY, shape.points[i + 1]);
-            }
-            break;
-          case "text":
-            minX = Math.min(minX, shape.x);
-            minY = Math.min(minY, shape.y - shape.fontSize);
-            maxX = Math.max(maxX, shape.x + shape.text.length * shape.fontSize * 0.6);
-            maxY = Math.max(maxY, shape.y);
-            break;
-        }
-      });
-
-      const contentWidth = maxX - minX;
-      const contentHeight = maxY - minY;
-      const padding = 20;
-      const scaleX = (canvas.width - padding * 2) / contentWidth;
-      const scaleY = (canvas.height - padding * 2) / contentHeight;
-      const scale = Math.min(scaleX, scaleY, 1);
-
-      const offsetX = padding + (canvas.width - padding * 2 - contentWidth * scale) / 2 - minX * scale;
-      const offsetY = padding + (canvas.height - padding * 2 - contentHeight * scale) / 2 - minY * scale;
-
-      ctx.save();
-      ctx.translate(offsetX, offsetY);
-      ctx.scale(scale, scale);
-
-      shapes.forEach((shape) => {
-        ctx.strokeStyle = shape.stroke;
-        ctx.lineWidth = shape.strokeWidth;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-
-        switch (shape.type) {
-          case "rectangle":
-            ctx.beginPath();
-            ctx.rect(shape.x, shape.y, shape.width, shape.height);
-            if (shape.fill && shape.fill !== "transparent") {
-              ctx.fillStyle = shape.fill;
-              ctx.fill();
-            }
-            ctx.stroke();
-            break;
-          case "circle":
-            ctx.beginPath();
-            ctx.arc(shape.x, shape.y, shape.radius, 0, Math.PI * 2);
-            if (shape.fill && shape.fill !== "transparent") {
-              ctx.fillStyle = shape.fill;
-              ctx.fill();
-            }
-            ctx.stroke();
-            break;
-          case "line":
-          case "connector":
-            ctx.beginPath();
-            ctx.moveTo(shape.points[0], shape.points[1]);
-            for (let i = 2; i < shape.points.length; i += 2) {
-              ctx.lineTo(shape.points[i], shape.points[i + 1]);
-            }
-            ctx.stroke();
-            break;
-          case "freehand":
-            if (shape.points.length >= 4) {
-              ctx.beginPath();
-              ctx.moveTo(shape.points[0], shape.points[1]);
-              for (let i = 2; i < shape.points.length; i += 2) {
-                ctx.lineTo(shape.points[i], shape.points[i + 1]);
-              }
-              ctx.stroke();
-            }
-            break;
-          case "text":
-            ctx.font = `${shape.fontSize}px sans-serif`;
-            ctx.fillStyle = shape.stroke;
-            ctx.fillText(shape.text, shape.x, shape.y);
-            break;
-          case "sticky":
-            const stickyColor = STICKY_COLORS[shape.colorIndex % STICKY_COLORS.length];
-            ctx.fillStyle = stickyColor.bg;
-            ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
-            ctx.strokeStyle = stickyColor.border;
-            ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
-            break;
-          case "noteEmbed":
-            ctx.fillStyle = isDark ? "#2a2a2a" : "#f8f8f8";
-            ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
-            ctx.strokeStyle = isDark ? "#444" : "#ddd";
-            ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
-            break;
-          case "mindmapNode":
-            ctx.fillStyle = shape.isRoot ? "#3b82f6" : (isDark ? "#2a2a2a" : "#f8f8f8");
-            const radius = 8;
-            ctx.beginPath();
-            ctx.roundRect(shape.x, shape.y, shape.width, shape.height, radius);
-            ctx.fill();
-            ctx.strokeStyle = shape.isRoot ? "#2563eb" : (isDark ? "#444" : "#ddd");
-            ctx.stroke();
-            break;
-        }
-      });
-
-      ctx.restore();
-    } catch {
-      ctx.fillStyle = isDark ? "#444" : "#ccc";
-      ctx.font = "12px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText("Preview unavailable", canvas.width / 2, canvas.height / 2);
-    }
-  }, [content, resolvedTheme]);
-
-  return (
-    <div ref={containerRef} className={className}>
-      <canvas ref={canvasRef} className="w-full h-full" />
-    </div>
-  );
 }
 
 // Generate unique ID
@@ -637,10 +454,7 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
 
   // Create note embed
   const createNoteEmbed = useCallback((pos: Point, note: { _id: string; title: string; content: string }) => {
-    // Extract preview text
-    const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = note.content;
-    const preview = (tempDiv.textContent || "").substring(0, 100);
+    const preview = stripHtmlToText(note.content).substring(0, 100);
 
     const { width, height } = getEmbedDimensions();
 

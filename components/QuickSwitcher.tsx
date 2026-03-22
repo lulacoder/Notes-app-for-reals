@@ -48,6 +48,10 @@ export function QuickSwitcher({
     return () => document.removeEventListener("keydown", down);
   }, [open, onOpenChange]);
 
+  const tagsById = useMemo(() => {
+    return new Map(tagsQuery.map((tag) => [tag._id, tag]));
+  }, [tagsQuery]);
+
   const handleSelect = useCallback(
     (noteId: string) => {
       onSelectNote(noteId as Id<"notes">);
@@ -63,14 +67,13 @@ export function QuickSwitcher({
 
   const notesWithTags = useMemo(() => {
     const notes = notesQuery;
-    const tags = tagsQuery;
     return notes.map((note) => ({
       ...note,
       tags: note.tagIds
-        ?.map((tagId) => tags.find((t) => t._id === tagId))
-        .filter(Boolean) || [],
+        ?.map((tagId) => tagsById.get(tagId))
+        .filter((tag): tag is NonNullable<typeof tag> => Boolean(tag)) || [],
     }));
-  }, [notesQuery, tagsQuery]);
+  }, [notesQuery, tagsById]);
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>

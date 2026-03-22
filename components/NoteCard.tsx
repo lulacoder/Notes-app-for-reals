@@ -1,11 +1,13 @@
 "use client";
 
+import { useMemo } from "react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Badge } from "@/components/ui/badge";
 import { Pin } from "lucide-react";
 import { motion } from "framer-motion";
 import { getRelativeTime } from "@/lib/relative-time";
 import { cn } from "@/lib/utils";
+import { extractFirstImageSrc, stripHtmlToText } from "@/lib/html-utils";
 
 interface NoteCardProps {
   note: {
@@ -26,26 +28,23 @@ interface NoteCardProps {
 }
 
 export function NoteCard({ note, tags, isSelected, onClick }: NoteCardProps) {
-  // Extract preview text from HTML content
-  const getPreviewText = (html: string): string => {
-    const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = html;
-    const text = tempDiv.textContent || tempDiv.innerText || "";
-    return text.trim().substring(0, 150);
-  };
+  const tagsById = useMemo(() => {
+    return new Map(tags.map((tag) => [tag._id, tag]));
+  }, [tags]);
 
-  // Extract first image from content for thumbnail
-  const getThumbnail = (html: string): string | null => {
-    const imgMatch = html.match(/<img[^>]+src="([^">]+)"/);
-    return imgMatch ? imgMatch[1] : null;
-  };
+  const noteTags = useMemo(() => {
+    return (note.tagIds || [])
+      .map((tagId) => tagsById.get(tagId))
+      .filter((tag): tag is NonNullable<typeof tag> => Boolean(tag));
+  }, [note.tagIds, tagsById]);
 
-  const noteTags = (note.tagIds || [])
-    .map((tagId) => tags.find((t) => t._id === tagId))
-    .filter(Boolean);
+  const preview = useMemo(() => {
+    return stripHtmlToText(note.content).substring(0, 150);
+  }, [note.content]);
 
-  const preview = getPreviewText(note.content);
-  const thumbnail = getThumbnail(note.content);
+  const thumbnail = useMemo(() => {
+    return extractFirstImageSrc(note.content);
+  }, [note.content]);
 
   return (
     <motion.div
@@ -102,10 +101,10 @@ export function NoteCard({ note, tags, isSelected, onClick }: NoteCardProps) {
         <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
           {noteTags.slice(0, 2).map((tag) => (
             <Badge
-              key={tag!._id}
-              className={cn(tag!.color, "text-white text-[10px] px-1.5 py-0")}
+              key={tag._id}
+              className={cn(tag.color, "text-white text-[10px] px-1.5 py-0")}
             >
-              {tag!.name}
+              {tag.name}
             </Badge>
           ))}
           {noteTags.length > 2 && (

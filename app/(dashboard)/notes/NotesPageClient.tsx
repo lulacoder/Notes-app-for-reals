@@ -115,7 +115,6 @@ export function NotesPageClient({
     onNewNote: handleNewNote,
     onDeleteNote: handleDeleteNote,
     onTogglePin: handleTogglePin,
-    onQuickSwitcher: () => setShowQuickSwitcher(true),
     onSearch: () => {
       const searchInput = document.querySelector('input[placeholder="Search notes..."]') as HTMLInputElement;
       if (searchInput) searchInput.focus();

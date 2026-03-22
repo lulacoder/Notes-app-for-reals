@@ -71,6 +71,9 @@ export function Sidebar({
   const tags = usePreloadedQuery(preloadedTags);
   const trash = usePreloadedQuery(preloadedTrash);
   const canvases = usePreloadedQuery(preloadedCanvases);
+  const tagsById = useMemo(() => {
+    return new Map(tags.map((tag) => [tag._id, tag]));
+  }, [tags]);
 
   const createNote = useMutation(api.notes.createNote);
   const createCanvas = useMutation(api.canvases.createCanvas);
@@ -154,8 +157,8 @@ export function Sidebar({
 
   const renderNoteItem = (note: (typeof notes)[0], index: number) => {
     const noteTags = note.tagIds
-      ?.map((tagId) => tags.find((t) => t._id === tagId))
-      .filter(Boolean);
+      ?.map((tagId) => tagsById.get(tagId))
+      .filter((tag): tag is NonNullable<typeof tag> => Boolean(tag));
 
     return (
       <motion.div
@@ -209,14 +212,14 @@ export function Sidebar({
             <div className="flex flex-wrap gap-1 mt-1.5">
               {noteTags.slice(0, 2).map((tag) => (
                 <span
-                  key={tag!._id}
+                  key={tag._id}
                   className={cn(
                     "inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full",
-                    tag!.color,
+                    tag.color,
                     "text-white"
                   )}
                 >
-                  {tag!.name}
+                  {tag.name}
                 </span>
               ))}
               {noteTags.length > 2 && (
