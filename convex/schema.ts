@@ -89,4 +89,49 @@ export default defineSchema({
   })
     .index("by_canvas", ["canvasId"])
     .index("by_asset_id", ["assetId"]),
+
+  // Kanban boards
+  kanbanBoards: defineTable({
+    title: v.string(),
+    userId: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    isDeleted: v.optional(v.boolean()),
+    deletedAt: v.optional(v.number()),
+    isPinned: v.optional(v.boolean()),
+    pinnedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_updated", ["userId", "updatedAt"])
+    .index("by_user_deleted", ["userId", "isDeleted"]),
+
+  // Kanban columns (belong to a board)
+  kanbanColumns: defineTable({
+    boardId: v.id("kanbanBoards"),
+    title: v.string(),
+    order: v.number(), // float for drag reordering
+    userId: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_board", ["boardId"])
+    .index("by_board_order", ["boardId", "order"]),
+
+  // Kanban cards (belong to a column)
+  kanbanCards: defineTable({
+    boardId: v.id("kanbanBoards"),
+    columnId: v.id("kanbanColumns"),
+    title: v.string(),
+    description: v.optional(v.string()), // Tiptap HTML
+    order: v.number(), // float for drag reordering
+    dueDate: v.optional(v.number()), // Unix ms timestamp
+    tagIds: v.optional(v.array(v.id("tags"))),
+    userId: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    isDeleted: v.optional(v.boolean()),
+    deletedAt: v.optional(v.number()),
+  })
+    .index("by_column", ["columnId"])
+    .index("by_board", ["boardId"])
+    .index("by_column_order", ["columnId", "order"]),
 });
