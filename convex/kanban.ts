@@ -276,6 +276,11 @@ export const deleteColumn = mutation({
       .collect();
 
     if (args.targetColumnId) {
+      // Verify the target column belongs to the same board (implicitly same user)
+      const targetCol = await ctx.db.get(args.targetColumnId);
+      if (!targetCol || targetCol.boardId !== col.boardId)
+        throw new Error("Target column not found or belongs to a different board");
+
       // Move cards to target column
       const targetCards = await ctx.db
         .query("kanbanCards")
@@ -304,6 +309,7 @@ export const deleteColumn = mutation({
   },
 });
 
+
 export const reorderColumns = mutation({
   args: {
     boardId: v.id("kanbanBoards"),
@@ -318,12 +324,17 @@ export const reorderColumns = mutation({
       throw new Error("Board not found or unauthorized");
 
     for (let i = 0; i < args.orderedIds.length; i++) {
+      const col = await ctx.db.get(args.orderedIds[i]);
+      // Reject any column that doesn't belong to this board
+      if (!col || col.boardId !== args.boardId)
+        throw new Error(`Column ${args.orderedIds[i]} does not belong to this board`);
       await ctx.db.patch(args.orderedIds[i], { order: (i + 1) * 1000 });
     }
 
     await ctx.db.patch(args.boardId, { updatedAt: Date.now() });
   },
 });
+
 
 // ─── CARDS ───────────────────────────────────────────────────────────────────
 
@@ -460,6 +471,47 @@ export const moveCard = mutation({
     return args.id;
   },
 });
+
+/**
+ * Move a card to a different column, placing it at the end.
+ * Computes the correct order server-side so callers don't have to pass an
+ * order value that was only meaningful in the source column.
+ */
+export const moveCardToColumnEnd = mutation({
+  args: {
+    id: v.id("kanbanCards"),
+    columnId: v.id("kanbanColumns"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const card = await ctx.db.get(args.id);
+    if (!card || card.userId !== identity.subject)
+      throw new Error("Card not found or unauthorized");
+
+    // Compute end-of-column order in the destination column
+    const destCards = await ctx.db
+      .query("kanbanCards")
+      .withIndex("by_column", (q) => q.eq("columnId", args.columnId))
+      .collect();
+    const activeDestCards = destCards.filter((c) => !c.isDeleted);
+    const maxOrder =
+      activeDestCards.length > 0
+        ? Math.max(...activeDestCards.map((c) => c.order))
+        : 0;
+
+    const now = Date.now();
+    await ctx.db.patch(args.id, {
+      columnId: args.columnId,
+      order: maxOrder + 1000,
+      updatedAt: now,
+    });
+    await ctx.db.patch(card.boardId, { updatedAt: now });
+    return args.id;
+  },
+});
+
 
 export const reorderCards = mutation({
   args: {

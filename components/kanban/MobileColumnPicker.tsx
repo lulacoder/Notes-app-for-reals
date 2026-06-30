@@ -18,7 +18,7 @@ interface MobileColumnPickerProps {
   columns: Column[];
   currentColumnId: Id<"kanbanColumns">;
   cardId: Id<"kanbanCards">;
-  cardOrder: number;
+  // cardOrder intentionally omitted: order is computed server-side by moveCardToColumnEnd
 }
 
 export function MobileColumnPicker({
@@ -27,16 +27,16 @@ export function MobileColumnPicker({
   columns,
   currentColumnId,
   cardId,
-  cardOrder,
 }: MobileColumnPickerProps) {
-  const moveCard = useMutation(api.kanban.moveCard);
+  const moveCardToColumnEnd = useMutation(api.kanban.moveCardToColumnEnd);
 
   const handleMove = async (columnId: Id<"kanbanColumns">) => {
     if (columnId === currentColumnId) {
       onClose();
       return;
     }
-    await moveCard({ id: cardId, columnId, order: cardOrder });
+    // Server computes correct end-of-column order; no need to pass a stale source order.
+    await moveCardToColumnEnd({ id: cardId, columnId });
     onClose();
   };
 

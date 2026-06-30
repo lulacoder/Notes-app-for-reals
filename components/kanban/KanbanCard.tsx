@@ -164,7 +164,6 @@ export function KanbanCard({
           columns={columns}
           currentColumnId={card.columnId}
           cardId={card._id}
-          cardOrder={card.order}
         />
       )}
     </>

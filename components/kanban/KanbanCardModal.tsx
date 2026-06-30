@@ -67,7 +67,7 @@ export function KanbanCardModal({
   onClose,
 }: KanbanCardModalProps) {
   const updateCard = useMutation(api.kanban.updateCard);
-  const moveCard = useMutation(api.kanban.moveCard);
+  const moveCardToColumnEnd = useMutation(api.kanban.moveCardToColumnEnd);
   const softDeleteCard = useMutation(api.kanban.softDeleteCard);
 
   const [title, setTitle] = useState(card?.title ?? "");
@@ -110,7 +110,9 @@ export function KanbanCardModal({
 
   const handleMoveToColumn = async (columnId: Id<"kanbanColumns">) => {
     if (!card) return;
-    await moveCard({ id: card._id, columnId, order: card.order });
+    // Use moveCardToColumnEnd so the card is placed after all existing cards
+    // in the destination column, not at its old source-column position.
+    await moveCardToColumnEnd({ id: card._id, columnId });
     onClose();
   };
 
