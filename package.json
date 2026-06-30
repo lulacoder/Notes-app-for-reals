@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@convex-dev/better-auth": "^0.10.10",
+    "@hello-pangea/dnd": "^18.0.1",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-dialog": "^1.1.15",
