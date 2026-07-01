@@ -1,8 +1,22 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Plus, FileText, Trash2, Search, Layers } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Plus,
+  FileText,
+  Trash2,
+  Search,
+  Layers,
+  LayoutDashboard,
+  MoreHorizontal,
+} from "lucide-react";
 
 interface MobileNavProps {
   onToggleSidebar: () => void;
@@ -10,6 +24,7 @@ interface MobileNavProps {
   onOpenTrash: () => void;
   onOpenSearch?: () => void;
   onOpenCanvas?: () => void;
+  onOpenBoards?: () => void;
 }
 
 export function MobileNav({
@@ -18,10 +33,13 @@ export function MobileNav({
   onOpenTrash,
   onOpenSearch,
   onOpenCanvas,
+  onOpenBoards,
 }: MobileNavProps) {
+  const router = useRouter();
   return (
     <div className="md:hidden fixed bottom-0 left-0 right-0 bg-background border-t mobile-nav z-50">
       <div className="flex items-center justify-around py-2 px-4">
+        {/* Notes */}
         <Button
           variant="ghost"
           size="sm"
@@ -32,6 +50,7 @@ export function MobileNav({
           <span className="text-xs">Notes</span>
         </Button>
 
+        {/* Canvas */}
         <Button
           variant="ghost"
           size="sm"
@@ -42,6 +61,7 @@ export function MobileNav({
           <span className="text-xs">Canvas</span>
         </Button>
 
+        {/* New note (centre FAB) */}
         <Button
           variant="default"
           size="sm"
@@ -51,6 +71,18 @@ export function MobileNav({
           <Plus className="h-6 w-6" />
         </Button>
 
+        {/* Boards */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="flex-col gap-0.5 h-auto py-2"
+          onClick={onOpenBoards ?? (() => router.push("/kanban"))}
+        >
+          <LayoutDashboard className="h-5 w-5" />
+          <span className="text-xs">Boards</span>
+        </Button>
+
+        {/* Search */}
         <Button
           variant="ghost"
           size="sm"
@@ -61,19 +93,39 @@ export function MobileNav({
           <span className="text-xs">Search</span>
         </Button>
 
-        <Button
-          variant="ghost"
-          size="sm"
-          className="flex-col gap-0.5 h-auto py-2"
-          onClick={onOpenTrash}
-        >
-          <Trash2 className="h-5 w-5" />
-          <span className="text-xs">Trash</span>
-        </Button>
+        {/* More — contains Trash so it is never inaccessible on mobile */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex-col gap-0.5 h-auto py-2"
+            >
+              <MoreHorizontal className="h-5 w-5" />
+              <span className="text-xs">More</span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="top"
+            align="end"
+            className="w-40 p-1"
+            sideOffset={8}
+          >
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-2 text-sm"
+              onClick={onOpenTrash}
+            >
+              <Trash2 className="h-4 w-4" />
+              Trash
+            </Button>
+          </PopoverContent>
+        </Popover>
       </div>
     </div>
   );
 }
+
 
 // Swipe gesture hook for mobile
 interface SwipeGestureOptions {

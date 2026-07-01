@@ -33,6 +33,7 @@ import {
   Send,
   LayoutGrid,
   LayoutList,
+  LayoutDashboard,
 } from "lucide-react";
 import { getRelativeTime } from "@/lib/relative-time";
 import { createNotesSearchIndex } from "@/lib/fuse";
@@ -66,6 +67,7 @@ export function Sidebar({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTagId, setSelectedTagId] = useState<Id<"tags"> | null>(null);
   const [canvasesExpanded, setCanvasesExpanded] = useState(true);
+  const [boardsExpanded, setBoardsExpanded] = useState(true);
 
   const notes = usePreloadedQuery(preloadedNotes);
   const tags = usePreloadedQuery(preloadedTags);
@@ -438,6 +440,45 @@ export function Sidebar({
                 </AnimatePresence>
               </motion.div>
             )}
+
+            {/* Boards section */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="mt-4 pt-2 border-t"
+            >
+              <button
+                onClick={() => setBoardsExpanded(!boardsExpanded)}
+                className="w-full px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1 hover:text-foreground transition-colors"
+              >
+                <motion.div
+                  animate={{ rotate: boardsExpanded ? 0 : -90 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <ChevronDown className="h-3 w-3" />
+                </motion.div>
+                <LayoutDashboard className="h-3 w-3" />
+                Boards
+              </button>
+              <AnimatePresence>
+                {boardsExpanded && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="mt-1 overflow-hidden"
+                  >
+                    <motion.div
+                      onClick={() => router.push("/kanban")}
+                      className="group flex items-center gap-2 p-1.5 rounded-lg cursor-pointer hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                    >
+                      <LayoutDashboard className="h-3.5 w-3.5" />
+                      <span className="font-medium text-xs">Open Boards</span>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
           </div>
         )}
       </ScrollArea>
@@ -459,6 +500,15 @@ export function Sidebar({
             Canvas
           </Button>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full h-8 text-xs"
+          onClick={() => router.push("/kanban")}
+        >
+          <LayoutDashboard className="h-3.5 w-3.5 mr-1.5" />
+          Boards
+        </Button>
         <Button
           variant="ghost"
           size="sm"
