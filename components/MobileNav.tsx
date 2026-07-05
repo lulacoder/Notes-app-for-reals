@@ -38,7 +38,18 @@ export function MobileNav({
   const router = useRouter();
   return (
     <div className="md:hidden fixed bottom-0 left-0 right-0 bg-background border-t mobile-nav z-50">
-      <div className="flex items-center justify-around py-2 px-4">
+      {/* FAB sits above the bar, perfectly centered */}
+      <div className="absolute left-1/2 -translate-x-1/2 -top-7 z-10">
+        <Button
+          variant="default"
+          size="sm"
+          className="h-14 w-14 rounded-full shadow-lg shadow-primary/40 flex items-center justify-center p-0 border-4 border-background"
+          onClick={onNewNote}
+        >
+          <Plus className="h-6 w-6" />
+        </Button>
+      </div>
+      <div className="flex items-center justify-around py-2 px-4 pb-2">
         {/* Notes */}
         <Button
           variant="ghost"
@@ -61,15 +72,8 @@ export function MobileNav({
           <span className="text-xs">Canvas</span>
         </Button>
 
-        {/* New note (centre FAB) */}
-        <Button
-          variant="default"
-          size="sm"
-          className="flex-col gap-0.5 h-auto py-2 rounded-full w-14"
-          onClick={onNewNote}
-        >
-          <Plus className="h-6 w-6" />
-        </Button>
+        {/* Spacer in place of the FAB to keep surrounding buttons evenly spaced */}
+        <div className="w-14" aria-hidden />
 
         {/* Boards */}
         <Button
