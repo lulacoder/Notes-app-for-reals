@@ -37,19 +37,22 @@ export function MobileNav({
 }: MobileNavProps) {
   const router = useRouter();
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-background border-t mobile-nav z-50">
-      {/* FAB sits above the bar, perfectly centered */}
-      <div className="absolute left-1/2 -translate-x-1/2 -top-7 z-10">
+    <div
+      className="md:hidden fixed bottom-0 left-0 right-0 bg-background border-t mobile-nav z-50"
+      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+    >
+      {/* FAB sits subtly above the bar, perfectly centered */}
+      <div className="absolute left-1/2 -translate-x-1/2 -top-5 z-10">
         <Button
           variant="default"
           size="sm"
-          className="h-14 w-14 rounded-full shadow-lg shadow-primary/40 flex items-center justify-center p-0 border-4 border-background"
+          className="h-12 w-12 rounded-full shadow-md shadow-primary/30 flex items-center justify-center p-0 border-2 border-background"
           onClick={onNewNote}
         >
-          <Plus className="h-6 w-6" />
+          <Plus className="h-5 w-5" />
         </Button>
       </div>
-      <div className="flex items-center justify-around py-2 px-4 pb-2">
+      <div className="flex items-center justify-around pt-3 pb-1 px-4">
         {/* Notes */}
         <Button
           variant="ghost"
