@@ -38,66 +38,64 @@ export function MobileNav({
   const router = useRouter();
   return (
     <div
-      className="md:hidden fixed bottom-0 left-0 right-0 bg-background border-t mobile-nav z-50"
+      className="md:hidden fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-md border-t mobile-nav z-50"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
-      {/* FAB sits subtly above the bar, perfectly centered */}
-      <div className="absolute left-1/2 -translate-x-1/2 -top-5 z-10">
-        <Button
-          variant="default"
-          size="sm"
-          className="h-12 w-12 rounded-full shadow-md shadow-primary/30 flex items-center justify-center p-0 border-2 border-background"
-          onClick={onNewNote}
-        >
-          <Plus className="h-5 w-5" />
-        </Button>
-      </div>
-      <div className="flex items-center justify-around pt-3 pb-1 px-4">
+      <div className="flex items-center justify-around pt-2 pb-1 px-2">
         {/* Notes */}
         <Button
           variant="ghost"
           size="sm"
-          className="flex-col gap-0.5 h-auto py-2"
+          className="flex-col gap-0.5 h-auto py-2 min-w-0 flex-1"
           onClick={onToggleSidebar}
         >
           <FileText className="h-5 w-5" />
-          <span className="text-xs">Notes</span>
+          <span className="text-[10px]">Notes</span>
         </Button>
 
         {/* Canvas */}
         <Button
           variant="ghost"
           size="sm"
-          className="flex-col gap-0.5 h-auto py-2"
+          className="flex-col gap-0.5 h-auto py-2 min-w-0 flex-1"
           onClick={onOpenCanvas}
         >
           <Layers className="h-5 w-5" />
-          <span className="text-xs">Canvas</span>
+          <span className="text-[10px]">Canvas</span>
         </Button>
 
-        {/* Spacer in place of the FAB to keep surrounding buttons evenly spaced */}
-        <div className="w-14" aria-hidden />
+        {/* New — primary action, inline with an accent background */}
+        <div className="flex-1 flex items-center justify-center">
+          <Button
+            variant="default"
+            size="sm"
+            className="h-10 w-10 rounded-full p-0 shadow-sm"
+            onClick={onNewNote}
+          >
+            <Plus className="h-5 w-5" />
+          </Button>
+        </div>
 
         {/* Boards */}
         <Button
           variant="ghost"
           size="sm"
-          className="flex-col gap-0.5 h-auto py-2"
+          className="flex-col gap-0.5 h-auto py-2 min-w-0 flex-1"
           onClick={onOpenBoards ?? (() => router.push("/kanban"))}
         >
           <LayoutDashboard className="h-5 w-5" />
-          <span className="text-xs">Boards</span>
+          <span className="text-[10px]">Boards</span>
         </Button>
 
         {/* Search */}
         <Button
           variant="ghost"
           size="sm"
-          className="flex-col gap-0.5 h-auto py-2"
+          className="flex-col gap-0.5 h-auto py-2 min-w-0 flex-1"
           onClick={onOpenSearch}
         >
           <Search className="h-5 w-5" />
-          <span className="text-xs">Search</span>
+          <span className="text-[10px]">Search</span>
         </Button>
 
         {/* More — contains Trash so it is never inaccessible on mobile */}
@@ -106,10 +104,10 @@ export function MobileNav({
             <Button
               variant="ghost"
               size="sm"
-              className="flex-col gap-0.5 h-auto py-2"
+              className="flex-col gap-0.5 h-auto py-2 min-w-0 flex-1"
             >
               <MoreHorizontal className="h-5 w-5" />
-              <span className="text-xs">More</span>
+              <span className="text-[10px]">More</span>
             </Button>
           </PopoverTrigger>
           <PopoverContent
