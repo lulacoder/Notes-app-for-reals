@@ -38,87 +38,83 @@ export function MobileNav({
   const router = useRouter();
   return (
     <div
-      className="md:hidden fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-md border-t mobile-nav z-50"
+      className="md:hidden fixed bottom-4 left-4 right-4 z-50 pointer-events-none"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
-      <div className="flex items-center justify-around pt-2 pb-1 px-2">
+      <div className="pointer-events-auto max-w-sm mx-auto bg-card/85 backdrop-blur-xl border border-border/60 shadow-2xl rounded-full p-1.5 px-2 flex items-center justify-around">
         {/* Notes */}
         <Button
           variant="ghost"
           size="sm"
-          className="flex-col gap-0.5 h-auto py-2 min-w-0 flex-1"
+          className="flex-col gap-0.5 h-auto py-1.5 px-2 min-w-0 flex-1 rounded-full hover:bg-accent/60"
           onClick={onToggleSidebar}
         >
           <FileText className="h-5 w-5" />
-          <span className="text-[10px]">Notes</span>
+          <span className="text-[10px] font-medium tracking-tight">Notes</span>
         </Button>
 
         {/* Canvas */}
         <Button
           variant="ghost"
           size="sm"
-          className="flex-col gap-0.5 h-auto py-2 min-w-0 flex-1"
+          className="flex-col gap-0.5 h-auto py-1.5 px-2 min-w-0 flex-1 rounded-full hover:bg-accent/60"
           onClick={onOpenCanvas}
         >
           <Layers className="h-5 w-5" />
-          <span className="text-[10px]">Canvas</span>
+          <span className="text-[10px] font-medium tracking-tight">Canvas</span>
         </Button>
 
-        {/* New — primary action, inline with an accent background */}
-        <div className="flex-1 flex items-center justify-center">
-          <Button
-            variant="default"
-            size="sm"
-            className="h-10 w-10 rounded-full p-0 shadow-sm"
-            onClick={onNewNote}
-          >
-            <Plus className="h-5 w-5" />
-          </Button>
-        </div>
+        {/* New Note — Seamless transparent glass style */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="flex-col gap-0.5 h-auto py-1.5 px-2 min-w-0 flex-1 rounded-full text-primary hover:bg-primary/10"
+          onClick={onNewNote}
+        >
+          <Plus className="h-5 w-5 stroke-[2.5]" />
+          <span className="text-[10px] font-semibold tracking-tight">New</span>
+        </Button>
 
         {/* Boards */}
         <Button
           variant="ghost"
           size="sm"
-          className="flex-col gap-0.5 h-auto py-2 min-w-0 flex-1"
+          className="flex-col gap-0.5 h-auto py-1.5 px-2 min-w-0 flex-1 rounded-full hover:bg-accent/60"
           onClick={onOpenBoards ?? (() => router.push("/kanban"))}
         >
           <LayoutDashboard className="h-5 w-5" />
-          <span className="text-[10px]">Boards</span>
+          <span className="text-[10px] font-medium tracking-tight">Boards</span>
         </Button>
 
-        {/* Search */}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="flex-col gap-0.5 h-auto py-2 min-w-0 flex-1"
-          onClick={onOpenSearch}
-        >
-          <Search className="h-5 w-5" />
-          <span className="text-[10px]">Search</span>
-        </Button>
-
-        {/* More — contains Trash so it is never inaccessible on mobile */}
+        {/* More — Popover containing Search and Trash */}
         <Popover>
           <PopoverTrigger asChild>
             <Button
               variant="ghost"
               size="sm"
-              className="flex-col gap-0.5 h-auto py-2 min-w-0 flex-1"
+              className="flex-col gap-0.5 h-auto py-1.5 px-2 min-w-0 flex-1 rounded-full hover:bg-accent/60"
             >
               <MoreHorizontal className="h-5 w-5" />
-              <span className="text-[10px]">More</span>
+              <span className="text-[10px] font-medium tracking-tight">More</span>
             </Button>
           </PopoverTrigger>
           <PopoverContent
             side="top"
             align="end"
-            className="w-40 p-1"
-            sideOffset={8}
+            className="w-44 p-1 rounded-xl shadow-xl border border-border/60 bg-card/95 backdrop-blur-md"
+            sideOffset={12}
           >
             <Button
               variant="ghost"
-              className="w-full justify-start gap-2 text-sm"
+              className="w-full justify-start gap-2.5 text-xs h-9 font-medium"
+              onClick={onOpenSearch}
+            >
+              <Search className="h-4 w-4 text-muted-foreground" />
+              Search Notes
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-2.5 text-xs h-9 font-medium text-destructive focus:text-destructive"
               onClick={onOpenTrash}
             >
               <Trash2 className="h-4 w-4" />
