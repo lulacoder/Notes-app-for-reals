@@ -3,15 +3,15 @@ import { convex } from "@convex-dev/better-auth/plugins";
 import { components } from "./_generated/api";
 import { DataModel } from "./_generated/dataModel";
 import { query } from "./_generated/server";
-import { betterAuth } from "better-auth";
+import { betterAuth, type BetterAuthOptions } from "better-auth";
+import { admin } from "better-auth/plugins";
 import authConfig from "./auth.config";
+import authSchema from "./betterAuth/schema";
 
 const siteUrl = process.env.SITE_URL!;
 
-export const authComponent = createClient<DataModel>(components.betterAuth);
-
-export const createAuth = (ctx: GenericCtx<DataModel>) => {
-  return betterAuth({
+export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
+  return {
     baseURL: siteUrl,
     database: authComponent.adapter(ctx),
     emailAndPassword: {
@@ -34,8 +34,25 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
         },
         jwksRotateOnTokenGenerationError: true, // For algorithm migration
       }),
+      admin({
+        defaultRole: "user",
+        adminRoles: ["admin"],
+      }),
     ],
-  });
+  } satisfies BetterAuthOptions;
+};
+
+export const authComponent = createClient<DataModel, typeof authSchema>(
+  components.betterAuth,
+  {
+    local: {
+      schema: authSchema,
+    },
+  }
+);
+
+export const createAuth = (ctx: GenericCtx<DataModel>) => {
+  return betterAuth(createAuthOptions(ctx));
 };
 
 export const getCurrentUser = query({
@@ -44,3 +61,4 @@ export const getCurrentUser = query({
     return authComponent.getAuthUser(ctx);
   },
 });
+

@@ -21,6 +21,7 @@ import {
   Keyboard,
   Download,
   Command,
+  ShieldCheck,
 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -111,6 +112,15 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
                   <p className="text-xs text-muted-foreground truncate">{userEmail}</p>
                 </div>
                 <DropdownMenuSeparator />
+                {currentUser?.role === "admin" && (
+                  <>
+                    <DropdownMenuItem onClick={() => router.push("/admin")}>
+                      <ShieldCheck className="mr-2 h-4 w-4 text-primary" />
+                      Admin Panel
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 {isInstallable && (
                   <>
                     <DropdownMenuItem onClick={install}>
