@@ -1,3 +1,4 @@
+import { getActiveIdentity } from "./lib/active-identity";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
@@ -5,7 +6,7 @@ import { mutation, query } from "./_generated/server";
 export const listCanvases = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       return [];
     }
@@ -32,7 +33,7 @@ export const listCanvases = query({
 export const listTrash = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       return [];
     }
@@ -51,7 +52,7 @@ export const listTrash = query({
 export const getCanvas = query({
   args: { id: v.id("canvases") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       return null;
     }
@@ -70,7 +71,7 @@ export const createCanvas = mutation({
     title: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -98,7 +99,7 @@ export const updateCanvas = mutation({
     content: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -128,7 +129,7 @@ export const updateCanvas = mutation({
 export const softDeleteCanvas = mutation({
   args: { id: v.id("canvases") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -152,7 +153,7 @@ export const softDeleteCanvas = mutation({
 export const restoreCanvas = mutation({
   args: { id: v.id("canvases") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -175,7 +176,7 @@ export const restoreCanvas = mutation({
 export const deleteCanvas = mutation({
   args: { id: v.id("canvases") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -205,7 +206,7 @@ export const deleteCanvas = mutation({
 export const togglePin = mutation({
   args: { id: v.id("canvases") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -231,7 +232,7 @@ export const updateCanvasTags = mutation({
     tagIds: v.array(v.id("tags")),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -253,7 +254,7 @@ export const updateCanvasTags = mutation({
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -271,7 +272,7 @@ export const saveAsset = mutation({
     mimeType: v.string(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -298,7 +299,7 @@ export const saveAsset = mutation({
 export const getAssetUrl = query({
   args: { assetId: v.string() },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       return null;
     }
@@ -320,7 +321,7 @@ export const getAssetUrl = query({
 export const getCanvasAssets = query({
   args: { canvasId: v.id("canvases") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       return [];
     }

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import type { Id } from "@/convex/_generated/dataModel";
-import { useQuery, useMutation } from "convex/react";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { useQuery, useMutation, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { DragDropContext, type DropResult } from "@hello-pangea/dnd";
 import { KanbanColumn } from "./KanbanColumn";
@@ -40,11 +40,15 @@ type Board = {
   isPinned?: boolean;
 };
 
+const EMPTY: never[] = [];
+
 interface KanbanBoardProps {
   board: Board;
   tags: Tag[];
   onToggleSidebar: () => void;
   sidebarOpen: boolean;
+  initialColumns?: Doc<"kanbanColumns">[];
+  initialCards?: Doc<"kanbanCards">[];
 }
 
 export function KanbanBoard({
@@ -52,12 +56,14 @@ export function KanbanBoard({
   tags,
   onToggleSidebar,
   sidebarOpen,
+  initialColumns,
+  initialCards,
 }: KanbanBoardProps) {
-  const columns = useQuery(api.kanban.listColumns, { boardId: board._id }) ?? [];
-  const cards = useQuery(api.kanban.listCards, { boardId: board._id }) ?? [];
+  const { isAuthenticated } = useConvexAuth();
+  const columns = useQuery(api.kanban.listColumns, isAuthenticated ? { boardId: board._id } : "skip") ?? initialColumns ?? EMPTY;
+  const cards = useQuery(api.kanban.listCards, isAuthenticated ? { boardId: board._id } : "skip") ?? initialCards ?? EMPTY;
 
   const moveCard = useMutation(api.kanban.moveCard);
-  const reorderCards = useMutation(api.kanban.reorderCards);
   const reorderColumns = useMutation(api.kanban.reorderColumns);
   const createColumn = useMutation(api.kanban.createColumn);
   const updateBoard = useMutation(api.kanban.updateBoard);
@@ -65,7 +71,9 @@ export function KanbanBoard({
   const togglePin = useMutation(api.kanban.togglePinBoard);
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [boardTitle, setBoardTitle] = useState(board.title);
+  const [draftTitle, setDraftTitle] = useState(board.title);
+  const boardTitle = isEditingTitle ? draftTitle : board.title;
+  const setBoardTitle = setDraftTitle;
   const [isAddingColumn, setIsAddingColumn] = useState(false);
   const [newColumnTitle, setNewColumnTitle] = useState("");
   const [isMobile, setIsMobile] = useState(false);
@@ -78,10 +86,6 @@ export function KanbanBoard({
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // Sync board title when board changes
-  useEffect(() => {
-    setBoardTitle(board.title);
-  }, [board.title]);
 
   const handleBoardTitleSave = async () => {
     if (boardTitle.trim() && boardTitle !== board.title) {
@@ -226,7 +230,7 @@ export function KanbanBoard({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setIsEditingTitle(true)}>
+              <DropdownMenuItem onClick={() => { setDraftTitle(board.title); setIsEditingTitle(true); }}>
                 <Pencil className="h-4 w-4 mr-2" />
                 Rename Board
               </DropdownMenuItem>

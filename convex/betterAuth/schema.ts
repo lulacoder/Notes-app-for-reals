@@ -1,6 +1,9 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { tables as generatedTables } from "./schema.generated";
 
+// Preserve the existing optional user fields, custom indexes, and unused plugin tables.
+// The active core tables use the schema generated for Better Auth 1.6.
 export const tables = {
   user: defineTable({
     name: v.string(),
@@ -29,50 +32,11 @@ export const tables = {
     .index("phoneNumber", ["phoneNumber"])
     .index("role", ["role"]),
 
-  session: defineTable({
-    expiresAt: v.number(),
-    token: v.string(),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-    ipAddress: v.optional(v.union(v.null(), v.string())),
-    userAgent: v.optional(v.union(v.null(), v.string())),
-    userId: v.string(),
-    // Admin plugin fields
-    impersonatedBy: v.optional(v.union(v.null(), v.string())),
-  })
-    .index("expiresAt", ["expiresAt"])
-    .index("expiresAt_userId", ["expiresAt", "userId"])
-    .index("token", ["token"])
-    .index("userId", ["userId"]),
+  session: generatedTables.session,
 
-  account: defineTable({
-    accountId: v.string(),
-    providerId: v.string(),
-    userId: v.string(),
-    accessToken: v.optional(v.union(v.null(), v.string())),
-    refreshToken: v.optional(v.union(v.null(), v.string())),
-    idToken: v.optional(v.union(v.null(), v.string())),
-    accessTokenExpiresAt: v.optional(v.union(v.null(), v.number())),
-    refreshTokenExpiresAt: v.optional(v.union(v.null(), v.number())),
-    scope: v.optional(v.union(v.null(), v.string())),
-    password: v.optional(v.union(v.null(), v.string())),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("accountId", ["accountId"])
-    .index("accountId_providerId", ["accountId", "providerId"])
-    .index("providerId_userId", ["providerId", "userId"])
-    .index("userId", ["userId"]),
+  account: generatedTables.account,
 
-  verification: defineTable({
-    identifier: v.string(),
-    value: v.string(),
-    expiresAt: v.number(),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("expiresAt", ["expiresAt"])
-    .index("identifier", ["identifier"]),
+  verification: generatedTables.verification,
 
   twoFactor: defineTable({
     secret: v.string(),
@@ -138,11 +102,7 @@ export const tables = {
     .index("clientId_userId", ["clientId", "userId"])
     .index("userId", ["userId"]),
 
-  jwks: defineTable({
-    publicKey: v.string(),
-    privateKey: v.string(),
-    createdAt: v.number(),
-  }),
+  jwks: generatedTables.jwks,
 
   rateLimit: defineTable({
     key: v.optional(v.union(v.null(), v.string())),

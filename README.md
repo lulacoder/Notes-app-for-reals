@@ -17,7 +17,7 @@ A beautiful, modern note-taking app built with Next.js and Convex. Capture your 
 
 ## Tech Stack
 
-- **Frontend**: Next.js 16, React 19, TailwindCSS
+- **Frontend**: Next.js 16.4.0, React 19.3.0, React Compiler, TailwindCSS
 - **Backend**: Convex (real-time database)
 - **Authentication**: Better Auth
 - **UI Components**: shadcn/ui
@@ -26,7 +26,7 @@ A beautiful, modern note-taking app built with Next.js and Convex. Capture your 
 
 ### Prerequisites
 
-- Node.js 18+ 
+- Node.js 22.12+ or Node.js 24
 - npm or yarn
 - A Convex account (free tier available)
 
@@ -57,6 +57,20 @@ A beautiful, modern note-taking app built with Next.js and Convex. Capture your 
    ```
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Checks and backend updates
+
+```bash
+npm run lint -- --max-warnings=0
+npm run typecheck
+npm test
+npm audit --omit=dev
+npm run build
+```
+
+Tests run against an in-memory Convex database. Configure `NEXT_PUBLIC_CONVEX_SITE_URL` for the auth proxy and `SITE_URL` on the Convex deployment for auth callbacks. Keep `BETTER_AUTH_SECRET` on the backend deployment.
+
+See [the Next.js 16.4 upgrade notes](docs/next-16-4-upgrade.md) for caching behavior, authentication safeguards, and the required backend-first release order.
 
 ## Usage
 

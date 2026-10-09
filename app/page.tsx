@@ -13,7 +13,11 @@ import {
 import Image from "next/image";
 import { isAuthenticated } from "@/lib/auth-server";
 
-export default async function Home() {
+export default function Home() {
+  return <Suspense fallback={<div className="min-h-screen grid place-items-center font-semibold" aria-busy="true">Noteworthy</div>}><HomeContent /></Suspense>;
+}
+
+async function HomeContent() {
   if (await isAuthenticated()) {
     redirect("/notes");
   }
@@ -170,3 +174,4 @@ export default async function Home() {
     </div>
   );
 }
+import { Suspense } from "react";

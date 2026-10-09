@@ -1,9 +1,12 @@
 "use client";
 
+import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
+
 import { useState } from "react";
 import type { Preloaded } from "convex/react";
-import { useMutation, usePreloadedQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
@@ -35,7 +38,7 @@ export function CanvasListPageClient({ preloadedCanvases }: CanvasListPageClient
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
 
-  const canvases = usePreloadedQuery(preloadedCanvases);
+  const canvases = usePreloadedAuthQuery(preloadedCanvases) ?? [];
   const createCanvas = useMutation(api.canvases.createCanvas);
   const softDeleteCanvas = useMutation(api.canvases.softDeleteCanvas);
   const togglePin = useMutation(api.canvases.togglePin);
@@ -43,10 +46,6 @@ export function CanvasListPageClient({ preloadedCanvases }: CanvasListPageClient
   const handleCreateCanvas = async () => {
     const canvasId = await createCanvas({ title: "Untitled Canvas" });
     router.push(`/canvas/${canvasId}`);
-  };
-
-  const handleOpenCanvas = (id: Id<"canvases">) => {
-    router.push(`/canvas/${id}`);
   };
 
   const handleDeleteCanvas = async (id: Id<"canvases">) => {
@@ -117,7 +116,6 @@ export function CanvasListPageClient({ preloadedCanvases }: CanvasListPageClient
                     <CanvasCard
                       key={canvas._id}
                       canvas={canvas}
-                      onOpen={handleOpenCanvas}
                       onDelete={handleDeleteCanvas}
                       onTogglePin={handleTogglePin}
                     />
@@ -138,7 +136,6 @@ export function CanvasListPageClient({ preloadedCanvases }: CanvasListPageClient
                     <CanvasCard
                       key={canvas._id}
                       canvas={canvas}
-                      onOpen={handleOpenCanvas}
                       onDelete={handleDeleteCanvas}
                       onTogglePin={handleTogglePin}
                     />
@@ -155,7 +152,6 @@ export function CanvasListPageClient({ preloadedCanvases }: CanvasListPageClient
 
 function CanvasCard({
   canvas,
-  onOpen,
   onDelete,
   onTogglePin,
 }: {
@@ -166,17 +162,17 @@ function CanvasCard({
     updatedAt: number;
     isPinned?: boolean;
   };
-  onOpen: (id: Id<"canvases">) => void;
   onDelete: (id: Id<"canvases">) => void;
   onTogglePin: (id: Id<"canvases">) => void;
 }) {
   return (
     <div
-      onClick={() => onOpen(canvas._id)}
       className="group cursor-pointer rounded-xl border bg-card hover:bg-accent/50 transition-all hover:shadow-lg overflow-hidden"
     >
       <div className="aspect-video bg-muted/30 relative">
-        <CanvasPreview content={canvas.content} className="w-full h-full" />
+        <Link href={`/canvas/${canvas._id}`} aria-label={`Open ${canvas.title}`} className="block h-full">
+          <CanvasPreview content={canvas.content} className="w-full h-full" />
+        </Link>
         {canvas.isPinned && (
           <div className="absolute top-2 left-2">
             <Pin className="h-4 w-4 text-primary fill-primary" />
@@ -214,12 +210,12 @@ function CanvasCard({
         </div>
       </div>
 
-      <div className="p-3 space-y-1">
+      <Link href={`/canvas/${canvas._id}`} className="block p-3 space-y-1">
         <h3 className="font-medium truncate">{canvas.title}</h3>
         <p className="text-xs text-muted-foreground">
           {getRelativeTime(canvas.updatedAt)}
         </p>
-      </div>
+      </Link>
     </div>
   );
 }

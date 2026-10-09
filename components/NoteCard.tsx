@@ -5,15 +5,18 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { Badge } from "@/components/ui/badge";
 import { Pin } from "lucide-react";
 import { motion } from "framer-motion";
+import Link from "next/link";
+import { ViewTransition } from "react";
 import { getRelativeTime } from "@/lib/relative-time";
 import { cn } from "@/lib/utils";
-import { extractFirstImageSrc, stripHtmlToText } from "@/lib/html-utils";
+
 
 interface NoteCardProps {
   note: {
     _id: Id<"notes">;
     title: string;
-    content: string;
+    preview: string;
+    thumbnail: string | null;
     updatedAt: number;
     isPinned?: boolean;
     tagIds?: Id<"tags">[];
@@ -38,15 +41,10 @@ export function NoteCard({ note, tags, isSelected, onClick }: NoteCardProps) {
       .filter((tag): tag is NonNullable<typeof tag> => Boolean(tag));
   }, [note.tagIds, tagsById]);
 
-  const preview = useMemo(() => {
-    return stripHtmlToText(note.content).substring(0, 150);
-  }, [note.content]);
-
-  const thumbnail = useMemo(() => {
-    return extractFirstImageSrc(note.content);
-  }, [note.content]);
+  const { preview, thumbnail } = note;
 
   return (
+    <Link href={`/notes/${note._id}`} onNavigate={onClick} className="block">
     <motion.div
       layout
       initial={{ opacity: 0, scale: 0.95 }}
@@ -54,7 +52,6 @@ export function NoteCard({ note, tags, isSelected, onClick }: NoteCardProps) {
       exit={{ opacity: 0, scale: 0.95 }}
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
-      onClick={onClick}
       className={cn(
         "group relative cursor-pointer rounded-xl border bg-card p-4 transition-all duration-200",
         "hover:shadow-lg hover:border-primary/20",
@@ -87,9 +84,9 @@ export function NoteCard({ note, tags, isSelected, onClick }: NoteCardProps) {
       )}
 
       {/* Title */}
-      <h3 className="font-semibold text-base mb-1 truncate group-hover:text-primary transition-colors">
+      <ViewTransition name={`note-title-${note._id}`}><h3 className="font-semibold text-base mb-1 truncate group-hover:text-primary transition-colors">
         {note.title || "Untitled"}
-      </h3>
+      </h3></ViewTransition>
 
       {/* Preview text */}
       <p className="text-sm text-muted-foreground line-clamp-2 mb-3 min-h-[2.5rem]">
@@ -118,5 +115,6 @@ export function NoteCard({ note, tags, isSelected, onClick }: NoteCardProps) {
         </span>
       </div>
     </motion.div>
+    </Link>
   );
 }

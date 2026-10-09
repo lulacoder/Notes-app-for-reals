@@ -56,6 +56,7 @@ export default defineSchema({
   })
     .index("by_note", ["noteId"])
     .index("by_canvas", ["canvasId"])
+    .index("by_user_storage", ["userId", "storageId"])
     .index("by_user", ["userId"]),
 
   // Infinite Canvas tables
@@ -88,6 +89,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_canvas", ["canvasId"])
+    .index("by_user_storage", ["userId", "storageId"])
     .index("by_asset_id", ["assetId"]),
 
   // Kanban boards
