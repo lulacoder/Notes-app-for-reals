@@ -1,10 +1,11 @@
+import { getActiveIdentity } from "./lib/active-identity";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
 export const listVersions = query({
   args: { noteId: v.id("notes") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       return [];
     }
@@ -26,7 +27,7 @@ export const listVersions = query({
 export const getVersion = query({
   args: { id: v.id("noteVersions") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       return null;
     }
@@ -47,7 +48,7 @@ export const createVersion = mutation({
     content: v.string(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -84,7 +85,7 @@ export const createVersion = mutation({
 export const restoreVersion = mutation({
   args: { versionId: v.id("noteVersions") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -122,7 +123,7 @@ export const restoreVersion = mutation({
 export const deleteVersion = mutation({
   args: { id: v.id("noteVersions") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -141,7 +142,7 @@ export const deleteVersion = mutation({
 export const cleanupVersions = mutation({
   args: { noteId: v.id("notes") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }

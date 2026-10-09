@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useCallback, useMemo } from "react";
+import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
+
+import { useCallback, useMemo } from "react";
 import type { Preloaded } from "convex/react";
-import { usePreloadedQuery } from "convex/react";
+
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import {
@@ -16,12 +18,14 @@ import {
 import { FileText, Pin, Trash2, Tag } from "lucide-react";
 import { getRelativeTime } from "@/lib/relative-time";
 
+const EMPTY: never[] = [];
+
 interface QuickSwitcherProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelectNote: (id: Id<"notes">) => void;
   onOpenTrash?: () => void;
-  preloadedNotes: Preloaded<typeof api.notes.listNotes>;
+  preloadedNotes: Preloaded<typeof api.notes.listNoteSummaries>;
   preloadedTags: Preloaded<typeof api.tags.listTags>;
 }
 
@@ -33,20 +37,9 @@ export function QuickSwitcher({
   preloadedNotes,
   preloadedTags,
 }: QuickSwitcherProps) {
-  const notesQuery = usePreloadedQuery(preloadedNotes);
-  const tagsQuery = usePreloadedQuery(preloadedTags);
+  const notesQuery = usePreloadedAuthQuery(preloadedNotes) ?? EMPTY;
+  const tagsQuery = usePreloadedAuthQuery(preloadedTags) ?? EMPTY;
 
-  useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        onOpenChange(!open);
-      }
-    };
-
-    document.addEventListener("keydown", down);
-    return () => document.removeEventListener("keydown", down);
-  }, [open, onOpenChange]);
 
   const tagsById = useMemo(() => {
     return new Map(tagsQuery.map((tag) => [tag._id, tag]));
@@ -84,7 +77,7 @@ export function QuickSwitcher({
           {notesWithTags.map((note) => (
             <CommandItem
               key={note._id}
-              value={`${note.title} ${note.content}`}
+              value={`${note.title} ${note.searchText}`}
               onSelect={() => handleSelect(note._id)}
               className="flex items-center gap-2"
             >

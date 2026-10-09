@@ -1,7 +1,10 @@
 "use client";
 
+import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
+
 import type { Preloaded } from "convex/react";
-import { usePreloadedQuery } from "convex/react";
+
+import { useEffect } from "react";
 import { api } from "@/convex/_generated/api";
 import { signOut } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
@@ -37,14 +40,26 @@ interface HeaderProps {
 }
 
 export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
-  const currentUser = usePreloadedQuery(preloadedCurrentUser);
+  const currentUser = usePreloadedAuthQuery(preloadedCurrentUser);
   const router = useRouter();
   const { isInstallable, install } = usePWAInstall();
 
+  // If the user's account is suspended/banned, immediately terminate session and redirect
+  useEffect(() => {
+    if (currentUser?.banned) {
+      void signOut().finally(() => window.location.replace("/login?banned=true"));
+    } else if (currentUser === null) {
+      window.location.replace("/login");
+    }
+  }, [currentUser]);
+
   const handleSignOut = async () => {
     await signOut();
-    router.push("/");
+    // Discard the browser's private route cache when changing accounts.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.assign("/");
   };
+
 
   const userEmail = currentUser?.email || "";
   const userName = currentUser?.name || "";

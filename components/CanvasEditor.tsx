@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { stripHtmlToText } from "@/lib/html-utils";
 import {
   Layers,
@@ -36,6 +36,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { motion, AnimatePresence } from "framer-motion";
+import { z } from "zod";
 
 // Sticky note color options
 const STICKY_COLORS = [
@@ -130,6 +131,33 @@ type Shape = RectangleShape | CircleShape | LineShape | FreehandShape | TextShap
 
 interface CanvasEditorProps {
   canvasId: Id<"canvases">;
+  initialCanvas: Doc<"canvases">;
+}
+
+const baseShape = z.object({
+  id: z.string(), x: z.number(), y: z.number(), stroke: z.string(),
+  strokeWidth: z.number(), fill: z.string().optional(),
+});
+const dimensions = { width: z.number(), height: z.number() };
+const shapeSchema = z.discriminatedUnion("type", [
+  baseShape.extend({ type: z.literal("rectangle"), ...dimensions }),
+  baseShape.extend({ type: z.literal("circle"), radius: z.number() }),
+  baseShape.extend({ type: z.literal("line"), points: z.array(z.number()) }),
+  baseShape.extend({ type: z.literal("freehand"), points: z.array(z.number()) }),
+  baseShape.extend({ type: z.literal("text"), text: z.string(), fontSize: z.number() }),
+  baseShape.extend({ type: z.literal("sticky"), ...dimensions, text: z.string(), colorIndex: z.number() }),
+  baseShape.extend({ type: z.literal("noteEmbed"), ...dimensions, noteId: z.string(), noteTitle: z.string(), notePreview: z.string() }),
+  baseShape.extend({ type: z.literal("mindmapNode"), ...dimensions, text: z.string(), parentId: z.string().nullable(), isRoot: z.boolean(), collapsed: z.boolean() }),
+  baseShape.extend({ type: z.literal("connector"), fromId: z.string(), toId: z.string(), points: z.array(z.number()) }),
+]);
+
+function readShapes(content: string): Shape[] {
+  try {
+    return z.object({ shapes: z.array(shapeSchema) }).parse(JSON.parse(content || '{"shapes":[]}')).shapes;
+  } catch (error) {
+    console.error("Failed to parse canvas content:", error);
+    return [];
+  }
 }
 
 // Generate unique ID
@@ -137,21 +165,20 @@ function generateId(): string {
   return `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-export function CanvasEditor({ canvasId }: CanvasEditorProps) {
+export function CanvasEditor({ canvasId, initialCanvas }: CanvasEditorProps) {
   const { resolvedTheme } = useTheme();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastSavedRef = useRef<string>("");
-  const isLoadingRef = useRef(true);
 
   const [tool, setTool] = useState<Tool>("select");
-  const [shapes, setShapes] = useState<Shape[]>([]);
+  const [shapes, setShapes] = useState<Shape[]>(() => readShapes(initialCanvas.content));
+  const lastSavedRef = useRef(JSON.stringify({ shapes }));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentShape, setCurrentShape] = useState<Shape | null>(null);
   const [startPoint, setStartPoint] = useState<Point | null>(null);
-  const [history, setHistory] = useState<Shape[][]>([[]]);
+  const [history, setHistory] = useState<Shape[][]>(() => [shapes]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
   const [editingSticky, setEditingSticky] = useState<string | null>(null);
@@ -171,7 +198,9 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
   // Query user's notes for embedding
   const notes = useQuery(api.notes.listNotes);
   
-  const canvas = useQuery(api.canvases.getCanvas, { id: canvasId });
+  const { isAuthenticated } = useConvexAuth();
+  const liveCanvas = useQuery(api.canvases.getCanvas, isAuthenticated ? { id: canvasId } : "skip");
+  const canvas = liveCanvas === undefined ? initialCanvas : liveCanvas;
   const updateCanvas = useMutation(api.canvases.updateCanvas);
 
   const isDark = resolvedTheme === "dark";
@@ -194,28 +223,6 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
     return () => window.removeEventListener("resize", updateSize);
   }, []);
 
-  // Load canvas content from Convex
-  useEffect(() => {
-    if (canvas === undefined || canvas === null) return;
-    if (!isLoadingRef.current) return;
-
-    try {
-      const content = canvas.content || '{"shapes":[]}';
-      const parsed = JSON.parse(content);
-      if (parsed.shapes && Array.isArray(parsed.shapes)) {
-        setShapes(parsed.shapes);
-        setHistory([parsed.shapes]);
-        setHistoryIndex(0);
-      }
-      lastSavedRef.current = content;
-    } catch (error) {
-      console.error("Failed to parse canvas content:", error);
-      setShapes([]);
-    } finally {
-      isLoadingRef.current = false;
-    }
-  }, [canvas]);
-
   // Debounced save function
   const saveContent = useCallback(
     (shapesToSave: Shape[]) => {
@@ -225,7 +232,7 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
 
       saveTimeoutRef.current = setTimeout(async () => {
         const content = JSON.stringify({ shapes: shapesToSave });
-        if (content !== lastSavedRef.current && !isLoadingRef.current) {
+        if (content !== lastSavedRef.current) {
           try {
             await updateCanvas({ id: canvasId, content });
             lastSavedRef.current = content;
@@ -240,9 +247,7 @@ export function CanvasEditor({ canvasId }: CanvasEditorProps) {
 
   // Save when shapes change
   useEffect(() => {
-    if (!isLoadingRef.current) {
-      saveContent(shapes);
-    }
+    saveContent(shapes);
   }, [shapes, saveContent]);
 
   // Add to history

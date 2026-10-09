@@ -17,6 +17,7 @@ import { useEffect, forwardRef, useImperativeHandle } from "react";
 import { EditorToolbar } from "./EditorToolbar";
 import { SlashCommandMenu } from "./SlashCommand";
 import { cn } from "@/lib/utils";
+import { stripHtmlToText } from "@/lib/html-utils";
 
 const lowlight = createLowlight(common);
 
@@ -185,8 +186,9 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
 
     if (!editor) {
       return (
-        <div className="flex items-center justify-center h-64 text-muted-foreground">
-          Loading editor...
+        <div className="h-full overflow-y-auto px-4 py-4 sm:px-6 whitespace-pre-wrap" aria-busy="true">
+          <span className="sr-only">Loading editor</span>
+          {stripHtmlToText(content) || placeholder}
         </div>
       );
     }

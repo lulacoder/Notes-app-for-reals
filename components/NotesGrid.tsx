@@ -2,6 +2,7 @@
 
 import type { Id } from "@/convex/_generated/dataModel";
 import { NoteCard } from "./NoteCard";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { FileText, Layers } from "lucide-react";
 import { CanvasPreview } from "@/components/CanvasPreview";
@@ -10,7 +11,8 @@ import { getRelativeTime } from "@/lib/relative-time";
 interface Note {
   _id: Id<"notes">;
   title: string;
-  content: string;
+  preview: string;
+  thumbnail: string | null;
   updatedAt: number;
   isPinned?: boolean;
   tagIds?: Id<"tags">[];
@@ -221,6 +223,7 @@ function CanvasCard({
   onOpen: () => void;
 }) {
   return (
+    <Link href={`/canvas/${canvas._id}`} onNavigate={onOpen} className="block min-w-0">
     <motion.div
       layout
       initial={{ opacity: 0, scale: 0.98 }}
@@ -228,7 +231,6 @@ function CanvasCard({
       exit={{ opacity: 0, scale: 0.98 }}
       whileHover={{ scale: 1.01 }}
       whileTap={{ scale: 0.98 }}
-      onClick={onOpen}
       className="group cursor-pointer rounded-xl border bg-card hover:bg-accent/50 transition-all hover:shadow-lg overflow-hidden"
     >
       <div className="aspect-video bg-muted/30 relative">
@@ -244,5 +246,6 @@ function CanvasCard({
         </p>
       </div>
     </motion.div>
+    </Link>
   );
 }

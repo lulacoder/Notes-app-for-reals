@@ -1,8 +1,11 @@
 "use client";
 
+import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
+
 import { useState, useMemo } from "react";
 import type { Preloaded } from "convex/react";
-import { useMutation, usePreloadedQuery } from "convex/react";
+import { useMutation, useQuery, useConvex } from "convex/react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -40,27 +43,29 @@ import { createNotesSearchIndex } from "@/lib/fuse";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
+const EMPTY: never[] = [];
+
 interface SidebarProps {
   selectedNoteId: Id<"notes"> | null;
+  routeNavigation?: boolean;
   onSelectNote: (id: Id<"notes">) => void;
   onOpenTrash: () => void;
   viewMode?: "list" | "grid";
   onViewModeChange?: (mode: "list" | "grid") => void;
-  preloadedNotes: Preloaded<typeof api.notes.listNotes>;
+  preloadedNotes: Preloaded<typeof api.notes.listNoteSummaries>;
   preloadedTags: Preloaded<typeof api.tags.listTags>;
-  preloadedTrash: Preloaded<typeof api.notes.listTrash>;
   preloadedCanvases: Preloaded<typeof api.canvases.listCanvases>;
 }
 
 export function Sidebar({ 
   selectedNoteId, 
+  routeNavigation = false,
   onSelectNote, 
   onOpenTrash,
   viewMode = "list",
   onViewModeChange,
   preloadedNotes,
   preloadedTags,
-  preloadedTrash,
   preloadedCanvases,
 }: SidebarProps) {
   const router = useRouter();
@@ -69,10 +74,11 @@ export function Sidebar({
   const [canvasesExpanded, setCanvasesExpanded] = useState(true);
   const [boardsExpanded, setBoardsExpanded] = useState(true);
 
-  const notes = usePreloadedQuery(preloadedNotes);
-  const tags = usePreloadedQuery(preloadedTags);
-  const trash = usePreloadedQuery(preloadedTrash);
-  const canvases = usePreloadedQuery(preloadedCanvases);
+  const notes = usePreloadedAuthQuery(preloadedNotes) ?? EMPTY;
+  const tags = usePreloadedAuthQuery(preloadedTags) ?? EMPTY;
+  const trashCount = useQuery(api.notes.countTrash) ?? 0;
+  const convex = useConvex();
+  const canvases = usePreloadedAuthQuery(preloadedCanvases) ?? EMPTY;
   const tagsById = useMemo(() => {
     return new Map(tags.map((tag) => [tag._id, tag]));
   }, [tags]);
@@ -87,7 +93,7 @@ export function Sidebar({
       notes.map((note) => ({
         _id: note._id,
         title: note.title,
-        content: note.content,
+        content: note.searchText,
         updatedAt: note.updatedAt,
       }))
     );
@@ -126,16 +132,18 @@ export function Sidebar({
     router.push(`/canvas/${id}`);
   };
 
-  const handleSendToCanvas = (
+  const handleSendToCanvas = async (
     note: (typeof notes)[0],
     canvasId: Id<"canvases">
   ) => {
+    const fullNote = await convex.query(api.notes.getNote, { id: note._id });
+    if (!fullNote) return;
     window.dispatchEvent(
       new CustomEvent(`add-note-to-canvas-${canvasId}`, {
         detail: {
           noteId: note._id,
           noteTitle: note.title,
-          noteContent: note.content,
+          noteContent: fullNote.content,
         },
       })
     );
@@ -205,7 +213,7 @@ export function Sidebar({
         
         <div className="flex-1 min-w-0">
           <div className="font-medium text-xs truncate">
-            {note.title || "Untitled"}
+            {routeNavigation ? <Link href={`/notes/${note._id}`} onClick={(event) => event.stopPropagation()}>{note.title || "Untitled"}</Link> : note.title || "Untitled"}
           </div>
           <div className="text-[10px] text-muted-foreground">
             {getRelativeTime(note.updatedAt)}
@@ -517,9 +525,9 @@ export function Sidebar({
         >
           <Trash2 className="h-4 w-4 mr-2" />
           Trash
-          {trash.length > 0 && (
+          {trashCount > 0 && (
             <Badge variant="secondary" className="ml-auto">
-              {trash.length}
+              {trashCount}
             </Badge>
           )}
         </Button>

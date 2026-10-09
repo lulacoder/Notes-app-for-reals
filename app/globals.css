@@ -402,3 +402,11 @@
 .gradient-text {
   @apply bg-gradient-to-r from-primary to-chart-5 bg-clip-text text-transparent;
 }
+
+::view-transition-group(*) { animation-duration: 180ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation-duration: 0s; }
+}

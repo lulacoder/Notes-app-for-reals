@@ -1,10 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useState, useEffect, useCallback, useRef, useMemo, ViewTransition } from "react";
+import { useQuery, useMutation, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
+import type { Id, Doc } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TagAssigner } from "@/components/TagManager";
@@ -23,6 +23,7 @@ import { extractTitleFromHtml } from "@/lib/html-utils";
 
 interface NoteEditorProps {
   noteId: Id<"notes"> | null;
+  initialNote?: Doc<"notes"> | null;
 }
 
 const VersionHistory = dynamic(
@@ -30,17 +31,20 @@ const VersionHistory = dynamic(
   { ssr: false }
 );
 
-export function NoteEditor({ noteId }: NoteEditorProps) {
+export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
   const router = useRouter();
-  const note = useQuery(api.notes.getNote, noteId ? { id: noteId } : "skip");
-  const tags = useQuery(api.tags.listTags);
+  const { isAuthenticated } = useConvexAuth();
+  const liveNote = useQuery(api.notes.getNote, noteId && isAuthenticated ? { id: noteId } : "skip");
+  const note = liveNote === undefined ? initialNote : liveNote;
+  const isNoteReady = note != null;
+  const tags = useQuery(api.tags.listTags, isAuthenticated ? {} : "skip");
   const updateNote = useMutation(api.notes.updateNote);
   const togglePin = useMutation(api.notes.togglePin);
   const updateNoteTags = useMutation(api.notes.updateNoteTags);
   const createVersion = useMutation(api.versions.createVersion);
 
-  const [content, setContent] = useState("");
-  const [title, setTitle] = useState("");
+  const [content, setContent] = useState(initialNote?.content ?? "");
+  const [title, setTitle] = useState(initialNote?.title ?? "");
   const [showVersions, setShowVersions] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const versionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -75,7 +79,7 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
   // Create version after significant edits (5 min of no changes)
   const saveVersion = useCallback(
     async (versionTitle: string, versionContent: string) => {
-      if (!noteId) return;
+      if (!noteId || !isNoteReady) return;
 
       if (
         versionTitle === lastVersionRef.current.title &&
@@ -95,13 +99,13 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
         console.error("Failed to create version:", error);
       }
     },
-    [noteId, createVersion]
+    [noteId, isNoteReady, createVersion]
   );
 
   // Auto-save with debounce
   const saveNote = useCallback(
     async (newTitle: string, newContent: string) => {
-      if (!noteId) return;
+      if (!noteId || !isNoteReady) return;
 
       if (
         newTitle === lastSavedRef.current.title &&
@@ -121,7 +125,7 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
         console.error("Failed to save note:", error);
       }
     },
-    [noteId, updateNote]
+    [noteId, isNoteReady, updateNote]
   );
 
   // Debounced save effect (1 second)
@@ -265,14 +269,14 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
 
   return (
     <motion.div 
-      initial={{ opacity: 0 }}
+      initial={false}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.2 }}
       className="flex-1 flex flex-col h-full overflow-hidden bg-background"
     >
       {/* Title Bar */}
       <motion.div 
-        initial={{ y: -20, opacity: 0 }}
+        initial={false}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.1 }}
         className="px-3 py-3 sm:px-4 md:px-6 md:py-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
@@ -288,13 +292,15 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
             <ArrowLeft className="h-5 w-5" />
           </Button>
 
+          <ViewTransition name={`note-title-${noteId}`}><div className="flex-1 min-w-0">
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Untitled"
-            className="flex-1 min-w-0 text-xl sm:text-2xl font-bold outline-none border-none bg-transparent placeholder:text-muted-foreground/50 tracking-tight"
+            className="flex-1 min-w-0 text-xl sm:text-2xl font-bold outline-none border-none bg-transparent placeholder:text-muted-foreground/50 tracking-tight w-full"
           />
+          </div></ViewTransition>
           
           <div className="flex items-center gap-1 shrink-0">
             {/* Tags display - hidden on very small screens */}
@@ -382,7 +388,7 @@ export function NoteEditor({ noteId }: NoteEditorProps) {
 
       {/* Rich Text Editor */}
       <motion.div 
-        initial={{ opacity: 0, y: 10 }}
+        initial={false}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
         className="flex-1 overflow-hidden"

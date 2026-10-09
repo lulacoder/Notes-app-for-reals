@@ -1,3 +1,4 @@
+import { getActiveIdentity } from "./lib/active-identity";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
@@ -6,7 +7,7 @@ import { mutation, query } from "./_generated/server";
 export const listBoards = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) return [];
 
     const boards = await ctx.db
@@ -27,7 +28,7 @@ export const listBoards = query({
 export const listBoardTrash = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) return [];
 
     const boards = await ctx.db
@@ -44,7 +45,7 @@ export const listBoardTrash = query({
 export const getBoard = query({
   args: { id: v.id("kanbanBoards") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) return null;
 
     const board = await ctx.db.get(args.id);
@@ -56,7 +57,7 @@ export const getBoard = query({
 export const createBoard = mutation({
   args: { title: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) throw new Error("Not authenticated");
 
     const now = Date.now();
@@ -88,7 +89,7 @@ export const createBoard = mutation({
 export const updateBoard = mutation({
   args: { id: v.id("kanbanBoards"), title: v.string() },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) throw new Error("Not authenticated");
 
     const board = await ctx.db.get(args.id);
@@ -103,7 +104,7 @@ export const updateBoard = mutation({
 export const softDeleteBoard = mutation({
   args: { id: v.id("kanbanBoards") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) throw new Error("Not authenticated");
 
     const board = await ctx.db.get(args.id);
@@ -124,7 +125,7 @@ export const softDeleteBoard = mutation({
 export const restoreBoard = mutation({
   args: { id: v.id("kanbanBoards") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) throw new Error("Not authenticated");
 
     const board = await ctx.db.get(args.id);
@@ -139,7 +140,7 @@ export const restoreBoard = mutation({
 export const permanentDeleteBoard = mutation({
   args: { id: v.id("kanbanBoards") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) throw new Error("Not authenticated");
 
     const board = await ctx.db.get(args.id);
@@ -172,7 +173,7 @@ export const permanentDeleteBoard = mutation({
 export const togglePinBoard = mutation({
   args: { id: v.id("kanbanBoards") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) throw new Error("Not authenticated");
 
     const board = await ctx.db.get(args.id);
@@ -192,7 +193,7 @@ export const togglePinBoard = mutation({
 export const listColumns = query({
   args: { boardId: v.id("kanbanBoards") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) return [];
 
     const board = await ctx.db.get(args.boardId);
@@ -210,7 +211,7 @@ export const listColumns = query({
 export const createColumn = mutation({
   args: { boardId: v.id("kanbanBoards"), title: v.string() },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) throw new Error("Not authenticated");
 
     const board = await ctx.db.get(args.boardId);
@@ -244,7 +245,7 @@ export const createColumn = mutation({
 export const updateColumn = mutation({
   args: { id: v.id("kanbanColumns"), title: v.string() },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) throw new Error("Not authenticated");
 
     const col = await ctx.db.get(args.id);
@@ -263,7 +264,7 @@ export const deleteColumn = mutation({
     targetColumnId: v.optional(v.id("kanbanColumns")),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) throw new Error("Not authenticated");
 
     const col = await ctx.db.get(args.id);
@@ -316,7 +317,7 @@ export const reorderColumns = mutation({
     orderedIds: v.array(v.id("kanbanColumns")),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) throw new Error("Not authenticated");
 
     const board = await ctx.db.get(args.boardId);
@@ -341,7 +342,7 @@ export const reorderColumns = mutation({
 export const listCards = query({
   args: { boardId: v.id("kanbanBoards") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) return [];
 
     const board = await ctx.db.get(args.boardId);
@@ -361,7 +362,7 @@ export const listCards = query({
 export const getCard = query({
   args: { id: v.id("kanbanCards") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) return null;
 
     const card = await ctx.db.get(args.id);
@@ -377,7 +378,7 @@ export const createCard = mutation({
     title: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) throw new Error("Not authenticated");
 
     const board = await ctx.db.get(args.boardId);
@@ -421,7 +422,7 @@ export const updateCard = mutation({
     tagIds: v.optional(v.array(v.id("tags"))),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) throw new Error("Not authenticated");
 
     const card = await ctx.db.get(args.id);
@@ -454,7 +455,7 @@ export const moveCard = mutation({
     order: v.number(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) throw new Error("Not authenticated");
 
     const card = await ctx.db.get(args.id);
@@ -483,7 +484,7 @@ export const moveCardToColumnEnd = mutation({
     columnId: v.id("kanbanColumns"),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) throw new Error("Not authenticated");
 
     const card = await ctx.db.get(args.id);
@@ -519,7 +520,7 @@ export const reorderCards = mutation({
     orderedIds: v.array(v.id("kanbanCards")),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) throw new Error("Not authenticated");
 
     for (let i = 0; i < args.orderedIds.length; i++) {
@@ -534,7 +535,7 @@ export const reorderCards = mutation({
 export const softDeleteCard = mutation({
   args: { id: v.id("kanbanCards") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) throw new Error("Not authenticated");
 
     const card = await ctx.db.get(args.id);

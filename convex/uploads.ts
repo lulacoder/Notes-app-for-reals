@@ -1,3 +1,4 @@
+import { getActiveIdentity } from "./lib/active-identity";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
@@ -5,7 +6,7 @@ import { mutation, query } from "./_generated/server";
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -24,9 +25,18 @@ export const saveUpload = mutation({
     canvasId: v.optional(v.id("canvases")),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
+    }
+
+    if (args.noteId) {
+      const note = await ctx.db.get(args.noteId);
+      if (!note || note.userId !== identity.subject) throw new Error("Note not found");
+    }
+    if (args.canvasId) {
+      const canvas = await ctx.db.get(args.canvasId);
+      if (!canvas || canvas.userId !== identity.subject) throw new Error("Canvas not found");
     }
 
     const uploadId = await ctx.db.insert("uploads", {
@@ -51,6 +61,13 @@ export const saveUpload = mutation({
 export const getUrl = query({
   args: { storageId: v.id("_storage") },
   handler: async (ctx, args) => {
+    const identity = await getActiveIdentity(ctx);
+    if (!identity) return null;
+    const upload = await ctx.db.query("uploads")
+      .withIndex("by_user_storage", (q) => q.eq("userId", identity.subject).eq("storageId", args.storageId)).first();
+    const asset = await ctx.db.query("canvasAssets")
+      .withIndex("by_user_storage", (q) => q.eq("userId", identity.subject).eq("storageId", args.storageId)).first();
+    if (!upload && !asset) return null;
     return await ctx.storage.getUrl(args.storageId);
   },
 });
@@ -59,8 +76,10 @@ export const getUrl = query({
 export const listNoteUploads = query({
   args: { noteId: v.id("notes") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) return [];
+    const note = await ctx.db.get(args.noteId);
+    if (!note || note.userId !== identity.subject) return [];
 
     const uploads = await ctx.db
       .query("uploads")
@@ -75,7 +94,7 @@ export const listNoteUploads = query({
       }))
     );
 
-    return uploadsWithUrls;
+    return uploadsWithUrls.filter((upload) => upload.userId === identity.subject);
   },
 });
 
@@ -83,7 +102,7 @@ export const listNoteUploads = query({
 export const deleteUpload = mutation({
   args: { uploadId: v.id("uploads") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }

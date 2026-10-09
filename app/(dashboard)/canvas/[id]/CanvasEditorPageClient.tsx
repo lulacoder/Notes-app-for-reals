@@ -1,12 +1,14 @@
 "use client";
 
+import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
+
 import { useState, useEffect } from "react";
 import type { Preloaded } from "convex/react";
-import { useMutation, usePreloadedQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { CanvasEditor } from "@/components/CanvasEditor";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -28,6 +30,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { TagAssigner } from "@/components/TagManager";
 
+const CanvasEditor = dynamic(() => import("@/components/CanvasEditor").then((module) => module.CanvasEditor), { ssr: false, loading: () => <div className="h-full bg-muted/30 animate-pulse" aria-label="Loading canvas" /> });
+
 interface CanvasEditorPageClientProps {
   canvasId: Id<"canvases">;
   preloadedCanvas: Preloaded<typeof api.canvases.getCanvas>;
@@ -42,7 +46,7 @@ export function CanvasEditorPageClient({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
 
-  const canvas = usePreloadedQuery(preloadedCanvas);
+  const canvas = usePreloadedAuthQuery(preloadedCanvas);
   const updateCanvas = useMutation(api.canvases.updateCanvas);
   const softDeleteCanvas = useMutation(api.canvases.softDeleteCanvas);
   const togglePin = useMutation(api.canvases.togglePin);
@@ -171,7 +175,7 @@ export function CanvasEditorPageClient({
       </div>
 
       <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
-        <CanvasEditor canvasId={canvasId} />
+        <CanvasEditor key={canvasId} canvasId={canvasId} initialCanvas={canvas} />
       </div>
     </div>
   );

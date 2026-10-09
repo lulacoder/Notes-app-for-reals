@@ -1,50 +1,46 @@
 "use client";
 
+import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
+
 import { useCallback, useState } from "react";
+import dynamic from "next/dynamic";
+import { useNotesData } from "@/providers/notes-provider";
+import { useNotesViewMode } from "@/lib/use-notes-view-mode";
+import { useQuickSwitcherShortcut } from "@/lib/use-quick-switcher-shortcut";
 import type { Preloaded } from "convex/react";
-import { useMutation, usePreloadedQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import type { Id } from "@/convex/_generated/dataModel";
 import { api } from "@/convex/_generated/api";
 import { Sidebar } from "@/components/Sidebar";
-import { QuickSwitcher } from "@/components/QuickSwitcher";
-import { TrashView } from "@/components/TrashView";
 import { MobileNav, useSwipeGesture } from "@/components/MobileNav";
 import { NoteEditor } from "@/components/NoteEditor";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, FileText } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
+const QuickSwitcher = dynamic(() => import("@/components/QuickSwitcher").then((module) => module.QuickSwitcher));
+const TrashView = dynamic(() => import("@/components/TrashView").then((module) => module.TrashView));
+
 interface NoteDetailPageClientProps {
   noteId: Id<"notes">;
-  preloadedNotes: Preloaded<typeof api.notes.listNotes>;
-  preloadedCanvases: Preloaded<typeof api.canvases.listCanvases>;
-  preloadedTags: Preloaded<typeof api.tags.listTags>;
-  preloadedTrash: Preloaded<typeof api.notes.listTrash>;
   preloadedSelectedNote: Preloaded<typeof api.notes.getNote>;
 }
 
 export function NoteDetailPageClient({
   noteId,
-  preloadedNotes,
-  preloadedCanvases,
-  preloadedTags,
-  preloadedTrash,
   preloadedSelectedNote,
 }: NoteDetailPageClientProps) {
+  const { preloadedNotes, preloadedCanvases, preloadedTags } = useNotesData();
   const router = useRouter();
   const createNote = useMutation(api.notes.createNote);
-  const selectedNote = usePreloadedQuery(preloadedSelectedNote);
+  const selectedNote = usePreloadedAuthQuery(preloadedSelectedNote);
 
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
+  useQuickSwitcherShortcut(setShowQuickSwitcher);
   const [showTrash, setShowTrash] = useState(false);
   const [showSidebarMobile, setShowSidebarMobile] = useState(false);
-  const [viewMode, setViewMode] = useState<"list" | "grid">(() => {
-    if (typeof window !== "undefined") {
-      return (localStorage.getItem("notes-view-mode") as "list" | "grid") || "list";
-    }
-    return "list";
-  });
+  const [viewMode, setViewMode] = useNotesViewMode();
 
   const { containerRef } = useSwipeGesture({
     onSwipeLeft: () => setShowSidebarMobile(false),
@@ -53,9 +49,6 @@ export function NoteDetailPageClient({
 
   const handleViewModeChange = (mode: "list" | "grid") => {
     setViewMode(mode);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("notes-view-mode", mode);
-    }
 
     if (mode === "grid") {
       router.push("/notes");
@@ -109,13 +102,13 @@ export function NoteDetailPageClient({
       >
         <Sidebar
           selectedNoteId={noteId}
+          routeNavigation
           onSelectNote={handleSelectNote}
           onOpenTrash={handleOpenTrash}
           viewMode={viewMode}
           onViewModeChange={handleViewModeChange}
           preloadedNotes={preloadedNotes}
           preloadedTags={preloadedTags}
-          preloadedTrash={preloadedTrash}
           preloadedCanvases={preloadedCanvases}
         />
       </motion.div>
@@ -152,7 +145,7 @@ export function NoteDetailPageClient({
               exit={{ opacity: 0 }}
               className="flex-1 flex flex-col overflow-hidden bg-background"
             >
-              <NoteEditor noteId={noteId} />
+              <NoteEditor key={noteId} noteId={noteId} initialNote={selectedNote} />
             </motion.div>
           )}
         </AnimatePresence>

@@ -1,10 +1,11 @@
+import { getActiveIdentity } from "./lib/active-identity";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
 export const listTags = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       return [];
     }
@@ -22,7 +23,7 @@ export const createTag = mutation({
     color: v.string(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -55,7 +56,7 @@ export const updateTag = mutation({
     color: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -77,7 +78,7 @@ export const updateTag = mutation({
 export const deleteTag = mutation({
   args: { id: v.id("tags") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }

@@ -148,13 +148,14 @@ export function KanbanCard({
       </Draggable>
 
       {/* Card detail modal */}
-      <KanbanCardModal
+      {modalOpen && <KanbanCardModal
+        key={card._id}
         card={card}
         columns={columns}
         tags={tags}
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-      />
+      />}
 
       {/* Mobile column picker */}
       {isMobile && (

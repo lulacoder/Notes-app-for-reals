@@ -1,10 +1,12 @@
 "use client";
 
+import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
+
 import { useState } from "react";
 import type { Preloaded } from "convex/react";
-import { usePreloadedQuery, useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
 import { BoardSidebar } from "@/components/kanban/BoardSidebar";
 import { Button } from "@/components/ui/button";
@@ -14,14 +16,16 @@ import { motion, AnimatePresence } from "framer-motion";
 interface KanbanPageClientProps {
   preloadedBoards: Preloaded<typeof api.kanban.listBoards>;
   preloadedTags: Preloaded<typeof api.tags.listTags>;
+  initialBoardData: { boardId: Id<"kanbanBoards">; columns: Doc<"kanbanColumns">[]; cards: Doc<"kanbanCards">[] } | null;
 }
 
 export function KanbanPageClient({
   preloadedBoards,
   preloadedTags,
+  initialBoardData,
 }: KanbanPageClientProps) {
-  const boards = usePreloadedQuery(preloadedBoards);
-  const tags = usePreloadedQuery(preloadedTags);
+  const boards = usePreloadedAuthQuery(preloadedBoards) ?? [];
+  const tags = usePreloadedAuthQuery(preloadedTags) ?? [];
   const createBoard = useMutation(api.kanban.createBoard);
 
   const [selectedBoardId, setSelectedBoardId] =
@@ -34,7 +38,7 @@ export function KanbanPageClient({
   };
 
   // Keep selected board valid if it gets deleted
-  const selectedBoard = boards.find((b) => b._id === selectedBoardId);
+  const selectedBoard = boards.find((b) => b._id === selectedBoardId) ?? boards[0];
 
   return (
     <div className="flex-1 flex min-h-0 overflow-hidden bg-background">
@@ -62,7 +66,10 @@ export function KanbanPageClient({
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {selectedBoard ? (
           <KanbanBoard
+            key={selectedBoard._id}
             board={selectedBoard}
+            initialColumns={initialBoardData?.boardId === selectedBoard._id ? initialBoardData.columns : undefined}
+            initialCards={initialBoardData?.boardId === selectedBoard._id ? initialBoardData.cards : undefined}
             tags={tags}
             onToggleSidebar={() => setSidebarOpen((v) => !v)}
             sidebarOpen={sidebarOpen}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -79,18 +79,6 @@ export function KanbanCardModal({
     card?.tagIds ?? []
   );
   const [isSaving, setIsSaving] = useState(false);
-
-  // Reset state when card changes
-  useEffect(() => {
-    if (card) {
-      setTitle(card.title);
-      setDescription(card.description ?? "");
-      setDueDate(
-        card.dueDate ? format(new Date(card.dueDate), "yyyy-MM-dd") : ""
-      );
-      setSelectedTagIds(card.tagIds ?? []);
-    }
-  }, [card]);
 
   const handleSave = useCallback(async () => {
     if (!card) return;

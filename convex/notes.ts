@@ -1,11 +1,43 @@
+import { getActiveIdentity } from "./lib/active-identity";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { extractFirstImageSrc, stripHtmlToText } from "../lib/html-utils";
+
+export const listNoteSummaries = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await getActiveIdentity(ctx);
+    if (!identity) return [];
+    const notes = await ctx.db.query("notes").withIndex("by_user", (q) => q.eq("userId", identity.subject)).collect();
+    return notes.filter((note) => !note.isDeleted)
+      .sort((a, b) => Number(!!b.isPinned) - Number(!!a.isPinned) || b.updatedAt - a.updatedAt)
+      .map((note) => {
+        const searchText = stripHtmlToText(note.content);
+        return {
+          _id: note._id, title: note.title, updatedAt: note.updatedAt,
+          isPinned: note.isPinned, tagIds: note.tagIds,
+          preview: searchText.substring(0, 150), searchText,
+          thumbnail: note.thumbnail ?? extractFirstImageSrc(note.content),
+        };
+      });
+  },
+});
+
+export const countTrash = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await getActiveIdentity(ctx);
+    if (!identity) return 0;
+    const trash = await ctx.db.query("notes").withIndex("by_user_deleted", (q) => q.eq("userId", identity.subject).eq("isDeleted", true)).collect();
+    return trash.length;
+  },
+});
 
 // List active notes (not deleted)
 export const listNotes = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       return [];
     }
@@ -32,7 +64,7 @@ export const listNotes = query({
 export const listTrash = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       return [];
     }
@@ -51,7 +83,7 @@ export const listTrash = query({
 export const getNote = query({
   args: { id: v.id("notes") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       return null;
     }
@@ -71,7 +103,7 @@ export const createNote = mutation({
     content: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -100,7 +132,7 @@ export const updateNote = mutation({
     saveVersion: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -141,7 +173,7 @@ export const updateNote = mutation({
 export const softDeleteNote = mutation({
   args: { id: v.id("notes") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -165,7 +197,7 @@ export const softDeleteNote = mutation({
 export const restoreNote = mutation({
   args: { id: v.id("notes") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -188,7 +220,7 @@ export const restoreNote = mutation({
 export const deleteNote = mutation({
   args: { id: v.id("notes") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -217,7 +249,7 @@ export const deleteNote = mutation({
 export const emptyTrash = mutation({
   args: { all: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -256,7 +288,7 @@ export const emptyTrash = mutation({
 export const togglePin = mutation({
   args: { id: v.id("notes") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -282,7 +314,7 @@ export const updateNoteTags = mutation({
     tagIds: v.array(v.id("tags")),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
+    const identity = await getActiveIdentity(ctx);
     if (!identity) {
       throw new Error("Not authenticated");
     }
