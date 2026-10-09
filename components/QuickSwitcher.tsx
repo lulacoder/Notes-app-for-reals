@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/command";
 import { FileText, Pin, Trash2, Tag } from "lucide-react";
 import { getRelativeTime } from "@/lib/relative-time";
+import type { PreloadedNotes } from "@/lib/notes-data";
+import { useNoteSummaries } from "@/lib/use-notes-queries";
 
 const EMPTY: never[] = [];
 
@@ -25,7 +27,7 @@ interface QuickSwitcherProps {
   onOpenChange: (open: boolean) => void;
   onSelectNote: (id: Id<"notes">) => void;
   onOpenTrash?: () => void;
-  preloadedNotes: Preloaded<typeof api.notes.listNoteSummaries>;
+  preloadedNotes: PreloadedNotes;
   preloadedTags: Preloaded<typeof api.tags.listTags>;
 }
 
@@ -37,7 +39,7 @@ export function QuickSwitcher({
   preloadedNotes,
   preloadedTags,
 }: QuickSwitcherProps) {
-  const notesQuery = usePreloadedAuthQuery(preloadedNotes) ?? EMPTY;
+  const notesQuery = useNoteSummaries(preloadedNotes);
   const tagsQuery = usePreloadedAuthQuery(preloadedTags) ?? EMPTY;
 
 

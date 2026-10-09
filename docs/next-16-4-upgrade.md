@@ -35,7 +35,11 @@ After building, run `node scripts/measure-route-bundles.mjs`. It sums the unique
 
 ## Release order
 
-Deploy the Convex backend from this branch before releasing the frontend. The frontend requires the new `notes:listNoteSummaries` and `notes:countTrash` queries, the upload ownership indexes, and the updated Better Auth component schema. Use the normal authenticated Convex deployment workflow, then deploy the frontend. This PR does not deploy either production service.
+Deploy the Convex backend before releasing the frontend to enable the new summary and trash count queries, upload ownership indexes, and updated Better Auth component schema. Use the normal authenticated Convex deployment workflow, then deploy the frontend.
+
+The frontend also handles the older backend during a rollout. If Convex reports that `notes:listNoteSummaries` or `notes:countTrash` is missing, the server preloads the existing `notes:listNotes` or `notes:listTrash` query instead. The browser keeps that query's name for its live subscription. Legacy note records are converted to the same preview and search format, and the legacy trash list supplies its count. Each query falls back independently. Authentication, network, and other backend errors still propagate. A matching backend automatically uses the smaller summary and count responses on the next server request.
+
+The compatibility tests exercise both releases with real Convex preload serialization and the in-memory backend. A production frontend render against an older backend is also required when changing these queries, since a successful build alone does not prove that remote functions are deployed.
 
 After deployment, verify sign-in, saved grid mode, note edits and version history, canvas editing, board drag/drop, and admin actions in the target environment. Browser smoke testing has not been completed. Authenticated browser workflows require the matching backend deployment.
 

@@ -16,6 +16,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { useKeyboardShortcuts } from "@/components/KeyboardShortcuts";
 import { MobileNav, useSwipeGesture } from "@/components/MobileNav";
 import { motion, AnimatePresence } from "framer-motion";
+import { useNoteSummaries } from "@/lib/use-notes-queries";
 
 const NoteEditor = dynamic(() => import("@/components/NoteEditor").then((module) => module.NoteEditor));
 const NotesGrid = dynamic(() => import("@/components/NotesGrid").then((module) => module.NotesGrid));
@@ -27,7 +28,7 @@ const EMPTY: never[] = [];
 interface NotesPageClientProps { initialNote: Doc<"notes"> | null; }
 
 export function NotesPageClient({ initialNote }: NotesPageClientProps) {
-  const { preloadedNotes, preloadedCanvases, preloadedTags } = useNotesData();
+  const { preloadedNotes, preloadedCanvases, preloadedTags, preloadedTrashCount } = useNotesData();
   const router = useRouter();
   const [selectedNoteId, setSelectedNoteId] = useState<Id<"notes"> | null>(initialNote?._id ?? null);
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
@@ -36,7 +37,7 @@ export function NotesPageClient({ initialNote }: NotesPageClientProps) {
   const [showSidebarMobile, setShowSidebarMobile] = useState(false);
   const [viewMode, setViewMode] = useNotesViewMode();
 
-  const notes = usePreloadedAuthQuery(preloadedNotes) ?? EMPTY;
+  const notes = useNoteSummaries(preloadedNotes);
   const canvases = usePreloadedAuthQuery(preloadedCanvases) ?? EMPTY;
   const tags = usePreloadedAuthQuery(preloadedTags) ?? EMPTY;
   const createNote = useMutation(api.notes.createNote);
@@ -163,6 +164,7 @@ export function NotesPageClient({ initialNote }: NotesPageClientProps) {
           viewMode={viewMode}
           onViewModeChange={handleViewModeChange}
           preloadedNotes={preloadedNotes}
+          preloadedTrashCount={preloadedTrashCount}
           preloadedTags={preloadedTags}
           preloadedCanvases={preloadedCanvases}
         />

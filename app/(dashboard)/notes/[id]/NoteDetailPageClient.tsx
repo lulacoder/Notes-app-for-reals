@@ -31,7 +31,7 @@ export function NoteDetailPageClient({
   noteId,
   preloadedSelectedNote,
 }: NoteDetailPageClientProps) {
-  const { preloadedNotes, preloadedCanvases, preloadedTags } = useNotesData();
+  const { preloadedNotes, preloadedCanvases, preloadedTags, preloadedTrashCount } = useNotesData();
   const router = useRouter();
   const createNote = useMutation(api.notes.createNote);
   const selectedNote = usePreloadedAuthQuery(preloadedSelectedNote);
@@ -108,6 +108,7 @@ export function NoteDetailPageClient({
           viewMode={viewMode}
           onViewModeChange={handleViewModeChange}
           preloadedNotes={preloadedNotes}
+          preloadedTrashCount={preloadedTrashCount}
           preloadedTags={preloadedTags}
           preloadedCanvases={preloadedCanvases}
         />

@@ -4,11 +4,13 @@ import { createContext, useContext } from "react";
 import type { ReactNode } from "react";
 import type { Preloaded } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import type { PreloadedNotes, PreloadedTrashCount } from "@/lib/notes-data";
 
 interface NotesData {
-  preloadedNotes: Preloaded<typeof api.notes.listNoteSummaries>;
+  preloadedNotes: PreloadedNotes;
   preloadedCanvases: Preloaded<typeof api.canvases.listCanvases>;
   preloadedTags: Preloaded<typeof api.tags.listTags>;
+  preloadedTrashCount: PreloadedTrashCount;
 }
 
 const NotesContext = createContext<NotesData | null>(null);

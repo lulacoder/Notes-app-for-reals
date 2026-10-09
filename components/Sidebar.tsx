@@ -4,7 +4,7 @@ import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
 
 import { useState, useMemo } from "react";
 import type { Preloaded } from "convex/react";
-import { useMutation, useQuery, useConvex } from "convex/react";
+import { useMutation, useConvex } from "convex/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
@@ -42,6 +42,8 @@ import { getRelativeTime } from "@/lib/relative-time";
 import { createNotesSearchIndex } from "@/lib/fuse";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import type { PreloadedNotes, PreloadedTrashCount } from "@/lib/notes-data";
+import { useNoteSummaries, useTrashCount } from "@/lib/use-notes-queries";
 
 const EMPTY: never[] = [];
 
@@ -52,9 +54,10 @@ interface SidebarProps {
   onOpenTrash: () => void;
   viewMode?: "list" | "grid";
   onViewModeChange?: (mode: "list" | "grid") => void;
-  preloadedNotes: Preloaded<typeof api.notes.listNoteSummaries>;
+  preloadedNotes: PreloadedNotes;
   preloadedTags: Preloaded<typeof api.tags.listTags>;
   preloadedCanvases: Preloaded<typeof api.canvases.listCanvases>;
+  preloadedTrashCount: PreloadedTrashCount;
 }
 
 export function Sidebar({ 
@@ -67,6 +70,7 @@ export function Sidebar({
   preloadedNotes,
   preloadedTags,
   preloadedCanvases,
+  preloadedTrashCount,
 }: SidebarProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
@@ -74,9 +78,9 @@ export function Sidebar({
   const [canvasesExpanded, setCanvasesExpanded] = useState(true);
   const [boardsExpanded, setBoardsExpanded] = useState(true);
 
-  const notes = usePreloadedAuthQuery(preloadedNotes) ?? EMPTY;
+  const notes = useNoteSummaries(preloadedNotes);
   const tags = usePreloadedAuthQuery(preloadedTags) ?? EMPTY;
-  const trashCount = useQuery(api.notes.countTrash) ?? 0;
+  const trashCount = useTrashCount(preloadedTrashCount);
   const convex = useConvex();
   const canvases = usePreloadedAuthQuery(preloadedCanvases) ?? EMPTY;
   const tagsById = useMemo(() => {
