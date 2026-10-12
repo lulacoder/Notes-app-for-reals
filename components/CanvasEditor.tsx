@@ -1353,6 +1353,8 @@ export function CanvasEditor({ canvasId, initialCanvas }: CanvasEditorProps) {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't trigger shortcuts when editing sticky
       if (editingSticky) return;
+      // The persistent sidebar can be searched while a canvas is open.
+      if (e.target instanceof HTMLElement && e.target.closest('input, textarea, [contenteditable="true"], [role="dialog"]')) return;
 
       // Space key for panning
       if (e.code === "Space" && !e.repeat) {

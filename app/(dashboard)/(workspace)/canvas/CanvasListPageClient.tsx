@@ -6,7 +6,7 @@ import { useState } from "react";
 import type { Preloaded } from "convex/react";
 import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { DocumentLink } from "@/components/DocumentLink";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
@@ -170,9 +170,9 @@ function CanvasCard({
       className="group cursor-pointer rounded-xl border bg-card hover:bg-accent/50 transition-all hover:shadow-lg overflow-hidden"
     >
       <div className="aspect-video bg-muted/30 relative">
-        <Link href={`/canvas/${canvas._id}`} aria-label={`Open ${canvas.title}`} className="block h-full">
+        <DocumentLink kind="canvas" id={canvas._id} aria-label={`Open ${canvas.title}`} className="block h-full">
           <CanvasPreview content={canvas.content} className="w-full h-full" />
-        </Link>
+        </DocumentLink>
         {canvas.isPinned && (
           <div className="absolute top-2 left-2">
             <Pin className="h-4 w-4 text-primary fill-primary" />
@@ -210,12 +210,12 @@ function CanvasCard({
         </div>
       </div>
 
-      <Link href={`/canvas/${canvas._id}`} className="block p-3 space-y-1">
+      <DocumentLink kind="canvas" id={canvas._id} className="block p-3 space-y-1">
         <h3 className="font-medium truncate">{canvas.title}</h3>
         <p className="text-xs text-muted-foreground">
           {getRelativeTime(canvas.updatedAt)}
         </p>
-      </Link>
+      </DocumentLink>
     </div>
   );
 }

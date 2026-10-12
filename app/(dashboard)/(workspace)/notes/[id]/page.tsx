@@ -1,11 +1,10 @@
 import type { Id } from "@/convex/_generated/dataModel";
-import { api } from "@/convex/_generated/api";
-import { preloadAuthQuery } from "@/lib/auth-server";
+import { preloadNote } from "@/lib/document-server";
 import { NoteDetailPageClient } from "./NoteDetailPageClient";
-import { NotesSkeleton } from "@/components/DashboardSkeleton";
+import { ContentSkeleton } from "@/components/DashboardSkeleton";
 
 export default function NoteDetailPage(props: { params: Promise<{ id: string }> }) {
-  return <Suspense fallback={<NotesSkeleton />}><NoteContent {...props} /></Suspense>;
+  return <Suspense fallback={<ContentSkeleton />}><NoteContent {...props} /></Suspense>;
 }
 
 async function NoteContent({
@@ -16,7 +15,7 @@ async function NoteContent({
   const { id } = await params;
   const noteId = id as Id<"notes">;
 
-  const preloadedSelectedNote = await preloadAuthQuery(api.notes.getNote, { id: noteId });
+  const preloadedSelectedNote = await preloadNote(noteId);
 
   return (
     <NoteDetailPageClient

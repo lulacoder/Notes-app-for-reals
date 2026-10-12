@@ -4,7 +4,7 @@ import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
 
 import { useState, useEffect } from "react";
 import type { Preloaded } from "convex/react";
-import { useMutation } from "convex/react";
+import { useConvexAuth, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -29,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { TagAssigner } from "@/components/TagManager";
+import { ContentSkeleton } from "@/components/DashboardSkeleton";
 
 const CanvasEditor = dynamic(() => import("@/components/CanvasEditor").then((module) => module.CanvasEditor), { ssr: false, loading: () => <div className="h-full bg-muted/30 animate-pulse" aria-label="Loading canvas" /> });
 
@@ -42,6 +43,7 @@ export function CanvasEditorPageClient({
   preloadedCanvas,
 }: CanvasEditorPageClientProps) {
   const router = useRouter();
+  const { isLoading, isAuthenticated } = useConvexAuth();
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
@@ -88,6 +90,8 @@ export function CanvasEditorPageClient({
   const handleUpdateTags = async (tagIds: Id<"tags">[]) => {
     await updateCanvasTags({ id: canvasId, tagIds });
   };
+
+  if (canvas === undefined || (!isLoading && !isAuthenticated)) return <ContentSkeleton />;
 
   if (canvas === null) {
     return (
