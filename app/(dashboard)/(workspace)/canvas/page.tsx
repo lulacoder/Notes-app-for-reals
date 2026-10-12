@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { NotesSkeleton } from "@/components/DashboardSkeleton";
+import { ContentSkeleton } from "@/components/DashboardSkeleton";
 import { api } from "@/convex/_generated/api";
 import { preloadAuthQuery } from "@/lib/auth-server";
 import { CanvasListPageClient } from "./CanvasListPageClient";
@@ -11,5 +11,5 @@ async function CanvasListPageContent() {
 }
 
 export default function CanvasListPage() {
- return <Suspense fallback={<NotesSkeleton />}><CanvasListPageContent /></Suspense>;
+ return <Suspense fallback={<ContentSkeleton />}><CanvasListPageContent /></Suspense>;
 }

@@ -5,7 +5,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { Badge } from "@/components/ui/badge";
 import { Pin } from "lucide-react";
 import { motion } from "framer-motion";
-import Link from "next/link";
+import { DocumentLink } from "@/components/DocumentLink";
 import { ViewTransition } from "react";
 import { getRelativeTime } from "@/lib/relative-time";
 import { cn } from "@/lib/utils";
@@ -27,10 +27,9 @@ interface NoteCardProps {
     color: string;
   }>;
   isSelected: boolean;
-  onClick: () => void;
 }
 
-export function NoteCard({ note, tags, isSelected, onClick }: NoteCardProps) {
+export function NoteCard({ note, tags, isSelected }: NoteCardProps) {
   const tagsById = useMemo(() => {
     return new Map(tags.map((tag) => [tag._id, tag]));
   }, [tags]);
@@ -44,7 +43,7 @@ export function NoteCard({ note, tags, isSelected, onClick }: NoteCardProps) {
   const { preview, thumbnail } = note;
 
   return (
-    <Link href={`/notes/${note._id}`} onNavigate={onClick} className="block">
+    <DocumentLink kind="note" id={note._id} className="block">
     <motion.div
       layout
       initial={{ opacity: 0, scale: 0.95 }}
@@ -115,6 +114,6 @@ export function NoteCard({ note, tags, isSelected, onClick }: NoteCardProps) {
         </span>
       </div>
     </motion.div>
-    </Link>
+    </DocumentLink>
   );
 }

@@ -2,7 +2,7 @@
 
 import type { Id } from "@/convex/_generated/dataModel";
 import { NoteCard } from "./NoteCard";
-import Link from "next/link";
+import { DocumentLink } from "@/components/DocumentLink";
 import { motion, AnimatePresence } from "framer-motion";
 import { FileText, Layers } from "lucide-react";
 import { CanvasPreview } from "@/components/CanvasPreview";
@@ -37,8 +37,6 @@ interface NotesGridProps {
   canvases: Canvas[];
   tags: Tag[];
   selectedNoteId: Id<"notes"> | null;
-  onOpenNote: (id: Id<"notes">) => void;
-  onOpenCanvas: (id: Id<"canvases">) => void;
 }
 
 export function NotesGrid({
@@ -46,8 +44,6 @@ export function NotesGrid({
   canvases,
   tags,
   selectedNoteId,
-  onOpenNote,
-  onOpenCanvas,
 }: NotesGridProps) {
   if (notes.length === 0 && canvases.length === 0) {
     return (
@@ -104,7 +100,6 @@ export function NotesGrid({
                       note={note}
                       tags={tags}
                       isSelected={selectedNoteId === note._id}
-                      onClick={() => onOpenNote(note._id)}
                     />
                   ))}
                 </AnimatePresence>
@@ -135,7 +130,6 @@ export function NotesGrid({
                       note={note}
                       tags={tags}
                       isSelected={selectedNoteId === note._id}
-                      onClick={() => onOpenNote(note._id)}
                     />
                   ))}
                 </AnimatePresence>
@@ -174,7 +168,6 @@ export function NotesGrid({
                     <CanvasCard
                       key={canvas._id}
                       canvas={canvas}
-                      onOpen={() => onOpenCanvas(canvas._id)}
                     />
                   ))}
                 </AnimatePresence>
@@ -202,7 +195,6 @@ export function NotesGrid({
                     <CanvasCard
                       key={canvas._id}
                       canvas={canvas}
-                      onOpen={() => onOpenCanvas(canvas._id)}
                     />
                   ))}
                 </AnimatePresence>
@@ -217,13 +209,11 @@ export function NotesGrid({
 
 function CanvasCard({
   canvas,
-  onOpen,
 }: {
   canvas: Canvas;
-  onOpen: () => void;
 }) {
   return (
-    <Link href={`/canvas/${canvas._id}`} onNavigate={onOpen} className="block min-w-0">
+    <DocumentLink kind="canvas" id={canvas._id} className="block min-w-0">
     <motion.div
       layout
       initial={{ opacity: 0, scale: 0.98 }}
@@ -246,6 +236,6 @@ function CanvasCard({
         </p>
       </div>
     </motion.div>
-    </Link>
+    </DocumentLink>
   );
 }

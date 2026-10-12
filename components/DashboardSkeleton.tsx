@@ -19,11 +19,17 @@ export function NotesSkeleton() {
           <div key={index} className="h-12 rounded bg-muted animate-pulse" />
         ))}
       </aside>
-      <div className="flex-1 p-6 space-y-5">
-        <div className="h-9 w-1/3 rounded bg-muted animate-pulse" />
-        <div className="h-5 w-3/4 rounded bg-muted animate-pulse" />
-        <div className="h-5 w-2/3 rounded bg-muted animate-pulse" />
-      </div>
+      <ContentSkeleton />
+    </div>
+  );
+}
+
+export function ContentSkeleton() {
+  return (
+    <div className="flex-1 min-w-0 p-6 space-y-5" aria-busy="true" aria-label="Loading document">
+      <div className="h-9 w-1/3 rounded bg-muted animate-pulse" />
+      <div className="h-5 w-3/4 rounded bg-muted animate-pulse" />
+      <div className="h-5 w-2/3 rounded bg-muted animate-pulse" />
     </div>
   );
 }

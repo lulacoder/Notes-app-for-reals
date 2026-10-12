@@ -1,4 +1,4 @@
-import { getActiveIdentity } from "./lib/active-identity";
+import { getActiveIdentity } from "./lib/activeIdentity";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 

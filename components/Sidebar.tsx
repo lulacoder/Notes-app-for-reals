@@ -5,7 +5,7 @@ import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
 import { useState, useMemo } from "react";
 import type { Preloaded } from "convex/react";
 import { useMutation, useConvex } from "convex/react";
-import Link from "next/link";
+import { DocumentLink } from "@/components/DocumentLink";
 import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -49,7 +49,8 @@ const EMPTY: never[] = [];
 
 interface SidebarProps {
   selectedNoteId: Id<"notes"> | null;
-  routeNavigation?: boolean;
+  selectedCanvasId: Id<"canvases"> | null;
+  onNavigate: () => void;
   onSelectNote: (id: Id<"notes">) => void;
   onOpenTrash: () => void;
   viewMode?: "list" | "grid";
@@ -62,7 +63,8 @@ interface SidebarProps {
 
 export function Sidebar({ 
   selectedNoteId, 
-  routeNavigation = false,
+  selectedCanvasId,
+  onNavigate,
   onSelectNote, 
   onOpenTrash,
   viewMode = "list",
@@ -132,10 +134,6 @@ export function Sidebar({
     router.push(`/canvas/${canvasId}`);
   };
 
-  const handleOpenCanvas = (id: Id<"canvases">) => {
-    router.push(`/canvas/${id}`);
-  };
-
   const handleSendToCanvas = async (
     note: (typeof notes)[0],
     canvasId: Id<"canvases">
@@ -188,7 +186,6 @@ export function Sidebar({
             ? "bg-primary/10 text-primary font-medium"
             : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
         )}
-        onClick={() => onSelectNote(note._id)}
       >
         <AnimatePresence>
           {selectedNoteId === note._id && (
@@ -201,6 +198,7 @@ export function Sidebar({
           )}
         </AnimatePresence>
         
+        <DocumentLink kind="note" id={note._id} onNavigate={onNavigate} className="flex flex-1 min-w-0 gap-2">
         <div className="flex-shrink-0 mt-0.5">
           {note.isPinned ? (
             <motion.div
@@ -217,7 +215,7 @@ export function Sidebar({
         
         <div className="flex-1 min-w-0">
           <div className="font-medium text-xs truncate">
-            {routeNavigation ? <Link href={`/notes/${note._id}`} onClick={(event) => event.stopPropagation()}>{note.title || "Untitled"}</Link> : note.title || "Untitled"}
+            {note.title || "Untitled"}
           </div>
           <div className="text-[10px] text-muted-foreground">
             {getRelativeTime(note.updatedAt)}
@@ -245,6 +243,7 @@ export function Sidebar({
           )}
         </div>
         
+        </DocumentLink>
         <div className="flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
           <Button
             variant="ghost"
@@ -430,9 +429,9 @@ export function Sidebar({
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: index * 0.05 }}
-                          onClick={() => handleOpenCanvas(canvas._id)}
-                          className="group flex items-center gap-2 p-1.5 rounded-lg cursor-pointer hover:bg-accent transition-colors"
+                          className={cn("group rounded-lg transition-colors", selectedCanvasId === canvas._id ? "bg-primary/10 text-primary" : "hover:bg-accent")}
                         >
+                          <DocumentLink kind="canvas" id={canvas._id} onNavigate={onNavigate} className="flex items-center gap-2 p-1.5">
                           <Layers className="h-3.5 w-3.5 text-muted-foreground" />
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-xs truncate">
@@ -445,6 +444,7 @@ export function Sidebar({
                           {canvas.isPinned && (
                             <Pin className="h-3 w-3 text-amber-500 fill-amber-500" />
                           )}
+                          </DocumentLink>
                         </motion.div>
                       ))}
                     </motion.div>

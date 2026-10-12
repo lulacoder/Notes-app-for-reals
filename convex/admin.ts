@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { authComponent } from "./auth";
 import { hashPassword } from "better-auth/crypto";
-import { authUserSchema, authUsersPageSchema, authAccountSchema, paginationSchema } from "./lib/auth-records";
+import { authUserSchema, authUsersPageSchema, authAccountSchema, paginationSchema } from "./lib/authRecords";
 
 export const ROOT_ADMIN_EMAIL = "leul15370@gmail.com";
 

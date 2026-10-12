@@ -3,11 +3,11 @@ import { preloadedQueryResult } from "convex/nextjs";
 import { api } from "@/convex/_generated/api";
 import { fetchAuthQuery } from "@/lib/auth-server";
 import { getNotesData } from "@/lib/notes-server";
-import { NotesSkeleton } from "@/components/DashboardSkeleton";
+import { ContentSkeleton } from "@/components/DashboardSkeleton";
 import { NotesPageClient } from "./NotesPageClient";
 
 export default function NotesPage() {
-  return <Suspense fallback={<NotesSkeleton />}><NotesContent /></Suspense>;
+  return <Suspense fallback={<ContentSkeleton />}><NotesContent /></Suspense>;
 }
 
 async function NotesContent() {

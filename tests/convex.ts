@@ -2,7 +2,7 @@ import { convexTest } from "convex-test";
 import { components } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import authSchema from "../convex/betterAuth/schema";
-import { authUserSchema } from "../convex/lib/auth-records";
+import { authUserSchema } from "../convex/lib/authRecords";
 import { z } from "zod";
 
 const modules = import.meta.glob("../convex/**/*.ts");
