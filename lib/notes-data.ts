@@ -4,8 +4,10 @@ import type { api } from "@/convex/_generated/api";
 import { extractFirstImageSrc, stripHtmlToText } from "@/lib/html-utils";
 
 export type NotesQuery = typeof api.notes.listNoteSummaries | typeof api.notes.listNotes;
+export type CanvasesQuery = typeof api.canvases.listCanvasSummaries | typeof api.canvases.listCanvases;
 export type TrashCountQuery = typeof api.notes.countTrash | typeof api.notes.listTrash;
 export type PreloadedNotes = Preloaded<NotesQuery>;
+export type PreloadedCanvases = Preloaded<CanvasesQuery>;
 export type PreloadedTrashCount = Preloaded<TrashCountQuery>;
 
 export function getNoteSummaries(notes: FunctionReturnType<NotesQuery>) {

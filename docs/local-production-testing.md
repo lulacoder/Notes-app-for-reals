@@ -45,3 +45,25 @@ item briefly cancels the hover work. Live queries keep opened documents current.
 
 Direct visits still get server-loaded document data. Private prefetch output is
 kept in the current browser session, not a shared server cache.
+
+## Autosave
+
+Notes and canvas shapes save after a two-second pause, or after ten seconds of
+continuous changes. Leaving an editor submits its pending snapshot. Hiding the
+tab or receiving `pagehide` also submits pending edits. Abrupt browser termination
+can still prevent an unconfirmed save from completing.
+
+Note updates send only changed title/body fields. Canvas shape updates serialize
+the latest committed shapes when saving, and title changes remain explicit.
+Identical updates do not patch the database or change `updatedAt`. Note history
+still creates a separate version after five minutes without edits.
+
+The shared sidebar subscribes to `canvases.listCanvasSummaries`, which excludes
+shape content. Canvas grids keep `listCanvases` for previews, and the notes grid
+subscribes to that full query only while grid view is open. Summary queries still
+read the canvas documents on the backend.
+
+If the summary query is missing or returns Convex's opaque production server
+error, workspace loading logs the error and falls back to the authenticated
+`listCanvases` query. Network errors still propagate, as does the original error
+if the fallback query also fails.

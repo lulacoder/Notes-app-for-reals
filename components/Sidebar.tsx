@@ -42,7 +42,7 @@ import { getRelativeTime } from "@/lib/relative-time";
 import { createNotesSearchIndex } from "@/lib/fuse";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import type { PreloadedNotes, PreloadedTrashCount } from "@/lib/notes-data";
+import type { PreloadedCanvases, PreloadedNotes, PreloadedTrashCount } from "@/lib/notes-data";
 import { useNoteSummaries, useTrashCount } from "@/lib/use-notes-queries";
 
 const EMPTY: never[] = [];
@@ -57,7 +57,7 @@ interface SidebarProps {
   onViewModeChange?: (mode: "list" | "grid") => void;
   preloadedNotes: PreloadedNotes;
   preloadedTags: Preloaded<typeof api.tags.listTags>;
-  preloadedCanvases: Preloaded<typeof api.canvases.listCanvases>;
+  preloadedCanvases: PreloadedCanvases;
   preloadedTrashCount: PreloadedTrashCount;
 }
 
