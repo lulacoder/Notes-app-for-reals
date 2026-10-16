@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { AuthPage } from "@/components/auth/AuthPage";
+import { AuthPage, type AuthRouteProps } from "@/components/auth/AuthPage";
 
 export const metadata: Metadata = { title: "Sign in | Noteworthy" };
 
-export default function LoginPage({ searchParams }: PageProps<"/login">) {
+export default function LoginPage({ searchParams }: AuthRouteProps) {
   return <AuthPage mode="login" searchParams={searchParams} />;
 }

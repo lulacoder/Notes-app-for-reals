@@ -5,9 +5,12 @@ import { getReturnPath } from "@/lib/auth-redirects";
 import { LandingPage } from "@/components/marketing/LandingPage";
 import { AuthDialog } from "./AuthDialog";
 
-interface AuthPageProps {
-  mode: "login" | "register";
+export interface AuthRouteProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+interface AuthPageProps extends AuthRouteProps {
+  mode: "login" | "register";
 }
 
 export function AuthPage(props: AuthPageProps) {
