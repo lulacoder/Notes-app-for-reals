@@ -20,7 +20,7 @@ npm run lint         # Run ESLint
 npx convex deploy    # Deploy Convex to production
 ```
 
-**Note**: No test framework configured yet. If adding tests, consider Vitest.
+Tests use Vitest, an in-memory Convex backend, and jsdom for UI behavior. Run `npm test` and `npm run typecheck` before opening a PR.
 
 ## Project Structure
 

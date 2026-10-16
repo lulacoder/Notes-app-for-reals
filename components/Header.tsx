@@ -7,7 +7,7 @@ import { useConvexAuth, type Preloaded } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/convex/_generated/api";
 import { signOut } from "@/lib/auth-client";
-import { getAuthHref } from "@/lib/auth-redirects";
+import { getAuthHref, replaceAuthLocation } from "@/lib/auth-redirects";
 import { useToast } from "@/components/ui/toast-notification";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -51,19 +51,19 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
   const { isInstallable, install } = usePWAInstall();
 
   useEffect(() => {
-    if (navigating.current || isLoading) return;
+    if (navigating.current || isLoading || signingOut) return;
     if (!isAuthenticated || currentUser === null || currentUser?.banned) {
       navigating.current = true;
       const returnTo = window.location.pathname + window.location.search + window.location.hash;
       const href = getAuthHref("login", returnTo, currentUser?.banned ? "banned" : "expired");
       // Clear a suspended account's cookie before showing the sign-in form.
       if (currentUser?.banned) {
-        void signOut().catch(() => {}).finally(() => window.location.replace(href));
+        void signOut().catch(() => {}).finally(() => replaceAuthLocation(href));
       } else {
-        window.location.replace(href);
+        replaceAuthLocation(href);
       }
     }
-  }, [currentUser, isLoading, isAuthenticated]);
+  }, [currentUser, isLoading, isAuthenticated, signingOut]);
 
   const handleSignOut = async () => {
     if (navigating.current) return;
@@ -73,7 +73,7 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
       const result = await signOut();
       if (result.error) throw new Error(result.error.message || "Please try again.");
       // Discard private route caches and keep expiry from racing manual sign-out.
-      window.location.replace("/");
+      replaceAuthLocation("/");
     } catch (error) {
       navigating.current = false;
       setSigningOut(false);

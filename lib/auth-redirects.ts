@@ -23,3 +23,8 @@ export function getAuthHref(
   if (reason === "expired") params.set("reason", "expired");
   return `/${mode}?${params}`;
 }
+
+// Auth boundaries need a fresh request so private client route caches are dropped.
+export function replaceAuthLocation(path: string) {
+  window.location.replace(path);
+}

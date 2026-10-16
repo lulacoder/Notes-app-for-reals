@@ -70,6 +70,10 @@ npm run build
 
 Tests run against an in-memory Convex database. Configure `NEXT_PUBLIC_CONVEX_SITE_URL` for the auth proxy and `SITE_URL` on the Convex deployment for auth callbacks. Keep `BETTER_AUTH_SECRET` on the backend deployment.
 
+For local auth, the selected Convex deployment must trust `http://localhost:3000` as its `SITE_URL`. A deployment configured only for the hosted app rejects localhost sign-in with `INVALID_ORIGIN`. Setting `SITE_URL` in a frontend env file does not change the backend setting.
+
+Private links send signed-out visitors to `/login?next=...`. Sign-in and sign-up preserve that destination, and active sessions skip both auth pages. Return paths are limited to notes, canvases, boards, and admin pages. Session checks read the live user on each server request, with request-local deduplication. Signing in or out starts a fresh page request to discard private client route caches.
+
 See [the Next.js 16.4 upgrade notes](docs/next-16-4-upgrade.md) for caching behavior, authentication safeguards, and the required backend-first release order.
 
 ## Usage
