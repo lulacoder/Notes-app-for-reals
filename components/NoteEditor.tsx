@@ -20,6 +20,9 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useImageUpload } from "@/lib/use-image-upload";
 import { extractTitleFromHtml } from "@/lib/html-utils";
+import { useAutosave } from "@/lib/use-autosave";
+
+type NoteDraft = Pick<Doc<"notes">, "title" | "content">;
 
 interface NoteEditorProps {
   noteId: Id<"notes"> | null;
@@ -46,10 +49,10 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
   const [content, setContent] = useState(initialNote?.content ?? "");
   const [title, setTitle] = useState(initialNote?.title ?? "");
   const [showVersions, setShowVersions] = useState(false);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const versionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastSavedRef = useRef({ title: "", content: "" });
+  const lastSubmittedRef = useRef<NoteDraft | null>(null);
   const lastVersionRef = useRef({ title: "", content: "" });
+  const [loadedNoteId, setLoadedNoteId] = useState(initialNote?._id ?? null);
   const prevNoteIdRef = useRef<Id<"notes"> | null>(null);
 
   // Sync state when note changes - defer state updates to avoid synchronous setState
@@ -61,16 +64,18 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
       queueMicrotask(() => {
         setTitle(note.title);
         setContent(noteContent);
+        setLoadedNoteId(noteId);
       });
-      lastSavedRef.current = { title: note.title, content: noteContent };
+      lastSubmittedRef.current = { title: note.title, content: noteContent };
       lastVersionRef.current = { title: note.title, content: noteContent };
       prevNoteIdRef.current = noteId;
     } else if (!note && noteId === null) {
       queueMicrotask(() => {
         setTitle("");
         setContent("");
+        setLoadedNoteId(null);
       });
-      lastSavedRef.current = { title: "", content: "" };
+      lastSubmittedRef.current = null;
       lastVersionRef.current = { title: "", content: "" };
       prevNoteIdRef.current = null;
     }
@@ -102,48 +107,30 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
     [noteId, isNoteReady, createVersion]
   );
 
-  // Auto-save with debounce
+  // Compare against submitted edits so reverting during a slow save is preserved.
   const saveNote = useCallback(
-    async (newTitle: string, newContent: string) => {
-      if (!noteId || !isNoteReady) return;
+    async (draft: NoteDraft) => {
+      if (!noteId) return;
+      const previous = lastSubmittedRef.current;
+      const updates: Partial<NoteDraft> = {};
+      if (draft.title !== previous?.title) updates.title = draft.title;
+      if (draft.content !== previous?.content) updates.content = draft.content;
+      if (updates.title === undefined && updates.content === undefined) return;
 
-      if (
-        newTitle === lastSavedRef.current.title &&
-        newContent === lastSavedRef.current.content
-      ) {
-        return;
-      }
-
+      lastSubmittedRef.current = draft;
       try {
-        await updateNote({
-          id: noteId,
-          title: newTitle || "Untitled",
-          content: newContent,
-        });
-        lastSavedRef.current = { title: newTitle, content: newContent };
+        await updateNote({ id: noteId, ...updates });
       } catch (error) {
-        console.error("Failed to save note:", error);
+        // A later edit must resend all fields after a rejected mutation.
+        lastSubmittedRef.current = null;
+        throw error;
       }
     },
-    [noteId, isNoteReady, updateNote]
+    [noteId, updateNote]
   );
 
-  // Debounced save effect (1 second)
-  useEffect(() => {
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    saveTimeoutRef.current = setTimeout(() => {
-      saveNote(title, content);
-    }, 1000);
-
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, [title, content, saveNote]);
+  const draft = useMemo(() => ({ title: title || "Untitled", content }), [title, content]);
+  useAutosave(draft, saveNote, isNoteReady && noteId !== null && loadedNoteId === noteId);
 
   // Debounced version creation (5 minutes)
   useEffect(() => {

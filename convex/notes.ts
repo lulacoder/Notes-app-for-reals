@@ -142,8 +142,12 @@ export const updateNote = mutation({
       throw new Error("Note not found or unauthorized");
     }
 
-    // Save version if requested and content changed
-    if (args.saveVersion && (args.title !== note.title || args.content !== note.content)) {
+    const titleChanged = args.title !== undefined && args.title !== note.title;
+    const contentChanged = args.content !== undefined && args.content !== note.content;
+    if (!titleChanged && !contentChanged) return args.id;
+
+    // Save version if requested and supplied fields changed.
+    if (args.saveVersion) {
       await ctx.db.insert("noteVersions", {
         noteId: args.id,
         title: note.title,
@@ -157,10 +161,10 @@ export const updateNote = mutation({
       updatedAt: Date.now(),
     };
 
-    if (args.title !== undefined) {
+    if (titleChanged) {
       updates.title = args.title;
     }
-    if (args.content !== undefined) {
+    if (contentChanged) {
       updates.content = args.content;
     }
 

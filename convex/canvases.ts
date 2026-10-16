@@ -2,6 +2,27 @@ import { getActiveIdentity } from "./lib/activeIdentity";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
+// Sidebar navigation does not need the shapes used by grid previews.
+export const listCanvasSummaries = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await getActiveIdentity(ctx);
+    if (!identity) return [];
+
+    const canvases = await ctx.db
+      .query("canvases")
+      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+      .collect();
+    return canvases
+      .filter((canvas) => !canvas.isDeleted)
+      .sort((a, b) => Number(!!b.isPinned) - Number(!!a.isPinned) || b.updatedAt - a.updatedAt)
+      .map((canvas) => ({
+        _id: canvas._id, title: canvas.title, updatedAt: canvas.updatedAt,
+        isPinned: canvas.isPinned, tagIds: canvas.tagIds,
+      }));
+  },
+});
+
 // List active canvases (not deleted)
 export const listCanvases = query({
   args: {},
@@ -109,14 +130,18 @@ export const updateCanvas = mutation({
       throw new Error("Canvas not found or unauthorized");
     }
 
+    const titleChanged = args.title !== undefined && args.title !== canvas.title;
+    const contentChanged = args.content !== undefined && args.content !== canvas.content;
+    if (!titleChanged && !contentChanged) return args.id;
+
     const updates: { title?: string; content?: string; updatedAt: number } = {
       updatedAt: Date.now(),
     };
 
-    if (args.title !== undefined) {
+    if (titleChanged) {
       updates.title = args.title;
     }
-    if (args.content !== undefined) {
+    if (contentChanged) {
       updates.content = args.content;
     }
 

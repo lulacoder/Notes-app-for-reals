@@ -6,6 +6,7 @@ import { useMutation, useQuery, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { stripHtmlToText } from "@/lib/html-utils";
+import { useAutosave } from "@/lib/use-autosave";
 import {
   Layers,
   MousePointer2,
@@ -169,11 +170,10 @@ export function CanvasEditor({ canvasId, initialCanvas }: CanvasEditorProps) {
   const { resolvedTheme } = useTheme();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [tool, setTool] = useState<Tool>("select");
   const [shapes, setShapes] = useState<Shape[]>(() => readShapes(initialCanvas.content));
-  const lastSavedRef = useRef(JSON.stringify({ shapes }));
+  const lastSubmittedRef = useRef<string | null>(JSON.stringify({ shapes }));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentShape, setCurrentShape] = useState<Shape | null>(null);
@@ -223,32 +223,22 @@ export function CanvasEditor({ canvasId, initialCanvas }: CanvasEditorProps) {
     return () => window.removeEventListener("resize", updateSize);
   }, []);
 
-  // Debounced save function
   const saveContent = useCallback(
-    (shapesToSave: Shape[]) => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
+    async (shapesToSave: Shape[]) => {
+      const content = JSON.stringify({ shapes: shapesToSave });
+      if (content === lastSubmittedRef.current) return;
+      lastSubmittedRef.current = content;
+      try {
+        await updateCanvas({ id: canvasId, content });
+      } catch (error) {
+        lastSubmittedRef.current = null;
+        throw error;
       }
-
-      saveTimeoutRef.current = setTimeout(async () => {
-        const content = JSON.stringify({ shapes: shapesToSave });
-        if (content !== lastSavedRef.current) {
-          try {
-            await updateCanvas({ id: canvasId, content });
-            lastSavedRef.current = content;
-          } catch (error) {
-            console.error("Failed to save canvas:", error);
-          }
-        }
-      }, 1000);
     },
     [canvasId, updateCanvas]
   );
 
-  // Save when shapes change
-  useEffect(() => {
-    saveContent(shapes);
-  }, [shapes, saveContent]);
+  useAutosave(shapes, saveContent);
 
   // Add to history
   const addToHistory = useCallback((newShapes: Shape[]) => {
@@ -1430,15 +1420,6 @@ export function CanvasEditor({ canvasId, initialCanvas }: CanvasEditorProps) {
       window.removeEventListener("keyup", handleKeyUp);
     };
   }, [selectedId, shapes, addToHistory, undo, redo, editingSticky, zoomIn, zoomOut, resetView]);
-
-  // Cleanup save timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, []);
 
   // Loading state
   if (canvas === undefined) {
