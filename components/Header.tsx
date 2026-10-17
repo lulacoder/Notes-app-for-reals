@@ -75,6 +75,7 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
       // Discard private route caches and keep expiry from racing manual sign-out.
       replaceAuthLocation("/");
     } catch (error) {
+      console.error("Could not sign out", error);
       navigating.current = false;
       setSigningOut(false);
       showError("Could not sign out", error instanceof Error ? error.message : "Please try again.");
