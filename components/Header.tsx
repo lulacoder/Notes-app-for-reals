@@ -2,11 +2,13 @@
 
 import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
 
-import type { Preloaded } from "convex/react";
+import { useConvexAuth, type Preloaded } from "convex/react";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/convex/_generated/api";
 import { signOut } from "@/lib/auth-client";
+import { getAuthHref, replaceAuthLocation } from "@/lib/auth-redirects";
+import { useToast } from "@/components/ui/toast-notification";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -42,22 +44,42 @@ interface HeaderProps {
 export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
   const currentUser = usePreloadedAuthQuery(preloadedCurrentUser);
   const router = useRouter();
+  const { isLoading, isAuthenticated } = useConvexAuth();
+  const { error: showError } = useToast();
+  const navigating = useRef(false);
+  const [signingOut, setSigningOut] = useState(false);
   const { isInstallable, install } = usePWAInstall();
 
-  // If the user's account is suspended/banned, immediately terminate session and redirect
   useEffect(() => {
-    if (currentUser?.banned) {
-      void signOut().finally(() => window.location.replace("/login?banned=true"));
-    } else if (currentUser === null) {
-      window.location.replace("/login");
+    if (navigating.current || isLoading || signingOut) return;
+    if (!isAuthenticated || currentUser === null || currentUser?.banned) {
+      navigating.current = true;
+      const returnTo = window.location.pathname + window.location.search + window.location.hash;
+      const href = getAuthHref("login", returnTo, currentUser?.banned ? "banned" : "expired");
+      // Clear a suspended account's cookie before showing the sign-in form.
+      if (currentUser?.banned) {
+        void signOut().catch(() => {}).finally(() => replaceAuthLocation(href));
+      } else {
+        replaceAuthLocation(href);
+      }
     }
-  }, [currentUser]);
+  }, [currentUser, isLoading, isAuthenticated, signingOut]);
 
   const handleSignOut = async () => {
-    await signOut();
-    // Discard the browser's private route cache when changing accounts.
-    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-    window.location.assign("/");
+    if (navigating.current) return;
+    navigating.current = true;
+    setSigningOut(true);
+    try {
+      const result = await signOut();
+      if (result.error) throw new Error(result.error.message || "Please try again.");
+      // Discard private route caches and keep expiry from racing manual sign-out.
+      replaceAuthLocation("/");
+    } catch (error) {
+      console.error("Could not sign out", error);
+      navigating.current = false;
+      setSigningOut(false);
+      showError("Could not sign out", error instanceof Error ? error.message : "Please try again.");
+    }
   };
 
 
@@ -145,9 +167,9 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
                     <DropdownMenuSeparator />
                   </>
                 )}
-                <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
+                <DropdownMenuItem onClick={handleSignOut} disabled={signingOut} className="text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
-                  Sign out
+                  {signingOut ? "Signing out..." : "Sign out"}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
