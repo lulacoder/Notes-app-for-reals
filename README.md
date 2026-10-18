@@ -70,7 +70,14 @@ npm run build
 
 Tests run against an in-memory Convex database. Configure `NEXT_PUBLIC_CONVEX_SITE_URL` for the auth proxy and `SITE_URL` on the Convex deployment for auth callbacks. Keep `BETTER_AUTH_SECRET` on the backend deployment.
 
-For local auth, the selected Convex deployment must trust `http://localhost:3000` as its `SITE_URL`. A deployment configured only for the hosted app rejects localhost sign-in with `INVALID_ORIGIN`. Setting `SITE_URL` in a frontend env file does not change the backend setting.
+This project intentionally uses the Convex **dev deployment for the hosted app** and the **prod deployment for localhost**:
+
+| Frontend | Convex deployment | Backend `SITE_URL` |
+| --- | --- | --- |
+| `https://notes-app-liart-eight.vercel.app` | Dev: `calculating-seal-739` | `https://notes-app-liart-eight.vercel.app` |
+| `http://localhost:3000` | Prod: `dapper-lemming-169` | `http://localhost:3000` |
+
+Local `.env.development.local` and `.env.production.local` must point `NEXT_PUBLIC_CONVEX_URL` and `NEXT_PUBLIC_CONVEX_SITE_URL` at `dapper-lemming-169`. The hosted frontend points these variables at `calculating-seal-739`. Frontend env files do not change Convex's backend `SITE_URL`; set that separately on the named deployment. Selecting the wrong deployment or changing its `SITE_URL` to the other frontend's origin causes `403 INVALID_ORIGIN`.
 
 Private links send signed-out visitors to `/login?next=...`. Sign-in and sign-up preserve that destination, and active sessions skip both auth pages. Return paths are limited to notes, canvases, boards, and admin pages. Session checks read the live user on each server request, with request-local deduplication. Signing in or out starts a fresh page request to discard private client route caches.
 
