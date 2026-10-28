@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { ArrowRight, FileText, LayoutDashboard, Network } from "lucide-react";
 import { Brand } from "./Brand";
+import { NavigationLink } from "./NavigationLink";
 import { WorkspacePreview } from "./WorkspacePreview";
 import styles from "./paper.module.css";
 
@@ -9,13 +9,13 @@ export function LandingPage() {
     <div className={styles.paper}>
       <a href="#main" className={styles.skipLink}>Skip to content</a>
       <header className={styles.header}>
-        <Link href="/" aria-label="Noteworthy home"><Brand /></Link>
+        <NavigationLink href="/" aria-label="Noteworthy home"><Brand /></NavigationLink>
         <nav aria-label="Features" className={styles.featureNav}>
           <a href="#notes">Notes</a><a href="#canvas">Canvas</a><a href="#boards">Boards</a>
         </nav>
         <nav aria-label="Account" className={styles.accountNav}>
-          <Link href="/login" className={styles.secondaryButton}>Sign in</Link>
-          <Link href="/register" className={styles.primaryButton}>Start writing <ArrowRight size={15} /></Link>
+          <NavigationLink href="/login" className={styles.secondaryButton}>Sign in</NavigationLink>
+          <NavigationLink href="/register" className={styles.primaryButton}>Start writing <ArrowRight size={15} /></NavigationLink>
         </nav>
       </header>
       <main id="main" className={styles.main}>
@@ -25,8 +25,8 @@ export function LandingPage() {
             <h1 id="hero-title">Write it down.<br />Map it out.</h1>
             <p className={styles.intro}>Write notes, connect ideas on a canvas, and organize tasks on a board.</p>
             <div className={styles.heroActions}>
-              <Link href="/register" className={styles.primaryButton}>Start writing <ArrowRight size={17} /></Link>
-              <Link href="/login" className={styles.secondaryButton}>Sign in</Link>
+              <NavigationLink href="/register" className={styles.primaryButton}>Start writing <ArrowRight size={17} /></NavigationLink>
+              <NavigationLink href="/login" className={styles.secondaryButton}>Sign in</NavigationLink>
             </div>
             <p className={styles.heroFootnote}>Your next idea starts with a blank page.</p>
           </div>

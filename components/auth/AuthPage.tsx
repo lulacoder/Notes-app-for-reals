@@ -4,6 +4,7 @@ import { getAuthSession } from "@/lib/auth-session";
 import { getReturnPath } from "@/lib/auth-redirects";
 import { LandingPage } from "@/components/marketing/LandingPage";
 import { AuthDialog } from "./AuthDialog";
+import { AuthDialogLoading } from "./AuthDialogLoading";
 
 export interface AuthRouteProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -14,7 +15,7 @@ interface AuthPageProps extends AuthRouteProps {
 }
 
 export function AuthPage(props: AuthPageProps) {
-  return <Suspense fallback={<LandingPage />}><AuthPageContent {...props} /></Suspense>;
+  return <Suspense key={props.mode} fallback={<><LandingPage /><AuthDialogLoading mode={props.mode} /></>}><AuthPageContent {...props} /></Suspense>;
 }
 
 async function AuthPageContent({ mode, searchParams }: AuthPageProps) {

@@ -1,13 +1,13 @@
 "use client";
 
-import { useId, useRef, useState, type FormEvent } from "react";
-import Link from "next/link";
+import { useId, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ArrowRight, Eye, EyeOff, Loader2, X } from "lucide-react";
 import { signIn, signUp } from "@/lib/auth-client";
 import { getAuthHref, getReturnPath, replaceAuthLocation } from "@/lib/auth-redirects";
 import { Brand } from "@/components/marketing/Brand";
+import { NavigationLink } from "@/components/marketing/NavigationLink";
 import styles from "@/components/marketing/paper.module.css";
 
 interface AuthDialogProps {
@@ -23,12 +23,14 @@ export function AuthDialog({ mode, returnTo, notice }: AuthDialogProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [closing, startTransition] = useTransition();
+  const busy = pending || closing;
   const submitting = useRef(false);
   const firstField = useRef<HTMLInputElement>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (submitting.current) return;
+    if (submitting.current || closing) return;
     const data = new FormData(event.currentTarget);
     const email = String(data.get("email") ?? "").trim();
     const password = String(data.get("password") ?? "");
@@ -59,18 +61,19 @@ export function AuthDialog({ mode, returnTo, notice }: AuthDialogProps) {
   }
 
   return (
-    <Dialog.Root open onOpenChange={(open) => { if (!open && !submitting.current) router.replace("/"); }}>
+    <Dialog.Root open onOpenChange={(open) => { if (!open && !submitting.current && !closing) startTransition(() => router.replace("/")); }}>
       <Dialog.Overlay className={styles.authOverlay} />
       <Dialog.Content className={`${styles.paper} ${styles.authContent}`} onOpenAutoFocus={(event) => { event.preventDefault(); firstField.current?.focus(); }} onCloseAutoFocus={(event) => event.preventDefault()}>
         <div className={styles.authBrand}><Brand /></div>
-        <Dialog.Close className={styles.authClose} disabled={pending} aria-label="Close and return home"><X size={20} /></Dialog.Close>
+        <Dialog.Close className={styles.authClose} disabled={busy} aria-label="Close and return home">{closing ? <Loader2 size={20} className="animate-spin motion-reduce:animate-none" /> : <X size={20} />}</Dialog.Close>
         <Dialog.Title className={styles.authTitle}>{isRegister ? "Create an account" : "Welcome back"}</Dialog.Title>
         <Dialog.Description className={styles.authDescription}>{isRegister ? "A place for your notes and ideas." : "Sign in to access your notes."}</Dialog.Description>
+        {closing && <p className={styles.authNotice} role="status">Returning home...</p>}
         {notice === "banned" && <p className={styles.authNotice} role="status">Your account has been suspended. Contact your administrator for help.</p>}
         {notice === "expired" && <p className={styles.authNotice} role="status">Your session ended. Sign in to pick up where you left off.</p>}
-        <form onSubmit={handleSubmit} aria-busy={pending}>
+        <form onSubmit={handleSubmit} aria-busy={busy}>
           {error && <p className={styles.authError} role="alert">{error}</p>}
-          <fieldset disabled={pending} className={styles.authFields}>
+          <fieldset disabled={busy} className={styles.authFields}>
             {isRegister && <div className={styles.authField}>
               <label htmlFor={`${formId}-name`}>Name</label>
               <input ref={isRegister ? firstField : undefined} id={`${formId}-name`} name="name" type="text" autoComplete="name" placeholder="Your name" required maxLength={100} />
@@ -91,7 +94,7 @@ export function AuthDialog({ mode, returnTo, notice }: AuthDialogProps) {
           </fieldset>
         </form>
         <p className={styles.authFooter}>{isRegister ? "Already have an account?" : "Don't have an account?"}{" "}
-          <Link href={getAuthHref(isRegister ? "login" : "register", returnTo)} aria-disabled={pending} onClick={(event) => { if (submitting.current) event.preventDefault(); }}>{isRegister ? "Sign in" : "Sign up"}</Link>
+          <NavigationLink href={getAuthHref(isRegister ? "login" : "register", returnTo)} aria-disabled={busy} onClick={(event) => { if (submitting.current || closing) event.preventDefault(); }}>{isRegister ? "Sign in" : "Sign up"}</NavigationLink>
         </p>
       </Dialog.Content>
     </Dialog.Root>
