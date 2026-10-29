@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CanvasEditorPageClient } from "../app/(dashboard)/(workspace)/canvas/[id]/CanvasEditorPageClient";
 import { api } from "../convex/_generated/api";
 import { account, setup } from "./convex";
+import { ToastProvider } from "../components/ui/toast-notification";
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -43,7 +44,7 @@ describe("canvas loading during authentication changes", () => {
         root.render(
           <AppRouterContext.Provider value={router}>
             <ConvexProviderWithAuth client={client} useAuth={useUnauthenticated}>
-              <CanvasEditorPageClient canvasId={id} preloadedCanvas={preloaded} />
+              <ToastProvider><CanvasEditorPageClient canvasId={id} preloadedCanvas={preloaded} /></ToastProvider>
             </ConvexProviderWithAuth>
           </AppRouterContext.Provider>,
         );

@@ -21,6 +21,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useImageUpload } from "@/lib/use-image-upload";
 import { extractTitleFromHtml } from "@/lib/html-utils";
 import { useAutosave } from "@/lib/use-autosave";
+import { SaveStatus } from "@/components/SaveStatus";
 
 type NoteDraft = Pick<Doc<"notes">, "title" | "content">;
 
@@ -130,7 +131,7 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
   );
 
   const draft = useMemo(() => ({ title: title || "Untitled", content }), [title, content]);
-  useAutosave(draft, saveNote, isNoteReady && noteId !== null && loadedNoteId === noteId);
+  const autosave = useAutosave(draft, saveNote, isNoteReady && noteId !== null && loadedNoteId === noteId);
 
   // Debounced version creation (5 minutes)
   useEffect(() => {
@@ -315,6 +316,7 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
             )}
 
             {/* Tag assigner */}
+            <SaveStatus status={autosave.status} retry={autosave.retry} />
             <TagAssigner
               selectedTagIds={note.tagIds || []}
               onUpdateTags={handleUpdateTags}

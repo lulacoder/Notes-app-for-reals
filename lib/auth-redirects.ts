@@ -1,4 +1,4 @@
-const APP_PATH = /^\/(notes|canvas|kanban|admin)(\/|$)/;
+const APP_PATH = /^\/(notes|canvas|kanban|trash|admin)(\/|$)/;
 
 // Only return to app pages. Never accept an external URL or another auth page.
 export function getReturnPath(value: string | string[] | null | undefined): string {

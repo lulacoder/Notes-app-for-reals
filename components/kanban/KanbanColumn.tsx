@@ -1,275 +1,329 @@
 "use client";
 
-import { useState, useRef } from "react";
-import type { Id } from "@/convex/_generated/dataModel";
-import { Droppable } from "@hello-pangea/dnd";
+import { useRef, useState } from "react";
+
+import {
+  Droppable,
+  type DraggableProvidedDragHandleProps,
+} from "@hello-pangea/dnd";
 import { useMutation } from "convex/react";
+import {
+  GripVertical,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
+
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { api } from "@/convex/_generated/api";
-import { KanbanCard } from "./KanbanCard";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast-notification";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Plus, MoreHorizontal, Trash2, Pencil } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
-type Tag = {
-  _id: Id<"tags">;
-  name: string;
-  color: string;
-};
-
-type Card = {
-  _id: Id<"kanbanCards">;
-  title: string;
-  description?: string;
-  dueDate?: number;
-  tagIds?: Id<"tags">[];
-  columnId: Id<"kanbanColumns">;
-  boardId: Id<"kanbanBoards">;
-  order: number;
-};
-
-type Column = {
-  _id: Id<"kanbanColumns">;
-  title: string;
-  order: number;
-};
+import { KanbanCard } from "./KanbanCard";
 
 interface KanbanColumnProps {
-  column: Column;
-  allColumns: Column[];
-  cards: Card[];
+  column: Doc<"kanbanColumns">;
+  allColumns: Doc<"kanbanColumns">[];
+  cards: Doc<"kanbanCards">[];
+  totalCards: number;
   boardId: Id<"kanbanBoards">;
-  tags: Tag[];
-  isMobile: boolean;
+  tags: Doc<"tags">[];
+  dragHandleProps: DraggableProvidedDragHandleProps | null | undefined;
+  filtering: boolean;
+  onMoveCard: (id: Id<"kanbanCards">) => void;
 }
 
 export function KanbanColumn({
   column,
   allColumns,
   cards,
+  totalCards,
   boardId,
   tags,
-  isMobile,
+  dragHandleProps,
+  filtering,
+  onMoveCard,
 }: KanbanColumnProps) {
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [titleValue, setTitleValue] = useState(column.title);
-  const [isAddingCard, setIsAddingCard] = useState(false);
-  const [newCardTitle, setNewCardTitle] = useState("");
-  const titleInputRef = useRef<HTMLInputElement>(null);
-  const cardInputRef = useRef<HTMLInputElement>(null);
-
-  const updateColumn = useMutation(api.kanban.updateColumn);
-  const deleteColumn = useMutation(api.kanban.deleteColumn);
-  const createCard = useMutation(api.kanban.createCard);
-
-  const handleTitleSave = async () => {
-    if (titleValue.trim() && titleValue !== column.title) {
-      await updateColumn({ id: column._id, title: titleValue.trim() });
-    } else {
-      setTitleValue(column.title);
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(column.title);
+  const [adding, setAdding] = useState(false);
+  const [cardTitle, setCardTitle] = useState("");
+  const [pending, setPending] = useState(false);
+  const running = useRef(false);
+  const [deleting, setDeleting] = useState(false);
+  const [destination, setDestination] = useState(
+    allColumns.find((item) => item._id !== column._id)?._id ?? "",
+  );
+  const update = useMutation(api.kanban.updateColumn);
+  const remove = useMutation(api.kanban.deleteColumn);
+  const create = useMutation(api.kanban.createCard);
+  const { error } = useToast();
+  async function run(action: () => Promise<unknown>, done: () => void) {
+    if (running.current) return;
+    running.current = true;
+    setPending(true);
+    try {
+      await action();
+      done();
+    } catch (cause) {
+      console.error("Failed KanbanColumn action:", cause);
+      error(
+        "Could not update column",
+        cause instanceof Error ? cause.message : "Try again.",
+      );
+    } finally {
+      running.current = false;
+      setPending(false);
     }
-    setIsEditingTitle(false);
-  };
-
-  const handleDeleteColumn = async () => {
-    // Move cards to the next column if available
-    const otherColumns = allColumns.filter((c) => c._id !== column._id);
-    const targetColumnId = otherColumns[0]?._id;
-    await deleteColumn({ id: column._id, targetColumnId });
-  };
-
-  const handleAddCard = async () => {
-    if (!newCardTitle.trim()) {
-      setIsAddingCard(false);
+  }
+  function saveTitle() {
+    if (!title.trim()) {
+      setTitle(column.title);
+      setEditing(false);
       return;
     }
-    await createCard({
-      boardId,
-      columnId: column._id,
-      title: newCardTitle.trim(),
-    });
-    setNewCardTitle("");
-    setIsAddingCard(false);
-  };
-
-  const handleAddCardKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") handleAddCard();
-    if (e.key === "Escape") {
-      setNewCardTitle("");
-      setIsAddingCard(false);
-    }
-  };
-
+    void run(
+      () => update({ id: column._id, title: title.trim() }),
+      () => setEditing(false),
+    );
+  }
+  const target = allColumns.find(
+    (item) => item._id === destination && item._id !== column._id,
+  );
   return (
-    <div
-      className={cn(
-        "flex flex-col rounded-xl bg-muted/40 border",
-        "shrink-0",
-        isMobile ? "w-[85vw] snap-start" : "w-[300px]"
-      )}
+    <section
+      className="flex h-full max-h-full w-[min(85vw,300px)] flex-col rounded-xl border bg-muted/35"
+      aria-label={`${column.title} column`}
     >
-      {/* Column header */}
-      <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-        {isEditingTitle ? (
+      <div className="flex items-center gap-1.5 p-3">
+        <button
+          {...dragHandleProps}
+          aria-label={`Reorder ${column.title} column`}
+          className="rounded p-1 text-muted-foreground"
+        >
+          <GripVertical size={15} />
+        </button>
+        {editing ? (
           <Input
-            ref={titleInputRef}
-            value={titleValue}
-            onChange={(e) => setTitleValue(e.target.value)}
-            onBlur={handleTitleSave}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleTitleSave();
-              if (e.key === "Escape") {
-                setTitleValue(column.title);
-                setIsEditingTitle(false);
-              }
-            }}
-            className="h-7 text-sm font-semibold border-primary"
             autoFocus
+            aria-label="Column title"
+            className="h-8 min-w-0 text-sm"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={saveTitle}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                saveTitle();
+              }
+              if (e.key === "Escape") setEditing(false);
+            }}
           />
         ) : (
           <button
-            className="flex-1 text-left text-sm font-semibold truncate hover:text-primary transition-colors"
-            onDoubleClick={() => {
-              setIsEditingTitle(true);
-              setTimeout(() => titleInputRef.current?.select(), 50);
+            className="min-w-0 flex-1 truncate text-left text-sm font-semibold"
+            onClick={() => {
+              setTitle(column.title);
+              setEditing(true);
             }}
+            aria-label={`Rename ${column.title} column`}
           >
             {column.title}
           </button>
         )}
-
-        <span className="text-xs text-muted-foreground bg-background rounded-full px-2 py-0.5 shrink-0">
-          {cards.length}
+        <span className="rounded-md bg-background px-1.5 py-0.5 text-[11px] text-muted-foreground">
+          {filtering ? `${cards.length}/` : ""}
+          {totalCards}
         </span>
-
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0">
-              <MoreHorizontal className="h-4 w-4" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              aria-label={`Options for ${column.title} column`}
+            >
+              <MoreHorizontal size={15} />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent>
             <DropdownMenuItem
               onClick={() => {
-                setIsEditingTitle(true);
-                setTimeout(() => titleInputRef.current?.select(), 50);
+                setTitle(column.title);
+                setEditing(true);
               }}
             >
-              <Pencil className="h-4 w-4 mr-2" />
-              Rename
+              <Pencil size={14} />
+              Rename column
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={handleDeleteColumn}
+              className="text-destructive"
+              onClick={() => setDeleting(true)}
             >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete Column
+              <Trash2 size={14} />
+              Delete column
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-
-      {/* Cards droppable area */}
-      <Droppable droppableId={column._id}>
+      <Droppable droppableId={column._id} type="CARD">
         {(provided, snapshot) => (
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
             className={cn(
-              "flex-1 overflow-y-auto px-3 py-1 space-y-2 min-h-[80px] max-h-[calc(100vh-280px)] transition-colors duration-200",
-              snapshot.isDraggingOver && "bg-primary/5 rounded-xl"
+              "min-h-[80px] flex-1 space-y-2 overflow-y-auto px-3 pb-2",
+              snapshot.isDraggingOver && "bg-primary/5",
             )}
           >
-            <AnimatePresence>
-              {cards.map((card, index) => (
-                <motion.div
-                  key={card._id}
-                  initial={{ opacity: 0, y: -8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ delay: index * 0.02 }}
-                >
-                  <KanbanCard
-                    card={card}
-                    index={index}
-                    tags={tags}
-                    columns={allColumns}
-                    isMobile={isMobile}
-                  />
-                </motion.div>
-              ))}
-            </AnimatePresence>
+            {cards.map((card, index) => (
+              <KanbanCard
+                key={card._id}
+                card={card}
+                index={index}
+                tags={tags}
+                columns={allColumns}
+                dragDisabled={filtering}
+                onMoveCard={onMoveCard}
+              />
+            ))}
             {provided.placeholder}
+            {cards.length === 0 && (
+              <p className="rounded-lg border border-dashed px-3 py-5 text-center text-xs text-muted-foreground">
+                {filtering
+                  ? "No matching tasks"
+                  : "Drop a task here or add your next step."}
+              </p>
+            )}
           </div>
         )}
       </Droppable>
-
-      {/* Add card area */}
-      <div className="px-3 pb-3 pt-1">
-        <AnimatePresence mode="wait">
-          {isAddingCard ? (
-            <motion.div
-              key="adding"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="space-y-2"
-            >
-              <Input
-                ref={cardInputRef}
-                value={newCardTitle}
-                onChange={(e) => setNewCardTitle(e.target.value)}
-                onKeyDown={handleAddCardKeyDown}
-                placeholder="Card title..."
-                className="h-8 text-sm"
-                autoFocus
-              />
-              <div className="flex gap-1.5">
-                <Button size="sm" className="h-7 text-xs" onClick={handleAddCard}>
-                  Add
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => {
-                    setIsAddingCard(false);
-                    setNewCardTitle("");
-                  }}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="button"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
+      <div className="p-3">
+        {adding ? (
+          <form
+            className="space-y-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (cardTitle.trim())
+                void run(
+                  () =>
+                    create({
+                      boardId,
+                      columnId: column._id,
+                      title: cardTitle.trim(),
+                    }),
+                  () => {
+                    setCardTitle("");
+                    setAdding(false);
+                  },
+                );
+            }}
+          >
+            <Input
+              autoFocus
+              aria-label={`New task in ${column.title}`}
+              placeholder="What needs doing?"
+              value={cardTitle}
+              onChange={(e) => setCardTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setAdding(false);
+              }}
+            />
+            <div className="flex gap-2">
+              <Button size="sm" disabled={pending || !cardTitle.trim()}>
+                {pending ? "Adding..." : "Add task"}
+              </Button>
               <Button
+                type="button"
                 variant="ghost"
                 size="sm"
-                className="w-full h-7 text-xs text-muted-foreground hover:text-foreground justify-start gap-1.5"
-                onClick={() => setIsAddingCard(true)}
+                onClick={() => setAdding(false)}
+                disabled={pending}
               >
-                <Plus className="h-3.5 w-3.5" />
-                Add card
+                Cancel
               </Button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
+          </form>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-muted-foreground"
+            onClick={() => setAdding(true)}
+          >
+            <Plus size={15} />
+            Add task
+          </Button>
+        )}
       </div>
-    </div>
+      <AlertDialog open={deleting} onOpenChange={setDeleting}>
+        <AlertDialogContent>
+          <AlertDialogTitle>Delete {column.title}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {totalCards
+              ? `Choose where to move the ${totalCards} tasks before deleting this column. No tasks will be permanently deleted.`
+              : "This removes the column. Any remaining tasks must be moved to another column."}
+          </AlertDialogDescription>
+          {allColumns.length > 1 && (
+            <label className="space-y-2 text-sm">
+              Move remaining tasks to
+              <select
+                aria-label="Destination for column tasks"
+                className="mt-2 h-10 w-full rounded-md border bg-background px-3"
+                value={destination}
+                onChange={(e) => setDestination(e.target.value)}
+              >
+                {allColumns
+                  .filter((item) => item._id !== column._id)
+                  .map((item) => (
+                    <option key={item._id} value={item._id}>
+                      {item.title}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
+          {totalCards > 0 && !target && (
+            <p role="status" className="text-sm text-destructive">
+              Create another column to keep these tasks before deleting this
+              one.
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={pending || (totalCards > 0 && !target)}
+              onClick={(e) => {
+                e.preventDefault();
+                void run(
+                  () => remove({ id: column._id, targetColumnId: target?._id }),
+                  () => setDeleting(false),
+                );
+              }}
+            >
+              {pending ? "Deleting..." : "Delete column"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </section>
   );
 }

@@ -1,5 +1,8 @@
-import { getActiveIdentity } from "./lib/activeIdentity";
+
+
 import { v } from "convex/values";
+
+import { getActiveIdentity } from "./lib/activeIdentity";
 import { mutation, query } from "./_generated/server";
 
 // ─── BOARDS ──────────────────────────────────────────────────────────────────
@@ -280,7 +283,9 @@ export const deleteColumn = mutation({
       // Verify the target column belongs to the same board (implicitly same user)
       const targetCol = await ctx.db.get(args.targetColumnId);
       if (!targetCol || targetCol.boardId !== col.boardId)
-        throw new Error("Target column not found or belongs to a different board");
+        throw new Error(
+          "Target column not found or belongs to a different board",
+        );
 
       // Move cards to target column
       const targetCards = await ctx.db
@@ -299,17 +304,16 @@ export const deleteColumn = mutation({
         });
       }
     } else {
-      // Delete all cards
-      for (const card of cards) {
-        await ctx.db.delete(card._id);
-      }
+      if (cards.length > 0)
+        throw new Error(
+          "Choose another column for these cards before deleting this column.",
+        );
     }
 
     await ctx.db.delete(args.id);
     return args.id;
   },
 });
-
 
 export const reorderColumns = mutation({
   args: {
@@ -324,18 +328,30 @@ export const reorderColumns = mutation({
     if (!board || board.userId !== identity.subject)
       throw new Error("Board not found or unauthorized");
 
+    const columns = await ctx.db
+      .query("kanbanColumns")
+      .withIndex("by_board", (q) => q.eq("boardId", args.boardId))
+      .collect();
+    if (
+      args.orderedIds.length !== columns.length ||
+      new Set(args.orderedIds).size !== columns.length ||
+      columns.some((column) => !args.orderedIds.includes(column._id))
+    ) {
+      throw new Error("Include every column exactly once");
+    }
     for (let i = 0; i < args.orderedIds.length; i++) {
       const col = await ctx.db.get(args.orderedIds[i]);
       // Reject any column that doesn't belong to this board
       if (!col || col.boardId !== args.boardId)
-        throw new Error(`Column ${args.orderedIds[i]} does not belong to this board`);
+        throw new Error(
+          `Column ${args.orderedIds[i]} does not belong to this board`,
+        );
       await ctx.db.patch(args.orderedIds[i], { order: (i + 1) * 1000 });
     }
 
     await ctx.db.patch(args.boardId, { updatedAt: Date.now() });
   },
 });
-
 
 // ─── CARDS ───────────────────────────────────────────────────────────────────
 
@@ -353,9 +369,7 @@ export const listCards = query({
       .withIndex("by_board", (q) => q.eq("boardId", args.boardId))
       .collect();
 
-    return cards
-      .filter((c) => !c.isDeleted)
-      .sort((a, b) => a.order - b.order);
+    return cards.filter((c) => !c.isDeleted).sort((a, b) => a.order - b.order);
   },
 });
 
@@ -386,15 +400,16 @@ export const createCard = mutation({
       throw new Error("Board not found or unauthorized");
 
     // Place at the end of the column
+    const column = await ctx.db.get(args.columnId);
+    if (!column || column.boardId !== args.boardId)
+      throw new Error("Column does not belong to this board");
     const existingCards = await ctx.db
       .query("kanbanCards")
       .withIndex("by_column", (q) => q.eq("columnId", args.columnId))
       .collect();
     const activeCards = existingCards.filter((c) => !c.isDeleted);
     const maxOrder =
-      activeCards.length > 0
-        ? Math.max(...activeCards.map((c) => c.order))
-        : 0;
+      activeCards.length > 0 ? Math.max(...activeCards.map((c) => c.order)) : 0;
 
     const now = Date.now();
     const cardId = await ctx.db.insert("kanbanCards", {
@@ -418,7 +433,7 @@ export const updateCard = mutation({
     id: v.id("kanbanCards"),
     title: v.optional(v.string()),
     description: v.optional(v.string()),
-    dueDate: v.optional(v.number()),
+    dueDate: v.optional(v.union(v.number(), v.null())),
     tagIds: v.optional(v.array(v.id("tags"))),
   },
   handler: async (ctx, args) => {
@@ -439,7 +454,7 @@ export const updateCard = mutation({
 
     if (args.title !== undefined) updates.title = args.title;
     if (args.description !== undefined) updates.description = args.description;
-    if (args.dueDate !== undefined) updates.dueDate = args.dueDate;
+    if (args.dueDate !== undefined) updates.dueDate = args.dueDate ?? undefined;
     if (args.tagIds !== undefined) updates.tagIds = args.tagIds;
 
     await ctx.db.patch(args.id, updates);
@@ -463,6 +478,9 @@ export const moveCard = mutation({
       throw new Error("Card not found or unauthorized");
 
     const now = Date.now();
+    const destination = await ctx.db.get(args.columnId);
+    if (!destination || destination.boardId !== card.boardId)
+      throw new Error("Move cards within their own board");
     await ctx.db.patch(args.id, {
       columnId: args.columnId,
       order: args.order,
@@ -492,6 +510,9 @@ export const moveCardToColumnEnd = mutation({
       throw new Error("Card not found or unauthorized");
 
     // Compute end-of-column order in the destination column
+    const destination = await ctx.db.get(args.columnId);
+    if (!destination || destination.boardId !== card.boardId)
+      throw new Error("Move cards within their own board");
     const destCards = await ctx.db
       .query("kanbanCards")
       .withIndex("by_column", (q) => q.eq("columnId", args.columnId))
@@ -513,7 +534,6 @@ export const moveCardToColumnEnd = mutation({
   },
 });
 
-
 export const reorderCards = mutation({
   args: {
     columnId: v.id("kanbanColumns"),
@@ -523,12 +543,66 @@ export const reorderCards = mutation({
     const identity = await getActiveIdentity(ctx);
     if (!identity) throw new Error("Not authenticated");
 
+    const column = await ctx.db.get(args.columnId);
+    if (!column || column.userId !== identity.subject)
+      throw new Error("Column not found or unauthorized");
+    const activeCards = (
+      await ctx.db
+        .query("kanbanCards")
+        .withIndex("by_column", (q) => q.eq("columnId", args.columnId))
+        .collect()
+    ).filter((card) => !card.isDeleted);
+    if (
+      new Set(args.orderedIds).size !== activeCards.length ||
+      args.orderedIds.length !== activeCards.length ||
+      activeCards.some((card) => !args.orderedIds.includes(card._id))
+    )
+      throw new Error(
+        "Reorder must include every active card in the column exactly once",
+      );
     for (let i = 0; i < args.orderedIds.length; i++) {
       const card = await ctx.db.get(args.orderedIds[i]);
       if (card && card.userId === identity.subject) {
         await ctx.db.patch(args.orderedIds[i], { order: (i + 1) * 1000 });
       }
     }
+    await ctx.db.patch(column.boardId, { updatedAt: Date.now() });
+  },
+});
+
+export const listCardTrash = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await getActiveIdentity(ctx);
+    if (!identity) return [];
+    return ctx.db
+      .query("kanbanCards")
+      .withIndex("by_user_deleted", (q) =>
+        q.eq("userId", identity.subject).eq("isDeleted", true),
+      )
+      .collect();
+  },
+});
+
+export const restoreCard = mutation({
+  args: { id: v.id("kanbanCards") },
+  handler: async (ctx, args) => {
+    const identity = await getActiveIdentity(ctx);
+    if (!identity) throw new Error("Not authenticated");
+    const card = await ctx.db.get(args.id);
+    if (!card || card.userId !== identity.subject)
+      throw new Error("Card not found or unauthorized");
+    const board = await ctx.db.get(card.boardId);
+    const column = await ctx.db.get(card.columnId);
+    if (!board || board.isDeleted || !column)
+      throw new Error("Restore the board before restoring this card");
+    await ctx.db.patch(card._id, {
+      isDeleted: false,
+      deletedAt: undefined,
+      updatedAt: Date.now(),
+    });
+    await ctx.db.patch(board._id, { updatedAt: Date.now() });
+    return card._id;
   },
 });
 

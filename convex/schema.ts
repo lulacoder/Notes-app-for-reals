@@ -1,3 +1,5 @@
+
+
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
@@ -135,5 +137,6 @@ export default defineSchema({
   })
     .index("by_column", ["columnId"])
     .index("by_board", ["boardId"])
+    .index("by_user_deleted", ["userId", "isDeleted"])
     .index("by_column_order", ["columnId", "order"]),
 });
