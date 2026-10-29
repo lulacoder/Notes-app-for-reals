@@ -101,4 +101,29 @@ describe("editor autosave", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
     expect(error).toHaveBeenCalledWith("Failed to autosave document:", failure);
   });
+
+  it("keeps a failed draft and retries it when connectivity returns", async () => {
+    const save = vi.fn<(value: string) => Promise<void>>()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValue(undefined);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await act(async () => root.render(<Editor value="keep me" save={save} />));
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    await act(async () => { window.dispatchEvent(new Event("online")); });
+    expect(save.mock.calls).toEqual([["keep me"], ["keep me"]]);
+  });
+
+  it("serializes writes so an older slow save cannot overwrite a newer edit", async () => {
+    let finish: (() => void) | undefined;
+    const save = vi.fn<(value: string) => Promise<void>>()
+      .mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }))
+      .mockResolvedValue(undefined);
+    await act(async () => root.render(<Editor value="old" save={save} />));
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    await act(async () => root.render(<Editor value="new" save={save} />));
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    expect(save.mock.calls).toEqual([["old"]]);
+    await act(async () => { finish?.(); });
+    expect(save.mock.calls).toEqual([["old"], ["new"]]);
+  });
 });

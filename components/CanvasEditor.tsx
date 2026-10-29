@@ -1,1752 +1,1242 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useTheme } from "next-themes";
-import { useMutation, useQuery, useConvexAuth } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import type { Doc, Id } from "@/convex/_generated/dataModel";
-import { stripHtmlToText } from "@/lib/html-utils";
-import { useAutosave } from "@/lib/use-autosave";
 import {
-  Layers,
-  MousePointer2,
-  Pencil,
-  Square,
-  Circle,
-  Minus,
-  Type,
-  Eraser,
-  Trash2,
-  Download,
-  Undo2,
-  Redo2,
-  StickyNote,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+} from "react";
+import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
+import { useConvex, useConvexAuth, useMutation, useQuery } from "convex/react";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { api } from "@/convex/_generated/api";
+import { useAutosave } from "@/lib/use-autosave";
+import { useCanvasHistory } from "@/lib/use-canvas-history";
+import {
+  STICKY_COLORS,
+  generateId,
+  readShapes,
+  serializeShapes,
+  type Point,
+  type Shape,
+  type Tool,
+} from "@/lib/canvas/model";
+import {
+  deleteShape,
+  fitScene,
+  hitTest,
+  reconnect,
+  resizeShape,
+  sceneBounds,
+  shapeBounds,
+  toWorld,
+  translateShape,
+  type Viewport,
+} from "@/lib/canvas/geometry";
+import { renderScene } from "@/lib/canvas/render";
+import { stripHtmlToText } from "@/lib/html-utils";
+import { CanvasToolbar } from "@/components/canvas/CanvasToolbar";
+import { SaveStatus } from "@/components/SaveStatus";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/components/ui/toast-notification";
+import {
+  Copy,
+  ExternalLink,
   FileText,
   GitBranch,
+  Maximize,
+  Pencil,
   Plus,
-  X,
+  StickyNote,
+  Trash2,
   ZoomIn,
   ZoomOut,
-  Maximize,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { motion, AnimatePresence } from "framer-motion";
-import { z } from "zod";
 
-// Sticky note color options
-const STICKY_COLORS = [
-  { bg: "#fef3c7", border: "#f59e0b", text: "#78350f" }, // Yellow
-  { bg: "#fce7f3", border: "#ec4899", text: "#831843" }, // Pink
-  { bg: "#dbeafe", border: "#3b82f6", text: "#1e3a8a" }, // Blue
-  { bg: "#dcfce7", border: "#22c55e", text: "#14532d" }, // Green
-  { bg: "#f3e8ff", border: "#a855f7", text: "#581c87" }, // Purple
-  { bg: "#ffedd5", border: "#f97316", text: "#7c2d12" }, // Orange
-];
+type Interaction =
+  | { kind: "move" | "resize"; id: string; start: Point; base: Shape[] }
+  | { kind: "draw"; shape: Shape; start: Point; base: Shape[] }
+  | { kind: "pan"; start: Point; view: Viewport }
+  | { kind: "pinch"; distance: number; center: Point; view: Viewport };
+type TextEditor =
+  | { kind: "create"; type: "text" | "sticky" | "mindmap"; point: Point }
+  | { kind: "edit"; id: string }
+  | { kind: "child"; parent: string };
 
-// Types for canvas shapes
-type Tool = "select" | "pen" | "rectangle" | "circle" | "line" | "text" | "eraser" | "sticky" | "noteEmbed" | "mindmap";
-
-interface Point {
-  x: number;
-  y: number;
-}
-
-interface BaseShape {
-  id: string;
-  type: string;
-  x: number;
-  y: number;
-  stroke: string;
-  strokeWidth: number;
-  fill?: string;
-}
-
-interface RectangleShape extends BaseShape {
-  type: "rectangle";
-  width: number;
-  height: number;
-}
-
-interface CircleShape extends BaseShape {
-  type: "circle";
-  radius: number;
-}
-
-interface LineShape extends BaseShape {
-  type: "line";
-  points: number[];
-}
-
-interface FreehandShape extends BaseShape {
-  type: "freehand";
-  points: number[];
-}
-
-interface TextShape extends BaseShape {
-  type: "text";
-  text: string;
-  fontSize: number;
-}
-
-interface StickyNoteShape extends BaseShape {
-  type: "sticky";
-  width: number;
-  height: number;
-  text: string;
-  colorIndex: number;
-}
-
-interface NoteEmbedShape extends BaseShape {
-  type: "noteEmbed";
-  width: number;
-  height: number;
-  noteId: string;
-  noteTitle: string;
-  notePreview: string;
-}
-
-interface MindMapNodeShape extends BaseShape {
-  type: "mindmapNode";
-  width: number;
-  height: number;
-  text: string;
-  parentId: string | null;
-  isRoot: boolean;
-  collapsed: boolean;
-}
-
-interface ConnectorShape extends BaseShape {
-  type: "connector";
-  fromId: string;
-  toId: string;
-  points: number[];
-}
-
-type Shape = RectangleShape | CircleShape | LineShape | FreehandShape | TextShape | StickyNoteShape | NoteEmbedShape | MindMapNodeShape | ConnectorShape;
-
-interface CanvasEditorProps {
+export function CanvasEditor({
+  canvasId,
+  initialCanvas,
+}: {
   canvasId: Id<"canvases">;
   initialCanvas: Doc<"canvases">;
-}
-
-const baseShape = z.object({
-  id: z.string(), x: z.number(), y: z.number(), stroke: z.string(),
-  strokeWidth: z.number(), fill: z.string().optional(),
-});
-const dimensions = { width: z.number(), height: z.number() };
-const shapeSchema = z.discriminatedUnion("type", [
-  baseShape.extend({ type: z.literal("rectangle"), ...dimensions }),
-  baseShape.extend({ type: z.literal("circle"), radius: z.number() }),
-  baseShape.extend({ type: z.literal("line"), points: z.array(z.number()) }),
-  baseShape.extend({ type: z.literal("freehand"), points: z.array(z.number()) }),
-  baseShape.extend({ type: z.literal("text"), text: z.string(), fontSize: z.number() }),
-  baseShape.extend({ type: z.literal("sticky"), ...dimensions, text: z.string(), colorIndex: z.number() }),
-  baseShape.extend({ type: z.literal("noteEmbed"), ...dimensions, noteId: z.string(), noteTitle: z.string(), notePreview: z.string() }),
-  baseShape.extend({ type: z.literal("mindmapNode"), ...dimensions, text: z.string(), parentId: z.string().nullable(), isRoot: z.boolean(), collapsed: z.boolean() }),
-  baseShape.extend({ type: z.literal("connector"), fromId: z.string(), toId: z.string(), points: z.array(z.number()) }),
-]);
-
-function readShapes(content: string): Shape[] {
-  try {
-    return z.object({ shapes: z.array(shapeSchema) }).parse(JSON.parse(content || '{"shapes":[]}')).shapes;
-  } catch (error) {
-    console.error("Failed to parse canvas content:", error);
-    return [];
-  }
-}
-
-// Generate unique ID
-function generateId(): string {
-  return `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
-
-export function CanvasEditor({ canvasId, initialCanvas }: CanvasEditorProps) {
-  const { resolvedTheme } = useTheme();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
+}) {
+  const storageKey = `noteworthy:canvas-draft:${canvasId}`;
+  const [initial] = useState(() => {
+    const saved = readShapes(initialCanvas.content),
+      baseline = serializeShapes(saved);
+    try {
+      const raw = sessionStorage.getItem(storageKey);
+      if (raw) {
+        const cached: unknown = JSON.parse(raw);
+        if (
+          cached &&
+          typeof cached === "object" &&
+          "content" in cached &&
+          typeof cached.content === "string" &&
+          "base" in cached &&
+          typeof cached.base === "string"
+        )
+          return {
+            shapes: readShapes(cached.content),
+            baseline,
+            recovered: cached.content !== baseline,
+            conflict:
+              cached.content !== baseline && cached.base !== baseline
+                ? saved
+                : null,
+          };
+      }
+    } catch {}
+    return { shapes: saved, baseline, recovered: false, conflict: null };
+  });
+  const history = useCanvasHistory(initial.shapes);
+  const { shapes, current, commit, reset, undo, redo } = history;
   const [tool, setTool] = useState<Tool>("select");
-  const [shapes, setShapes] = useState<Shape[]>(() => readShapes(initialCanvas.content));
-  const lastSubmittedRef = useRef<string | null>(JSON.stringify({ shapes }));
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [currentShape, setCurrentShape] = useState<Shape | null>(null);
-  const [startPoint, setStartPoint] = useState<Point | null>(null);
-  const [history, setHistory] = useState<Shape[][]>(() => [shapes]);
-  const [historyIndex, setHistoryIndex] = useState(0);
-  const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
-  const [editingSticky, setEditingSticky] = useState<string | null>(null);
-  const [stickyText, setStickyText] = useState("");
-  const [showMindMapPanel, setShowMindMapPanel] = useState(false);
-  const [mindMapRootId, setMindMapRootId] = useState<string | null>(null);
-
-  // Pan and zoom state
-  const [zoom, setZoom] = useState(1);
-  const [panOffset, setPanOffset] = useState<Point>({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
-  const [isSpacePressed, setIsSpacePressed] = useState(false);
-  const lastPanPoint = useRef<Point | null>(null);
-  const lastTouchDistance = useRef<number | null>(null);
-  const lastTouchCenter = useRef<Point | null>(null);
-
-  // Query user's notes for embedding
-  const notes = useQuery(api.notes.listNotes);
-  
+  const [selectedId, setSelected] = useState<string | null>(null);
+  const [view, setView] = useState<Viewport>({ x: 0, y: 0, zoom: 1 });
+  const viewRef = useRef(view);
+  const container = useRef<HTMLDivElement>(null),
+    canvas = useRef<HTMLCanvasElement>(null);
+  const [size, setSize] = useState({ width: 800, height: 600 });
+  const [draft, setDraft] = useState<Shape[] | null>(null);
+  const preview = useRef<Shape[] | null>(null);
+  const frame = useRef<number | null>(null);
+  const interaction = useRef<Interaction | null>(null);
+  const pointers = useRef(new Map<number, Point>());
+  const spacePressed = useRef(false);
+  const [textEditor, setTextEditor] = useState<TextEditor | null>(null);
+  const [text, setText] = useState("");
+  const [notesOpen, setNotesOpen] = useState(false),
+    [objectsOpen, setObjectsOpen] = useState(false),
+    [clearing, setClearing] = useState(false);
+  const [noteSearch, setNoteSearch] = useState("");
+  const [loadingNote, setLoadingNote] = useState(false);
+  const [stickyColor, setStickyColor] = useState(0);
+  const [remote, setRemote] = useState<Shape[] | null>(initial.conflict);
+  const [recovered, setRecovered] = useState(initial.recovered);
+  const lastSaved = useRef(initial.baseline),
+    lastSubmitted = useRef(initial.baseline);
+  const remoteRef = useRef<Shape[] | null>(initial.conflict);
+  const { resolvedTheme } = useTheme();
+  const dark = resolvedTheme === "dark";
   const { isAuthenticated } = useConvexAuth();
-  const liveCanvas = useQuery(api.canvases.getCanvas, isAuthenticated ? { id: canvasId } : "skip");
-  const canvas = liveCanvas === undefined ? initialCanvas : liveCanvas;
-  const updateCanvas = useMutation(api.canvases.updateCanvas);
+  const convex = useConvex();
+  const update = useMutation(api.canvases.updateCanvas);
+  const notes = useQuery(
+    api.notes.listNoteSummaries,
+    isAuthenticated && notesOpen ? {} : "skip",
+  );
+  const router = useRouter();
+  const { error: showError } = useToast();
 
-  const isDark = resolvedTheme === "dark";
-  const strokeColor = isDark ? "#ffffff" : "#000000";
-  const bgColor = isDark ? "#1a1a1a" : "#ffffff";
-
-  // Update stage size on resize
-  useEffect(() => {
-    const updateSize = () => {
-      if (containerRef.current) {
-        setStageSize({
-          width: containerRef.current.offsetWidth,
-          height: containerRef.current.offsetHeight,
-        });
-      }
-    };
-
-    updateSize();
-    window.addEventListener("resize", updateSize);
-    return () => window.removeEventListener("resize", updateSize);
-  }, []);
-
-  const saveContent = useCallback(
-    async (shapesToSave: Shape[]) => {
-      const content = JSON.stringify({ shapes: shapesToSave });
-      if (content === lastSubmittedRef.current) return;
-      lastSubmittedRef.current = content;
+  const save = useCallback(
+    async (value: Shape[]) => {
+      const content = serializeShapes(reconnect(value));
+      if (content === lastSaved.current) return;
+      if (remoteRef.current)
+        throw new Error(
+          "This canvas changed in another tab. Choose which version to keep.",
+        );
+      lastSubmitted.current = content;
+      await update({ id: canvasId, content });
+      lastSaved.current = content;
       try {
-        await updateCanvas({ id: canvasId, content });
-      } catch (error) {
-        lastSubmittedRef.current = null;
-        throw error;
-      }
+        const raw = sessionStorage.getItem(
+          `noteworthy:canvas-draft:${canvasId}`,
+        );
+        if (raw) {
+          const cached: unknown = JSON.parse(raw);
+          if (
+            cached &&
+            typeof cached === "object" &&
+            "content" in cached &&
+            cached.content === content
+          )
+            sessionStorage.removeItem(`noteworthy:canvas-draft:${canvasId}`);
+        }
+      } catch {}
     },
-    [canvasId, updateCanvas]
+    [canvasId, update],
+  );
+  const autosave = useAutosave(
+    shapes,
+    save,
+    isAuthenticated && remote === null,
   );
 
-  useAutosave(shapes, saveContent);
+  useEffect(() => {
+    const content = serializeShapes(reconnect(shapes));
+    try {
+      if (content !== lastSaved.current)
+        sessionStorage.setItem(
+          storageKey,
+          JSON.stringify({ base: lastSaved.current, content }),
+        );
+      else sessionStorage.removeItem(storageKey);
+    } catch {}
+  }, [shapes, storageKey]);
 
-  // Add to history
-  const addToHistory = useCallback((newShapes: Shape[]) => {
-    setHistory((prev) => {
-      const newHistory = prev.slice(0, historyIndex + 1);
-      newHistory.push(newShapes);
-      return newHistory;
-    });
-    setHistoryIndex((prev) => prev + 1);
-  }, [historyIndex]);
-
-  // Undo
-  const undo = useCallback(() => {
-    if (historyIndex > 0) {
-      const newIndex = historyIndex - 1;
-      setHistoryIndex(newIndex);
-      setShapes(history[newIndex]);
-    }
-  }, [history, historyIndex]);
-
-  // Redo
-  const redo = useCallback(() => {
-    if (historyIndex < history.length - 1) {
-      const newIndex = historyIndex + 1;
-      setHistoryIndex(newIndex);
-      setShapes(history[newIndex]);
-    }
-  }, [history, historyIndex]);
-
-  // Clear all shapes
-  const clearCanvas = useCallback(() => {
-    const newShapes: Shape[] = [];
-    setShapes(newShapes);
-    addToHistory(newShapes);
-    setSelectedId(null);
-    setMindMapRootId(null);
-  }, [addToHistory]);
-
-  // Zoom controls
-  const MIN_ZOOM = 0.1;
-  const MAX_ZOOM = 5;
-  const ZOOM_STEP = 0.1;
-
-  const zoomIn = useCallback(() => {
-    setZoom(prev => Math.min(MAX_ZOOM, prev + ZOOM_STEP));
-  }, []);
-
-  const zoomOut = useCallback(() => {
-    setZoom(prev => Math.max(MIN_ZOOM, prev - ZOOM_STEP));
-  }, []);
-
-  const resetView = useCallback(() => {
-    setZoom(1);
-    setPanOffset({ x: 0, y: 0 });
-  }, []);
-
-  // Zoom at a specific point (for mouse wheel zoom)
-  const zoomAtPoint = useCallback((delta: number, centerX: number, centerY: number) => {
-    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom + delta));
-    
-    // Adjust pan offset to zoom towards the cursor position
-    const zoomFactor = newZoom / zoom;
-    const newPanX = centerX - (centerX - panOffset.x) * zoomFactor;
-    const newPanY = centerY - (centerY - panOffset.y) * zoomFactor;
-    
-    setZoom(newZoom);
-    setPanOffset({ x: newPanX, y: newPanY });
-  }, [zoom, panOffset]);
-
-  // Export canvas as PNG
-  const exportCanvas = useCallback(() => {
-    const canvasEl = canvasRef.current;
-    if (!canvasEl) return;
-
-    const link = document.createElement("a");
-    link.download = "canvas.png";
-    link.href = canvasEl.toDataURL("image/png");
-    link.click();
-  }, []);
-
-  // Get mouse position relative to canvas (accounting for pan/zoom)
-  const getMousePos = useCallback((e: React.MouseEvent<HTMLCanvasElement>): Point => {
-    const canvasEl = canvasRef.current;
-    if (!canvasEl) return { x: 0, y: 0 };
-    
-    const rect = canvasEl.getBoundingClientRect();
-    // Convert screen coordinates to canvas coordinates (accounting for pan and zoom)
-    return {
-      x: (e.clientX - rect.left - panOffset.x) / zoom,
-      y: (e.clientY - rect.top - panOffset.y) / zoom,
-    };
-  }, [panOffset, zoom]);
-
-  // Find shape at position
-  const findShapeAtPosition = useCallback((pos: Point): Shape | null => {
-    for (let i = shapes.length - 1; i >= 0; i--) {
-      const shape = shapes[i];
-      
-      switch (shape.type) {
-        case "rectangle":
-        case "sticky":
-        case "noteEmbed":
-        case "mindmapNode":
-          if (
-            pos.x >= shape.x &&
-            pos.x <= shape.x + shape.width &&
-            pos.y >= shape.y &&
-            pos.y <= shape.y + shape.height
-          ) {
-            return shape;
-          }
-          break;
-        case "circle":
-          const dx = pos.x - shape.x;
-          const dy = pos.y - shape.y;
-          if (Math.sqrt(dx * dx + dy * dy) <= shape.radius) {
-            return shape;
-          }
-          break;
-        case "freehand":
-        case "line":
-        case "connector":
-          const points = shape.points;
-          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-          for (let j = 0; j < points.length; j += 2) {
-            minX = Math.min(minX, points[j]);
-            maxX = Math.max(maxX, points[j]);
-            minY = Math.min(minY, points[j + 1]);
-            maxY = Math.max(maxY, points[j + 1]);
-          }
-          if (
-            pos.x >= minX - 10 &&
-            pos.x <= maxX + 10 &&
-            pos.y >= minY - 10 &&
-            pos.y <= maxY + 10
-          ) {
-            return shape;
-          }
-          break;
-        case "text":
-          const textWidth = shape.text.length * shape.fontSize * 0.6;
-          const textHeight = shape.fontSize;
-          if (
-            pos.x >= shape.x &&
-            pos.x <= shape.x + textWidth &&
-            pos.y >= shape.y - textHeight &&
-            pos.y <= shape.y
-          ) {
-            return shape;
-          }
-          break;
-      }
-    }
-    return null;
-  }, [shapes]);
-
-  const getStickyDimensions = useCallback(() => {
-    // Better responsive sizing based on screen breakpoints
-    const screenWidth = stageSize.width;
-    let width: number;
-    let height: number;
-    
-    if (screenWidth < 400) {
-      // Small mobile: compact sticky notes
-      width = Math.max(120, Math.floor(screenWidth * 0.35));
-      height = Math.max(100, Math.floor(width * 0.8));
-    } else if (screenWidth < 768) {
-      // Mobile/tablet: medium sticky notes
-      width = Math.max(150, Math.min(200, Math.floor(screenWidth * 0.3)));
-      height = Math.max(120, Math.floor(width * 0.75));
+  useEffect(() => {
+    const incoming = readShapes(initialCanvas.content),
+      content = serializeShapes(incoming);
+    if (content === lastSaved.current || content === lastSubmitted.current)
+      return;
+    if (serializeShapes(current.current) === lastSaved.current) {
+      lastSaved.current = content;
+      lastSubmitted.current = content;
+      queueMicrotask(() => reset(incoming));
     } else {
-      // Desktop: larger sticky notes with more text space
-      width = Math.max(180, Math.min(280, Math.floor(screenWidth * 0.2)));
-      height = Math.max(140, Math.min(220, Math.floor(width * 0.7)));
+      remoteRef.current = incoming;
+      queueMicrotask(() => setRemote(incoming));
     }
-    
-    return { width, height };
-  }, [stageSize]);
+  }, [initialCanvas.content, current, reset]);
 
-  const getEmbedDimensions = useCallback(() => {
-    const width = Math.max(200, Math.min(320, Math.floor(stageSize.width * 0.6)));
-    const height = Math.max(110, Math.min(180, Math.floor(stageSize.height * 0.3)));
-    return { width, height };
-  }, [stageSize]);
+  useEffect(() => {
+    function warn(event: BeforeUnloadEvent) {
+      if (serializeShapes(reconnect(current.current)) !== lastSaved.current) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    }
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [current]);
 
-  // Create sticky note
-  const createStickyNote = useCallback((pos: Point, colorIndex: number = 0) => {
-    const { width, height } = getStickyDimensions();
-    const newShape: StickyNoteShape = {
-      id: generateId(),
-      type: "sticky",
-      x: pos.x,
-      y: pos.y,
-      width,
-      height,
-      text: "",
-      colorIndex,
-      stroke: STICKY_COLORS[colorIndex].border,
-      strokeWidth: 2,
-      fill: STICKY_COLORS[colorIndex].bg,
+  function schedule() {
+    if (frame.current !== null) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = null;
+      setDraft(preview.current);
+      setView({ ...viewRef.current });
+    });
+  }
+  function viewport(next: Viewport) {
+    viewRef.current = next;
+    schedule();
+  }
+  function previewShapes(next: Shape[] | null) {
+    preview.current = next;
+    schedule();
+  }
+  function finishPreview() {
+    if (frame.current !== null) cancelAnimationFrame(frame.current);
+    frame.current = null;
+    preview.current = null;
+    setDraft(null);
+  }
+  function change(next: Shape[]) {
+    commit(reconnect(next));
+    setRecovered(false);
+  }
+
+  useEffect(() => {
+    const releaseSpace = () => {
+      spacePressed.current = false;
     };
-    const newShapes = [...shapes, newShape];
-    setShapes(newShapes);
-    addToHistory(newShapes);
-    setEditingSticky(newShape.id);
-    setStickyText("");
-  }, [shapes, addToHistory, getStickyDimensions]);
-
-  // Create note embed
-  const createNoteEmbed = useCallback((pos: Point, note: { _id: string; title: string; content: string }) => {
-    const preview = stripHtmlToText(note.content).substring(0, 100);
-
-    const { width, height } = getEmbedDimensions();
-
-    const newShape: NoteEmbedShape = {
-      id: generateId(),
-      type: "noteEmbed",
-      x: pos.x,
-      y: pos.y,
-      width,
-      height,
-      noteId: note._id,
-      noteTitle: note.title,
-      notePreview: preview,
-      stroke: isDark ? "#444" : "#ddd",
-      strokeWidth: 1,
+    const keyup = (event: globalThis.KeyboardEvent) => {
+      if (event.code === "Space") releaseSpace();
     };
-    const newShapes = [...shapes, newShape];
-    setShapes(newShapes);
-    addToHistory(newShapes);
-  }, [shapes, addToHistory, isDark, getEmbedDimensions]);
-
-  // Helper to measure text width and calculate node dimensions for mind map
-  const getMindMapNodeDimensions = useCallback((text: string, isRoot: boolean) => {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      // Fallback dimensions
-      return { width: isRoot ? 150 : 120, height: isRoot ? 50 : 40 };
-    }
-    
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      return { width: isRoot ? 150 : 120, height: isRoot ? 50 : 40 };
-    }
-    
-    // Set font to match rendering font
-    ctx.font = isRoot ? "bold 14px sans-serif" : "13px sans-serif";
-    const textWidth = ctx.measureText(text).width;
-    
-    // Add padding (16px on each side) and constrain to min/max
-    const minWidth = isRoot ? 100 : 80;
-    const maxWidth = 300;
-    const padding = 32; // 16px on each side
-    
-    const calculatedWidth = textWidth + padding;
-    const width = Math.max(minWidth, Math.min(maxWidth, calculatedWidth));
-    
-    // Height is fixed based on root/child
-    const height = isRoot ? 50 : 40;
-    
-    return { width, height };
+    window.addEventListener("keyup", keyup);
+    window.addEventListener("blur", releaseSpace);
+    return () => {
+      window.removeEventListener("keyup", keyup);
+      window.removeEventListener("blur", releaseSpace);
+    };
   }, []);
 
-  // Create mind map root node
-  const createMindMapRoot = useCallback((pos: Point) => {
-    const text = prompt("Enter root topic:");
-    if (!text) return;
-
-    // Calculate node dimensions based on text
-    const { width, height } = getMindMapNodeDimensions(text, true);
-
-    const newShape: MindMapNodeShape = {
-      id: generateId(),
-      type: "mindmapNode",
-      x: pos.x - width / 2,
-      y: pos.y - height / 2,
-      width,
-      height,
-      text,
-      parentId: null,
-      isRoot: true,
-      collapsed: false,
-      stroke: "#2563eb",
-      strokeWidth: 2,
-      fill: "#3b82f6",
+  useEffect(() => {
+    const host = container.current;
+    if (!host) return;
+    const observer = new ResizeObserver(() =>
+      setSize({ width: host.clientWidth, height: host.clientHeight }),
+    );
+    observer.observe(host);
+    return () => {
+      observer.disconnect();
+      if (frame.current !== null) cancelAnimationFrame(frame.current);
     };
-    const newShapes = [...shapes, newShape];
-    setShapes(newShapes);
-    addToHistory(newShapes);
-    setMindMapRootId(newShape.id);
-    setShowMindMapPanel(true);
-  }, [shapes, addToHistory, getMindMapNodeDimensions]);
+  }, []);
 
-  // Add child to mind map node
-  const addMindMapChild = useCallback((parentId: string) => {
-    const parent = shapes.find(s => s.id === parentId) as MindMapNodeShape | undefined;
-    if (!parent || parent.type !== "mindmapNode") return;
+  useEffect(() => {
+    const element = canvas.current;
+    if (!element) return;
+    const dpr = window.devicePixelRatio || 1;
+    const width = Math.max(1, Math.round(size.width * dpr)),
+      height = Math.max(1, Math.round(size.height * dpr));
+    if (element.width !== width) element.width = width;
+    if (element.height !== height) element.height = height;
+    const ctx = element.getContext("2d");
+    if (ctx)
+      renderScene(ctx, draft ?? shapes, {
+        ...size,
+        dpr,
+        dark,
+        view,
+        selected: selectedId,
+      });
+  }, [shapes, draft, size, view, dark, selectedId]);
 
-    const text = prompt("Enter node text:");
-    if (!text) return;
-
-    // Calculate node dimensions based on text
-    const { width, height } = getMindMapNodeDimensions(text, false);
-
-    // Find siblings
-    const siblings = shapes.filter(s => s.type === "mindmapNode" && (s as MindMapNodeShape).parentId === parentId);
-    const offsetY = siblings.length * 70;
-
-    const newNode: MindMapNodeShape = {
-      id: generateId(),
-      type: "mindmapNode",
-      x: parent.x + parent.width + 100,
-      y: parent.y + offsetY,
-      width,
-      height,
-      text,
-      parentId,
-      isRoot: false,
-      collapsed: false,
-      stroke: isDark ? "#444" : "#ddd",
-      strokeWidth: 1,
-      fill: isDark ? "#2a2a2a" : "#f8f8f8",
-    };
-
-    // Create connector
-    const connector: ConnectorShape = {
-      id: generateId(),
-      type: "connector",
-      x: 0,
-      y: 0,
-      fromId: parentId,
-      toId: newNode.id,
-      points: [
-        parent.x + parent.width,
-        parent.y + parent.height / 2,
-        newNode.x,
-        newNode.y + newNode.height / 2,
-      ],
-      stroke: isDark ? "#666" : "#999",
-      strokeWidth: 2,
-    };
-
-    const newShapes = [...shapes, newNode, connector];
-    setShapes(newShapes);
-    addToHistory(newShapes);
-  }, [shapes, addToHistory, isDark, getMindMapNodeDimensions]);
-
-  // Update sticky text
-  const updateStickyText = useCallback(() => {
-    if (!editingSticky) return;
-    
-    const newShapes = shapes.map(s => {
-      if (s.id === editingSticky && s.type === "sticky") {
-        return { ...s, text: stickyText };
-      }
-      return s;
-    });
-    setShapes(newShapes);
-    addToHistory(newShapes);
-    setEditingSticky(null);
-    setStickyText("");
-  }, [editingSticky, stickyText, shapes, addToHistory]);
-
-  // Mouse down handler
-  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    // Middle mouse button or space+click starts panning
-    if (e.button === 1 || isSpacePressed) {
-      e.preventDefault();
-      setIsPanning(true);
-      lastPanPoint.current = { x: e.clientX, y: e.clientY };
-      return;
-    }
-
-    const pos = getMousePos(e);
-    setStartPoint(pos);
-    setIsDrawing(true);
-
-    if (tool === "select") {
-      const shape = findShapeAtPosition(pos);
-      setSelectedId(shape?.id || null);
-      
-      // Double-click to edit sticky
-      if (shape?.type === "sticky") {
-        if (e.detail === 2) {
-          setEditingSticky(shape.id);
-          setStickyText((shape as StickyNoteShape).text);
-        }
-      }
-      return;
-    }
-
-    if (tool === "eraser") {
-      const shape = findShapeAtPosition(pos);
-      if (shape) {
-        // Also remove connectors attached to this shape
-        const newShapes = shapes.filter((s) => {
-          if (s.id === shape.id) return false;
-          if (s.type === "connector") {
-            const conn = s as ConnectorShape;
-            if (conn.fromId === shape.id || conn.toId === shape.id) return false;
-          }
-          return true;
+  useEffect(() => {
+    const host = container.current;
+    if (!host) return;
+    const wheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const old = viewRef.current;
+      if (event.ctrlKey || event.metaKey) {
+        const rect = host.getBoundingClientRect(),
+          point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        const zoom = Math.min(
+          5,
+          Math.max(0.1, old.zoom * Math.exp(-event.deltaY * 0.005)),
+        );
+        const world = toWorld(point, old);
+        viewRef.current = {
+          zoom,
+          x: point.x - world.x * zoom,
+          y: point.y - world.y * zoom,
+        };
+      } else
+        viewRef.current = {
+          ...old,
+          x: old.x - event.deltaX,
+          y: old.y - event.deltaY,
+        };
+      if (frame.current === null)
+        frame.current = requestAnimationFrame(() => {
+          frame.current = null;
+          setView({ ...viewRef.current });
+          setDraft(preview.current);
         });
-        setShapes(newShapes);
-        addToHistory(newShapes);
-      }
+    };
+    host.addEventListener("wheel", wheel, { passive: false });
+    return () => host.removeEventListener("wheel", wheel);
+  }, []);
+
+  function screen(event: { clientX: number; clientY: number }): Point {
+    const rect = container.current?.getBoundingClientRect();
+    return {
+      x: event.clientX - (rect?.left ?? 0),
+      y: event.clientY - (rect?.top ?? 0),
+    };
+  }
+  function openText(editor: TextEditor, value = "") {
+    setText(value);
+    setTextEditor(editor);
+  }
+  function edit(shape: Shape) {
+    if (
+      shape.type === "sticky" ||
+      shape.type === "text" ||
+      shape.type === "mindmapNode"
+    )
+      openText({ kind: "edit", id: shape.id }, shape.text);
+  }
+  function pointerDown(event: PointerEvent<HTMLDivElement>) {
+    if (
+      event.target instanceof Element &&
+      event.target.closest("button") &&
+      !event.target.closest("[data-resize]")
+    )
+      return;
+    if (event.button !== 0 && event.button !== 1) return;
+    event.preventDefault();
+    canvas.current?.focus();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const point = screen(event);
+    pointers.current.set(event.pointerId, point);
+    if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()];
+      interaction.current = {
+        kind: "pinch",
+        distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+        center: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+        view: { ...viewRef.current },
+      };
+      previewShapes(null);
       return;
     }
+    if (tool === "pan" || spacePressed.current || event.button === 1) {
+      interaction.current = {
+        kind: "pan",
+        start: point,
+        view: { ...viewRef.current },
+      };
+      return;
+    }
+    const world = toWorld(point, viewRef.current),
+      base = current.current;
+    if (
+      event.target instanceof Element &&
+      event.target.closest("[data-resize]") &&
+      selectedId
+    ) {
+      interaction.current = {
+        kind: "resize",
+        id: selectedId,
+        start: world,
+        base,
+      };
+      return;
+    }
+    if (tool === "select") {
+      const shape = hitTest(base, world, viewRef.current.zoom);
+      setSelected(shape?.id ?? null);
+      if (shape)
+        interaction.current = {
+          kind: "move",
+          id: shape.id,
+          start: world,
+          base,
+        };
+      return;
+    }
+    if (tool === "eraser") {
+      const shape = hitTest(base, world, viewRef.current.zoom);
+      if (shape) change(deleteShape(base, shape.id));
+      return;
+    }
+    if (tool === "text" || tool === "sticky" || tool === "mindmap") {
+      openText({ kind: "create", type: tool, point: world });
+      return;
+    }
+    if (tool === "noteEmbed") {
+      setNotesOpen(true);
+      return;
+    }
+    const common = {
+      id: generateId(),
+      x: world.x,
+      y: world.y,
+      stroke: dark ? "#ffffff" : "#000000",
+      strokeWidth: 2,
+    };
+    let shape: Shape;
+    if (tool === "rectangle")
+      shape = {
+        ...common,
+        type: "rectangle",
+        width: 0,
+        height: 0,
+        fill: "transparent",
+      };
+    else if (tool === "circle")
+      shape = { ...common, type: "circle", radius: 0, fill: "transparent" };
+    else if (tool === "line")
+      shape = {
+        ...common,
+        type: "line",
+        x: 0,
+        y: 0,
+        points: [world.x, world.y, world.x, world.y],
+      };
+    else
+      shape = {
+        ...common,
+        type: "freehand",
+        x: 0,
+        y: 0,
+        points: [world.x, world.y],
+      };
+    interaction.current = { kind: "draw", shape, start: world, base };
+  }
 
-    if (tool === "sticky") {
-      createStickyNote(pos, Math.floor(Math.random() * STICKY_COLORS.length));
-      setIsDrawing(false);
+  function moved(
+    active: Extract<Interaction, { kind: "move" | "resize" }>,
+    point: Point,
+  ) {
+    return reconnect(
+      active.base.map((shape) =>
+        shape.id === active.id
+          ? active.kind === "resize"
+            ? resizeShape(shape, point)
+            : translateShape(
+                shape,
+                point.x - active.start.x,
+                point.y - active.start.y,
+              )
+          : shape,
+      ),
+    );
+  }
+  function pointerMove(event: PointerEvent<HTMLDivElement>) {
+    if (!pointers.current.has(event.pointerId)) return;
+    const point = screen(event);
+    pointers.current.set(event.pointerId, point);
+    const active = interaction.current;
+    if (!active) return;
+    if (active.kind === "pinch") {
+      if (pointers.current.size < 2) return;
+      const [a, b] = [...pointers.current.values()];
+      const center = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+        distance = Math.hypot(a.x - b.x, a.y - b.y);
+      const zoom = Math.min(
+          5,
+          Math.max(0.1, (active.view.zoom * distance) / active.distance),
+        ),
+        world = toWorld(active.center, active.view);
+      viewport({
+        zoom,
+        x: center.x - world.x * zoom,
+        y: center.y - world.y * zoom,
+      });
+      return;
+    }
+    if (active.kind === "pan") {
+      viewport({
+        ...active.view,
+        x: active.view.x + point.x - active.start.x,
+        y: active.view.y + point.y - active.start.y,
+      });
+      return;
+    }
+    const world = toWorld(point, viewRef.current);
+    if (active.kind === "move" || active.kind === "resize") {
+      previewShapes(moved(active, world));
+      return;
+    }
+    if (active.kind !== "draw") return;
+    const shape = active.shape;
+    if (shape.type === "freehand") shape.points.push(world.x, world.y);
+    else if (shape.type === "line")
+      shape.points = [active.start.x, active.start.y, world.x, world.y];
+    else if (shape.type === "rectangle") {
+      shape.width = world.x - active.start.x;
+      shape.height = world.y - active.start.y;
+    } else if (shape.type === "circle")
+      shape.radius = Math.hypot(
+        world.x - active.start.x,
+        world.y - active.start.y,
+      );
+    previewShapes([...active.base, { ...shape }]);
+  }
+
+  function pointerUp(event: PointerEvent<HTMLDivElement>) {
+    const active = interaction.current;
+    pointers.current.delete(event.pointerId);
+    interaction.current = null;
+    finishPreview();
+    if (active?.kind === "move" || active?.kind === "resize")
+      change(moved(active, toWorld(screen(event), viewRef.current)));
+    else if (active?.kind === "draw") {
+      const b = shapeBounds(active.shape);
+      if (b.width > 2 || b.height > 2) {
+        change([...active.base, active.shape]);
+        setSelected(active.shape.id);
+      }
+    }
+  }
+  function cancelPointer() {
+    pointers.current.clear();
+    interaction.current = null;
+    finishPreview();
+  }
+
+  function saveText() {
+    if (!textEditor || !text.trim()) return;
+    const base = current.current;
+    const common = {
+      id: generateId(),
+      stroke: dark ? "#ffffff" : "#000000",
+      strokeWidth: 1,
+    };
+    let next: Shape[];
+    if (textEditor.kind === "edit")
+      next = base.map((shape) =>
+        shape.id === textEditor.id && "text" in shape
+          ? { ...shape, text: text.trim() }
+          : shape,
+      );
+    else if (textEditor.kind === "child") {
+      const parent = base.find((shape) => shape.id === textEditor.parent);
+      if (!parent) return;
+      const b = shapeBounds(parent),
+        siblings = base.filter(
+          (shape) =>
+            shape.type === "mindmapNode" && shape.parentId === parent.id,
+        ).length;
+      const node: Shape = {
+        ...common,
+        type: "mindmapNode",
+        x: b.x + b.width + 90,
+        y: b.y + siblings * 90,
+        width: 180,
+        height: 70,
+        text: text.trim(),
+        parentId: parent.id,
+        isRoot: false,
+        collapsed: false,
+      };
+      next = [
+        ...base,
+        node,
+        {
+          id: generateId(),
+          type: "connector",
+          x: 0,
+          y: 0,
+          stroke: "#e85b7b",
+          strokeWidth: 1.5,
+          fromId: parent.id,
+          toId: node.id,
+          points: [],
+        },
+      ];
+      setSelected(node.id);
+    } else {
+      const { point, type } = textEditor;
+      const shape: Shape =
+        type === "sticky"
+          ? {
+              ...common,
+              ...point,
+              type: "sticky",
+              width: 210,
+              height: 170,
+              text: text.trim(),
+              colorIndex: stickyColor,
+            }
+          : type === "mindmap"
+            ? {
+                ...common,
+                ...point,
+                type: "mindmapNode",
+                width: 190,
+                height: 75,
+                text: text.trim(),
+                parentId: null,
+                isRoot: true,
+                collapsed: false,
+              }
+            : {
+                ...common,
+                ...point,
+                type: "text",
+                text: text.trim(),
+                fontSize: 22,
+              };
+      next = [...base, shape];
+      setSelected(shape.id);
+    }
+    change(next);
+    setTextEditor(null);
+    setTool("select");
+  }
+
+  async function embedNote(id: Id<"notes">) {
+    setLoadingNote(true);
+    try {
+      const note = await convex.query(api.notes.getNote, { id });
+      if (!note) throw new Error("This note is no longer available.");
+      const point = toWorld(
+          { x: size.width / 2, y: size.height / 2 },
+          viewRef.current,
+        ),
+        shape: Shape = {
+          id: generateId(),
+          type: "noteEmbed",
+          x: point.x - 130,
+          y: point.y - 90,
+          width: 260,
+          height: 180,
+          stroke: "#d5dde2",
+          strokeWidth: 1,
+          noteId: note._id,
+          noteTitle: note.title,
+          notePreview: stripHtmlToText(note.content).slice(0, 300),
+        };
+      change([...current.current, shape]);
+      setSelected(shape.id);
+      setNotesOpen(false);
+      setTool("select");
+    } catch (cause) {
+      showError(
+        "Could not embed note",
+        cause instanceof Error ? cause.message : "Try again.",
+      );
+    } finally {
+      setLoadingNote(false);
+    }
+  }
+  function exportCanvas() {
+    const bounds = sceneBounds(current.current);
+    if (!bounds) {
+      showError("Nothing to export", "Add an idea to the canvas first.");
+      return;
+    }
+    const zoom = Math.min(
+        2,
+        4096 / (Math.max(bounds.width, bounds.height) + 48),
+      ),
+      width = Math.ceil((bounds.width + 48) * zoom),
+      height = Math.ceil((bounds.height + 48) * zoom);
+    const output = document.createElement("canvas");
+    output.width = width;
+    output.height = height;
+    const ctx = output.getContext("2d");
+    if (!ctx) return;
+    renderScene(ctx, current.current, {
+      width,
+      height,
+      dark,
+      grid: false,
+      view: { zoom, x: (24 - bounds.x) * zoom, y: (24 - bounds.y) * zoom },
+    });
+    const link = document.createElement("a");
+    link.download = `${initialCanvas.title.replace(/[^a-z0-9_-]/gi, "-") || "canvas"}.png`;
+    link.href = output.toDataURL("image/png");
+    link.click();
+  }
+  function zoomBy(factor: number) {
+    const old = viewRef.current,
+      point = { x: size.width / 2, y: size.height / 2 },
+      world = toWorld(point, old),
+      zoom = Math.min(5, Math.max(0.1, old.zoom * factor));
+    viewport({
+      zoom,
+      x: point.x - world.x * zoom,
+      y: point.y - world.y * zoom,
+    });
+  }
+  function keyboard(event: KeyboardEvent<HTMLDivElement>) {
+    if (
+      event.target instanceof HTMLElement &&
+      event.target.closest('input,textarea,[contenteditable="true"]')
+    )
+      return;
+    const key = event.key.toLowerCase();
+    if (event.code === "Space") {
+      event.preventDefault();
+      spacePressed.current = true;
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && key === "z") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.shiftKey) redo();
+      else undo();
+      return;
+    }
+    if (key === "escape") {
+      setSelected(null);
       setTool("select");
       return;
     }
-
-    if (tool === "mindmap") {
-      if (!mindMapRootId) {
-        createMindMapRoot(pos);
-      } else {
-        // Find if clicking on a node
-        const shape = findShapeAtPosition(pos);
-        if (shape?.type === "mindmapNode") {
-          addMindMapChild(shape.id);
-        }
-      }
-      setIsDrawing(false);
-      return;
+    const selected = current.current.find((shape) => shape.id === selectedId);
+    if (selected && (key === "delete" || key === "backspace")) {
+      event.preventDefault();
+      event.stopPropagation();
+      change(deleteShape(current.current, selected.id));
+      setSelected(null);
     }
-
-    if (tool === "text") {
-      const text = prompt("Enter text:");
-      if (text) {
-        const newShape: TextShape = {
-          id: generateId(),
-          type: "text",
-          x: pos.x,
-          y: pos.y,
-          text,
-          fontSize: 20,
-          stroke: strokeColor,
-          strokeWidth: 1,
-        };
-        const newShapes = [...shapes, newShape];
-        setShapes(newShapes);
-        addToHistory(newShapes);
-      }
-      setIsDrawing(false);
-      return;
+    if (selected && key === "enter") edit(selected);
+    if (
+      selected &&
+      ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      const step = event.shiftKey ? 10 : 1;
+      change(
+        current.current.map((shape) =>
+          shape.id === selected.id
+            ? translateShape(
+                shape,
+                event.key === "ArrowLeft"
+                  ? -step
+                  : event.key === "ArrowRight"
+                    ? step
+                    : 0,
+                event.key === "ArrowUp"
+                  ? -step
+                  : event.key === "ArrowDown"
+                    ? step
+                    : 0,
+              )
+            : shape,
+        ),
+      );
     }
-
-    // Create initial shape for other tools
-    let newShape: Shape | null = null;
-
-    switch (tool) {
-      case "pen":
-        newShape = {
-          id: generateId(),
-          type: "freehand",
-          x: 0,
-          y: 0,
-          points: [pos.x, pos.y],
-          stroke: strokeColor,
-          strokeWidth: 2,
-        };
-        break;
-      case "rectangle":
-        newShape = {
-          id: generateId(),
-          type: "rectangle",
-          x: pos.x,
-          y: pos.y,
-          width: 0,
-          height: 0,
-          stroke: strokeColor,
-          strokeWidth: 2,
-          fill: "transparent",
-        };
-        break;
-      case "circle":
-        newShape = {
-          id: generateId(),
-          type: "circle",
-          x: pos.x,
-          y: pos.y,
-          radius: 0,
-          stroke: strokeColor,
-          strokeWidth: 2,
-          fill: "transparent",
-        };
-        break;
-      case "line":
-        newShape = {
-          id: generateId(),
-          type: "line",
-          x: 0,
-          y: 0,
-          points: [pos.x, pos.y, pos.x, pos.y],
-          stroke: strokeColor,
-          strokeWidth: 2,
-        };
-        break;
-    }
-
-    setCurrentShape(newShape);
-  }, [tool, getMousePos, findShapeAtPosition, shapes, strokeColor, addToHistory, createStickyNote, createMindMapRoot, mindMapRootId, addMindMapChild, isSpacePressed]);
-
-  // Mouse move handler
-  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    // Handle panning
-    if (isPanning && lastPanPoint.current) {
-      const dx = e.clientX - lastPanPoint.current.x;
-      const dy = e.clientY - lastPanPoint.current.y;
-      setPanOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }));
-      lastPanPoint.current = { x: e.clientX, y: e.clientY };
-      return;
-    }
-
-    if (!isDrawing || !startPoint || !currentShape) return;
-
-    const pos = getMousePos(e);
-
-    let updatedShape: Shape | null = null;
-
-    switch (currentShape.type) {
-      case "freehand":
-        updatedShape = {
-          ...currentShape,
-          points: [...currentShape.points, pos.x, pos.y],
-        };
-        break;
-      case "rectangle":
-        updatedShape = {
-          ...currentShape,
-          width: pos.x - startPoint.x,
-          height: pos.y - startPoint.y,
-        };
-        break;
-      case "circle":
-        const dx = pos.x - startPoint.x;
-        const dy = pos.y - startPoint.y;
-        updatedShape = {
-          ...currentShape,
-          radius: Math.sqrt(dx * dx + dy * dy),
-        };
-        break;
-      case "line":
-        updatedShape = {
-          ...currentShape,
-          points: [startPoint.x, startPoint.y, pos.x, pos.y],
-        };
-        break;
-    }
-
-    if (updatedShape) {
-      setCurrentShape(updatedShape);
-    }
-  }, [isDrawing, startPoint, currentShape, getMousePos, isPanning]);
-
-  // Mouse up handler
-  const handleMouseUp = useCallback(() => {
-    // End panning
-    if (isPanning) {
-      setIsPanning(false);
-      lastPanPoint.current = null;
-      return;
-    }
-
-    if (currentShape && isDrawing) {
-      const newShapes = [...shapes, currentShape];
-      setShapes(newShapes);
-      addToHistory(newShapes);
-    }
-    setIsDrawing(false);
-    setCurrentShape(null);
-    setStartPoint(null);
-  }, [currentShape, isDrawing, shapes, addToHistory, isPanning]);
-
-  // Wheel handler for zooming
-  const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    
-    const canvasEl = canvasRef.current;
-    if (!canvasEl) return;
-    
-    const rect = canvasEl.getBoundingClientRect();
-    const centerX = e.clientX - rect.left;
-    const centerY = e.clientY - rect.top;
-    
-    // Zoom in/out based on wheel direction
-    const delta = -e.deltaY * 0.001;
-    zoomAtPoint(delta, centerX, centerY);
-  }, [zoomAtPoint]);
-
-  // Helper to get touch distance and center for pinch-to-zoom
-  const getTouchInfo = useCallback((touches: React.TouchList) => {
-    if (touches.length < 2) return null;
-    
-    const touch1 = touches[0];
-    const touch2 = touches[1];
-    
-    const dx = touch2.clientX - touch1.clientX;
-    const dy = touch2.clientY - touch1.clientY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    
-    const centerX = (touch1.clientX + touch2.clientX) / 2;
-    const centerY = (touch1.clientY + touch2.clientY) / 2;
-    
-    return { distance, center: { x: centerX, y: centerY } };
-  }, []);
-
-  // Touch start handler
-  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
-    const touches = e.touches;
-    
-    // Two-finger touch: start pan/zoom gesture
-    if (touches.length === 2) {
-      e.preventDefault();
-      const touchInfo = getTouchInfo(touches);
-      if (touchInfo) {
-        lastTouchDistance.current = touchInfo.distance;
-        lastTouchCenter.current = touchInfo.center;
-      }
-      setIsPanning(true);
-      return;
-    }
-    
-    // Single touch: simulate mouse down
-    if (touches.length === 1) {
-      const touch = touches[0];
-      const canvasEl = canvasRef.current;
-      if (!canvasEl) return;
-      
-      const rect = canvasEl.getBoundingClientRect();
-      const pos = {
-        x: (touch.clientX - rect.left - panOffset.x) / zoom,
-        y: (touch.clientY - rect.top - panOffset.y) / zoom,
+    if (!event.ctrlKey && !event.metaKey) {
+      const shortcuts: Record<string, Tool> = {
+        v: "select",
+        h: "pan",
+        p: "pen",
+        r: "rectangle",
+        c: "circle",
+        l: "line",
+        t: "text",
+        e: "eraser",
+        s: "sticky",
+        m: "mindmap",
       };
-      
-      setStartPoint(pos);
-      setIsDrawing(true);
-      
-      if (tool === "select") {
-        const shape = findShapeAtPosition(pos);
-        setSelectedId(shape?.id || null);
-        return;
-      }
-      
-      if (tool === "eraser") {
-        const shape = findShapeAtPosition(pos);
-        if (shape) {
-          const newShapes = shapes.filter((s) => {
-            if (s.id === shape.id) return false;
-            if (s.type === "connector") {
-              const conn = s as ConnectorShape;
-              if (conn.fromId === shape.id || conn.toId === shape.id) return false;
-            }
-            return true;
-          });
-          setShapes(newShapes);
-          addToHistory(newShapes);
-        }
-        return;
-      }
-      
-      if (tool === "sticky") {
-        createStickyNote(pos, Math.floor(Math.random() * STICKY_COLORS.length));
-        setIsDrawing(false);
-        setTool("select");
-        return;
-      }
-      
-      // Create initial shape for drawing tools
-      let newShape: Shape | null = null;
-      
-      switch (tool) {
-        case "pen":
-          newShape = {
-            id: generateId(),
-            type: "freehand",
-            x: 0,
-            y: 0,
-            points: [pos.x, pos.y],
-            stroke: strokeColor,
-            strokeWidth: 2,
-          };
-          break;
-        case "rectangle":
-          newShape = {
-            id: generateId(),
-            type: "rectangle",
-            x: pos.x,
-            y: pos.y,
-            width: 0,
-            height: 0,
-            stroke: strokeColor,
-            strokeWidth: 2,
-            fill: "transparent",
-          };
-          break;
-        case "circle":
-          newShape = {
-            id: generateId(),
-            type: "circle",
-            x: pos.x,
-            y: pos.y,
-            radius: 0,
-            stroke: strokeColor,
-            strokeWidth: 2,
-            fill: "transparent",
-          };
-          break;
-        case "line":
-          newShape = {
-            id: generateId(),
-            type: "line",
-            x: 0,
-            y: 0,
-            points: [pos.x, pos.y, pos.x, pos.y],
-            stroke: strokeColor,
-            strokeWidth: 2,
-          };
-          break;
-      }
-      
-      setCurrentShape(newShape);
+      if (shortcuts[key]) setTool(shortcuts[key]);
     }
-  }, [getTouchInfo, tool, findShapeAtPosition, shapes, addToHistory, createStickyNote, strokeColor, panOffset, zoom]);
-
-  // Touch move handler
-  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
-    const touches = e.touches;
-    
-    // Two-finger gesture: pan and zoom
-    if (touches.length === 2 && isPanning) {
-      e.preventDefault();
-      const touchInfo = getTouchInfo(touches);
-      if (!touchInfo || !lastTouchDistance.current || !lastTouchCenter.current) return;
-      
-      const canvasEl = canvasRef.current;
-      if (!canvasEl) return;
-      
-      const rect = canvasEl.getBoundingClientRect();
-      
-      // Calculate pan delta
-      const panDx = touchInfo.center.x - lastTouchCenter.current.x;
-      const panDy = touchInfo.center.y - lastTouchCenter.current.y;
-      
-      // Calculate zoom delta
-      const scaleFactor = touchInfo.distance / lastTouchDistance.current;
-      const newZoom = Math.max(0.1, Math.min(5, zoom * scaleFactor));
-      
-      // Zoom towards center of pinch
-      const centerX = touchInfo.center.x - rect.left;
-      const centerY = touchInfo.center.y - rect.top;
-      const zoomFactor = newZoom / zoom;
-      
-      const newPanX = centerX - (centerX - panOffset.x) * zoomFactor + panDx;
-      const newPanY = centerY - (centerY - panOffset.y) * zoomFactor + panDy;
-      
-      setZoom(newZoom);
-      setPanOffset({ x: newPanX, y: newPanY });
-      
-      lastTouchDistance.current = touchInfo.distance;
-      lastTouchCenter.current = touchInfo.center;
-      return;
-    }
-    
-    // Single touch: drawing
-    if (touches.length === 1 && isDrawing && startPoint && currentShape) {
-      const touch = touches[0];
-      const canvasEl = canvasRef.current;
-      if (!canvasEl) return;
-      
-      const rect = canvasEl.getBoundingClientRect();
-      const pos = {
-        x: (touch.clientX - rect.left - panOffset.x) / zoom,
-        y: (touch.clientY - rect.top - panOffset.y) / zoom,
-      };
-      
-      let updatedShape: Shape | null = null;
-      
-      switch (currentShape.type) {
-        case "freehand":
-          updatedShape = {
-            ...currentShape,
-            points: [...currentShape.points, pos.x, pos.y],
-          };
-          break;
-        case "rectangle":
-          updatedShape = {
-            ...currentShape,
-            width: pos.x - startPoint.x,
-            height: pos.y - startPoint.y,
-          };
-          break;
-        case "circle":
-          const dx = pos.x - startPoint.x;
-          const dy = pos.y - startPoint.y;
-          updatedShape = {
-            ...currentShape,
-            radius: Math.sqrt(dx * dx + dy * dy),
-          };
-          break;
-        case "line":
-          updatedShape = {
-            ...currentShape,
-            points: [startPoint.x, startPoint.y, pos.x, pos.y],
-          };
-          break;
-      }
-      
-      if (updatedShape) {
-        setCurrentShape(updatedShape);
-      }
-    }
-  }, [getTouchInfo, isPanning, isDrawing, startPoint, currentShape, zoom, panOffset]);
-
-  // Touch end handler
-  const handleTouchEnd = useCallback(() => {
-    // End two-finger gesture
-    if (isPanning) {
-      setIsPanning(false);
-      lastTouchDistance.current = null;
-      lastTouchCenter.current = null;
-    }
-    
-    // End drawing
-    if (currentShape && isDrawing) {
-      const newShapes = [...shapes, currentShape];
-      setShapes(newShapes);
-      addToHistory(newShapes);
-    }
-    
-    setIsDrawing(false);
-    setCurrentShape(null);
-    setStartPoint(null);
-  }, [isPanning, currentShape, isDrawing, shapes, addToHistory]);
-
-  // Draw shapes on canvas
-  useEffect(() => {
-    const canvasEl = canvasRef.current;
-    if (!canvasEl) return;
-
-    const ctx = canvasEl.getContext("2d");
-    if (!ctx) return;
-
-    // HiDPI support for crisp rendering
-    const dpr = window.devicePixelRatio || 1;
-    const displayWidth = stageSize.width;
-    const displayHeight = stageSize.height;
-    
-    // Set actual canvas size in memory (scaled for HiDPI)
-    canvasEl.width = displayWidth * dpr;
-    canvasEl.height = displayHeight * dpr;
-    
-    // Set display size via CSS
-    canvasEl.style.width = `${displayWidth}px`;
-    canvasEl.style.height = `${displayHeight}px`;
-    
-    // Scale context to account for HiDPI
-    ctx.scale(dpr, dpr);
-
-    // Clear and fill background
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, displayWidth, displayHeight);
-
-    // Apply pan and zoom transforms
-    ctx.save();
-    ctx.translate(panOffset.x, panOffset.y);
-    ctx.scale(zoom, zoom);
-
-    const allShapes = currentShape ? [...shapes, currentShape] : shapes;
-
-    allShapes.forEach((shape) => {
-      ctx.strokeStyle = shape.stroke;
-      ctx.lineWidth = shape.strokeWidth;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-
-      switch (shape.type) {
-        case "rectangle":
-          ctx.beginPath();
-          ctx.rect(shape.x, shape.y, shape.width, shape.height);
-          if (shape.fill && shape.fill !== "transparent") {
-            ctx.fillStyle = shape.fill;
-            ctx.fill();
-          }
-          ctx.stroke();
-          break;
-
-        case "circle":
-          ctx.beginPath();
-          ctx.arc(shape.x, shape.y, shape.radius, 0, Math.PI * 2);
-          if (shape.fill && shape.fill !== "transparent") {
-            ctx.fillStyle = shape.fill;
-            ctx.fill();
-          }
-          ctx.stroke();
-          break;
-
-        case "line":
-          ctx.beginPath();
-          ctx.moveTo(shape.points[0], shape.points[1]);
-          ctx.lineTo(shape.points[2], shape.points[3]);
-          ctx.stroke();
-          break;
-
-        case "freehand":
-          if (shape.points.length < 4) return;
-          ctx.beginPath();
-          ctx.moveTo(shape.points[0], shape.points[1]);
-          for (let i = 2; i < shape.points.length; i += 2) {
-            ctx.lineTo(shape.points[i], shape.points[i + 1]);
-          }
-          ctx.stroke();
-          break;
-
-        case "text":
-          ctx.font = `${shape.fontSize}px sans-serif`;
-          ctx.fillStyle = shape.stroke;
-          ctx.fillText(shape.text, shape.x, shape.y);
-          break;
-
-        case "sticky": {
-          const stickyColor = STICKY_COLORS[shape.colorIndex % STICKY_COLORS.length];
-          // Shadow
-          ctx.shadowColor = "rgba(0,0,0,0.15)";
-          ctx.shadowBlur = 12;
-          ctx.shadowOffsetY = 4;
-          // Background with rounded corners
-          ctx.fillStyle = stickyColor.bg;
-          ctx.beginPath();
-          ctx.roundRect(shape.x, shape.y, shape.width, shape.height, 6);
-          ctx.fill();
-          ctx.shadowColor = "transparent";
-          // Border
-          ctx.strokeStyle = stickyColor.border;
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.roundRect(shape.x, shape.y, shape.width, shape.height, 6);
-          ctx.stroke();
-          ctx.lineWidth = shape.strokeWidth;
-          
-          // Text with word wrapping
-          ctx.fillStyle = stickyColor.text;
-          const fontSize = Math.max(12, Math.min(14, shape.width / 12));
-          ctx.font = `${fontSize}px sans-serif`;
-          
-          const padding = 12;
-          const lineHeight = fontSize + 6;
-          const maxWidth = shape.width - padding * 2;
-          const maxLines = Math.floor((shape.height - padding * 2 - 8) / lineHeight);
-          
-          // Split by newlines first, then wrap each line
-          const paragraphs = shape.text.split("\n");
-          const wrappedLines: string[] = [];
-          
-          for (const paragraph of paragraphs) {
-            if (wrappedLines.length >= maxLines) break;
-            
-            const words = paragraph.split(" ");
-            let currentLine = "";
-            
-            for (const word of words) {
-              const testLine = currentLine ? `${currentLine} ${word}` : word;
-              const metrics = ctx.measureText(testLine);
-              
-              if (metrics.width > maxWidth && currentLine) {
-                wrappedLines.push(currentLine);
-                currentLine = word;
-                if (wrappedLines.length >= maxLines) break;
-              } else {
-                currentLine = testLine;
-              }
-            }
-            
-            if (currentLine && wrappedLines.length < maxLines) {
-              wrappedLines.push(currentLine);
-            }
-          }
-          
-          // Add ellipsis if text was truncated
-          if (wrappedLines.length === maxLines && 
-              (paragraphs.length > 1 || shape.text.length > wrappedLines.join(" ").length + 10)) {
-            const lastLine = wrappedLines[maxLines - 1];
-            if (lastLine) {
-              const truncated = lastLine.slice(0, -3) + "...";
-              wrappedLines[maxLines - 1] = truncated;
-            }
-          }
-          
-          // Render wrapped lines
-          wrappedLines.forEach((line, i) => {
-            ctx.fillText(line, shape.x + padding, shape.y + padding + 12 + i * lineHeight);
-          });
-          break;
-        }
-
-        case "noteEmbed": {
-          // Background
-          ctx.fillStyle = isDark ? "#2a2a2a" : "#ffffff";
-          ctx.shadowColor = "rgba(0,0,0,0.1)";
-          ctx.shadowBlur = 10;
-          ctx.shadowOffsetY = 4;
-          ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
-          ctx.shadowColor = "transparent";
-          // Border
-          ctx.strokeStyle = isDark ? "#444" : "#e5e5e5";
-          ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
-          // Icon
-          ctx.fillStyle = "#3b82f6";
-          ctx.fillRect(shape.x, shape.y, 4, shape.height);
-          // Title
-          ctx.fillStyle = isDark ? "#fff" : "#000";
-          ctx.font = "bold 14px sans-serif";
-          ctx.fillText(shape.noteTitle || "Untitled", shape.x + 16, shape.y + 24);
-          // Preview
-          ctx.fillStyle = isDark ? "#888" : "#666";
-          ctx.font = "12px sans-serif";
-          ctx.fillText(shape.notePreview.substring(0, 35) + "...", shape.x + 16, shape.y + 48);
-          break;
-        }
-
-        case "mindmapNode": {
-          const radius = 8;
-          ctx.beginPath();
-          ctx.roundRect(shape.x, shape.y, shape.width, shape.height, radius);
-          ctx.fillStyle = shape.isRoot ? "#3b82f6" : (isDark ? "#2a2a2a" : "#ffffff");
-          ctx.fill();
-          ctx.strokeStyle = shape.isRoot ? "#2563eb" : (isDark ? "#555" : "#ddd");
-          ctx.stroke();
-          
-          // Text with ellipsis if needed
-          ctx.fillStyle = shape.isRoot ? "#fff" : (isDark ? "#fff" : "#000");
-          ctx.font = shape.isRoot ? "bold 14px sans-serif" : "13px sans-serif";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          
-          const maxTextWidth = shape.width - 16; // 8px padding on each side
-          let displayText = shape.text;
-          
-          // Truncate with ellipsis if text is too wide
-          if (ctx.measureText(displayText).width > maxTextWidth) {
-            while (displayText.length > 0 && ctx.measureText(displayText + "...").width > maxTextWidth) {
-              displayText = displayText.slice(0, -1);
-            }
-            displayText += "...";
-          }
-          
-          ctx.fillText(displayText, shape.x + shape.width / 2, shape.y + shape.height / 2);
-          ctx.textAlign = "left";
-          ctx.textBaseline = "alphabetic";
-          break;
-        }
-
-        case "connector": {
-          ctx.beginPath();
-          ctx.moveTo(shape.points[0], shape.points[1]);
-          // Curved line
-          const midX = (shape.points[0] + shape.points[2]) / 2;
-          ctx.bezierCurveTo(
-            midX, shape.points[1],
-            midX, shape.points[3],
-            shape.points[2], shape.points[3]
-          );
-          ctx.stroke();
-          break;
-        }
-      }
-
-      // Draw selection indicator
-      if (shape.id === selectedId) {
-        ctx.strokeStyle = "#3b82f6";
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 5]);
-
-        switch (shape.type) {
-          case "rectangle":
-          case "sticky":
-          case "noteEmbed":
-          case "mindmapNode":
-            ctx.strokeRect(shape.x - 5, shape.y - 5, shape.width + 10, shape.height + 10);
-            break;
-          case "circle":
-            ctx.beginPath();
-            ctx.arc(shape.x, shape.y, shape.radius + 5, 0, Math.PI * 2);
-            ctx.stroke();
-            break;
-        }
-
-        ctx.setLineDash([]);
-      }
-    });
-
-    // Restore context (undo pan/zoom transforms)
-    ctx.restore();
-  }, [shapes, currentShape, selectedId, stageSize, bgColor, isDark, zoom, panOffset]);
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger shortcuts when editing sticky
-      if (editingSticky) return;
-      // The persistent sidebar can be searched while a canvas is open.
-      if (e.target instanceof HTMLElement && e.target.closest('input, textarea, [contenteditable="true"], [role="dialog"]')) return;
-
-      // Space key for panning
-      if (e.code === "Space" && !e.repeat) {
-        e.preventDefault();
-        setIsSpacePressed(true);
-        return;
-      }
-
-      if (e.key === "Delete" || e.key === "Backspace") {
-        if (selectedId) {
-          const newShapes = shapes.filter((s) => {
-            if (s.id === selectedId) return false;
-            if (s.type === "connector") {
-              const conn = s as ConnectorShape;
-              if (conn.fromId === selectedId || conn.toId === selectedId) return false;
-            }
-            return true;
-          });
-          setShapes(newShapes);
-          addToHistory(newShapes);
-          setSelectedId(null);
-        }
-      }
-      if (e.ctrlKey || e.metaKey) {
-        if (e.key === "z") {
-          e.preventDefault();
-          if (e.shiftKey) {
-            redo();
-          } else {
-            undo();
-          }
-        }
-        // Zoom keyboard shortcuts
-        if (e.key === "=" || e.key === "+") {
-          e.preventDefault();
-          zoomIn();
-        }
-        if (e.key === "-") {
-          e.preventDefault();
-          zoomOut();
-        }
-        if (e.key === "0") {
-          e.preventDefault();
-          resetView();
-        }
-      }
-      // Tool shortcuts
-      switch (e.key.toLowerCase()) {
-        case "v": setTool("select"); break;
-        case "p": setTool("pen"); break;
-        case "r": setTool("rectangle"); break;
-        case "c": setTool("circle"); break;
-        case "l": setTool("line"); break;
-        case "t": setTool("text"); break;
-        case "e": setTool("eraser"); break;
-        case "s": if (!e.ctrlKey && !e.metaKey) setTool("sticky"); break;
-        case "m": setTool("mindmap"); break;
-      }
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === "Space") {
-        setIsSpacePressed(false);
-        setIsPanning(false);
-        lastPanPoint.current = null;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-    };
-  }, [selectedId, shapes, addToHistory, undo, redo, editingSticky, zoomIn, zoomOut, resetView]);
-
-  // Loading state
-  if (canvas === undefined) {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center bg-background">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-          className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full"
-        />
-      </div>
-    );
   }
-
-  // Not found state
-  if (canvas === null) {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4 text-muted-foreground">
-          <Layers className="h-12 w-12" />
-          <span>Canvas not found</span>
+  const selected = shapes.find((shape) => shape.id === selectedId);
+  const selectedBounds = selected ? shapeBounds(selected) : null;
+  const canResize =
+    selected && ("width" in selected || selected.type === "circle");
+  return (
+    <div className="absolute inset-0 flex min-h-0 min-w-0 flex-col bg-background">
+      <CanvasToolbar
+        tool={tool}
+        onTool={setTool}
+        onNotes={() => setNotesOpen(true)}
+        undo={undo}
+        redo={redo}
+        canUndo={history.canUndo}
+        canRedo={history.canRedo}
+        onExport={exportCanvas}
+        onClear={() => setClearing(true)}
+        onObjects={() => setObjectsOpen(true)}
+        status={autosave.status}
+        retry={autosave.retry}
+      />
+      <div className="flex min-h-8 shrink-0 items-center justify-between gap-2 border-b px-3 py-1 text-[10px] text-muted-foreground">
+        <span>
+          {selected
+            ? `${selected.type === "noteEmbed" ? "Embedded note" : selected.type === "mindmapNode" ? "Mind map node" : selected.type} selected`
+            : `${shapes.filter((shape) => shape.type !== "connector").length} objects · Select, drag, or add an idea`}
+        </span>
+        <span className="md:hidden">
+          <SaveStatus status={autosave.status} retry={autosave.retry} />
+        </span>
+        <span className="hidden md:inline">
+          V select · H pan · Enter edit · Arrow keys move
+        </span>
+      </div>
+      {remote && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-2 border-b bg-amber-500/10 p-3 text-xs"
+        >
+          <span>This canvas changed in another tab. Your draft is kept.</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              lastSaved.current = serializeShapes(remote);
+              remoteRef.current = null;
+              setRemote(null);
+            }}
+          >
+            Keep my edits
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              const content = serializeShapes(remote);
+              lastSaved.current = content;
+              lastSubmitted.current = content;
+              remoteRef.current = null;
+              reset(remote);
+              setRemote(null);
+              sessionStorage.removeItem(storageKey);
+            }}
+          >
+            Load saved version
+          </Button>
+        </div>
+      )}
+      {recovered && !remote && (
+        <p
+          role="status"
+          className="border-b bg-primary/5 px-3 py-2 text-xs text-muted-foreground"
+        >
+          Recovered edits from this tab. They will be saved automatically.
+        </p>
+      )}
+      {selected && (
+        <div
+          role="toolbar"
+          aria-label="Selected object actions"
+          className="flex shrink-0 items-center gap-1 overflow-x-auto border-b bg-muted/20 px-2 py-1"
+        >
+          {"text" in selected && (
+            <Button variant="ghost" size="sm" onClick={() => edit(selected)}>
+              <Pencil size={13} />
+              Edit
+            </Button>
+          )}
+          {selected.type === "mindmapNode" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => openText({ kind: "child", parent: selected.id })}
+            >
+              <GitBranch size={13} />
+              Add connected idea
+            </Button>
+          )}
+          {selected.type === "noteEmbed" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push(`/notes/${selected.noteId}`)}
+            >
+              <ExternalLink size={13} />
+              Open original note
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Duplicate selected object"
+            onClick={() => {
+              const copy = {
+                ...translateShape(selected, 28, 28),
+                id: generateId(),
+              };
+              change([...shapes, copy]);
+              setSelected(copy.id);
+            }}
+          >
+            <Copy size={13} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Delete selected object"
+            onClick={() => {
+              change(deleteShape(shapes, selected.id));
+              setSelected(null);
+            }}
+          >
+            <Trash2 size={13} />
+          </Button>
+          {selected.type === "sticky" && (
+            <div
+              className="ml-2 flex gap-1"
+              role="group"
+              aria-label="Sticky note color"
+            >
+              {STICKY_COLORS.map((color, index) => (
+                <button
+                  key={color.bg}
+                  aria-label={`Sticky color ${index + 1}`}
+                  aria-pressed={selected.colorIndex === index}
+                  className={`h-6 w-6 shrink-0 rounded-full border-2 ${selected.colorIndex === index ? "border-primary" : "border-transparent"}`}
+                  style={{ background: color.bg }}
+                  onClick={() => {
+                    setStickyColor(index);
+                    change(
+                      shapes.map((shape) =>
+                        shape.id === selected.id && shape.type === "sticky"
+                          ? { ...shape, colorIndex: index }
+                          : shape,
+                      ),
+                    );
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      <div
+        ref={container}
+        className="relative min-h-0 flex-1 touch-none overflow-hidden"
+        onPointerDown={pointerDown}
+        onPointerMove={pointerMove}
+        onPointerUp={pointerUp}
+        onPointerCancel={cancelPointer}
+        onKeyDown={keyboard}
+      >
+        <canvas
+          ref={canvas}
+          tabIndex={0}
+          role="application"
+          aria-label="Canvas editor. Use the toolbar to add objects. Select an object to move or edit it."
+          className="block h-full w-full touch-none outline-none"
+          style={{
+            cursor:
+              tool === "pan"
+                ? "grab"
+                : tool === "select"
+                  ? "default"
+                  : tool === "text"
+                    ? "text"
+                    : "crosshair",
+          }}
+          onDoubleClick={(event) => {
+            const shape = hitTest(
+              current.current,
+              toWorld(screen(event), viewRef.current),
+              viewRef.current.zoom,
+            );
+            if (shape) edit(shape);
+          }}
+        />
+        {selectedBounds && canResize && (
+          <button
+            data-resize
+            aria-label="Resize selected object"
+            className="absolute z-10 h-5 w-5 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize rounded-sm border-2 border-background bg-primary shadow-sm"
+            style={{
+              left:
+                (selectedBounds.x + selectedBounds.width) * view.zoom + view.x,
+              top:
+                (selectedBounds.y + selectedBounds.height) * view.zoom + view.y,
+            }}
+          />
+        )}
+        {shapes.length === 0 && (
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
+            <StickyNote size={32} className="mb-4 text-primary/60" />
+            <h2 className="text-xl font-semibold tracking-tight">
+              Give an idea some room.
+            </h2>
+            <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground">
+              Add a sticky note, bring in a note, or sketch a connection. This
+              space is yours.
+            </p>
+            <div className="pointer-events-auto mt-5 flex flex-wrap justify-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  openText({
+                    kind: "create",
+                    type: "sticky",
+                    point: toWorld(
+                      { x: size.width / 2 - 100, y: size.height / 2 - 70 },
+                      viewRef.current,
+                    ),
+                  })
+                }
+              >
+                <Plus size={14} />
+                First sticky note
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setNotesOpen(true)}
+              >
+                <FileText size={14} />
+                Embed a note
+              </Button>
+            </div>
+          </div>
+        )}
+        <div
+          className="absolute bottom-4 right-3 flex items-center gap-0.5 rounded-lg border bg-background/95 p-1 shadow-sm"
+          role="toolbar"
+          aria-label="Canvas view"
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            aria-label="Zoom out"
+            onClick={() => zoomBy(1 / 1.2)}
+          >
+            <ZoomOut size={15} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 min-w-[50px] px-1 text-xs"
+            aria-label="Reset canvas zoom"
+            onClick={() => viewport({ x: 0, y: 0, zoom: 1 })}
+          >
+            {Math.round(view.zoom * 100)}%
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            aria-label="Zoom in"
+            onClick={() => zoomBy(1.2)}
+          >
+            <ZoomIn size={15} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            aria-label="Fit all content to screen"
+            onClick={() => viewport(fitScene(shapes, size.width, size.height))}
+          >
+            <Maximize size={15} />
+          </Button>
         </div>
       </div>
-    );
-  }
-
-  const tools: { id: Tool; icon: typeof MousePointer2; label: string }[] = [
-    { id: "select", icon: MousePointer2, label: "Select (V)" },
-    { id: "pen", icon: Pencil, label: "Pen (P)" },
-    { id: "rectangle", icon: Square, label: "Rectangle (R)" },
-    { id: "circle", icon: Circle, label: "Circle (C)" },
-    { id: "line", icon: Minus, label: "Line (L)" },
-    { id: "text", icon: Type, label: "Text (T)" },
-    { id: "eraser", icon: Eraser, label: "Eraser (E)" },
-    { id: "sticky", icon: StickyNote, label: "Sticky Note (S)" },
-    { id: "mindmap", icon: GitBranch, label: "Mind Map (M)" },
-  ];
-
-  return (
-    <div className="absolute inset-0 flex flex-col">
-      {/* Toolbar */}
-      <motion.div
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="flex items-center gap-1 p-2 border-b bg-background/80 backdrop-blur-sm overflow-x-auto flex-nowrap"
+      <Dialog
+        open={textEditor !== null}
+        onOpenChange={(open) => {
+          if (!open) setTextEditor(null);
+        }}
       >
-        <TooltipProvider delayDuration={0}>
-          {tools.map(({ id, icon: Icon, label }) => (
-            <Tooltip key={id}>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={tool === id ? "default" : "ghost"}
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setTool(id)}
-                >
-                  <Icon className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">{label}</TooltipContent>
-            </Tooltip>
-          ))}
-
-          <div className="w-px h-6 bg-border mx-1" />
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={undo}
-                disabled={historyIndex <= 0}
-              >
-                <Undo2 className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Undo (Ctrl+Z)</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={redo}
-                disabled={historyIndex >= history.length - 1}
-              >
-                <Redo2 className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Redo (Ctrl+Shift+Z)</TooltipContent>
-          </Tooltip>
-
-          <div className="w-px h-6 bg-border mx-1" />
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={clearCanvas}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Clear Canvas</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={exportCanvas}
-              >
-                <Download className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Export as PNG</TooltipContent>
-          </Tooltip>
-
-          <div className="w-px h-6 bg-border mx-1" />
-
-          {/* Zoom Controls */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={zoomOut}
-                disabled={zoom <= 0.1}
-              >
-                <ZoomOut className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Zoom Out (Ctrl+-)</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2 min-w-[50px] text-xs font-medium"
-                onClick={resetView}
-              >
-                {Math.round(zoom * 100)}%
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Reset View (Ctrl+0)</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={zoomIn}
-                disabled={zoom >= 5}
-              >
-                <ZoomIn className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Zoom In (Ctrl++)</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={resetView}
-              >
-                <Maximize className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Fit to Screen</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </motion.div>
-
-      {/* Canvas */}
-      <div ref={containerRef} className="flex-1 overflow-hidden relative touch-none">
-        <canvas
-          ref={canvasRef}
-          width={stageSize.width}
-          height={stageSize.height}
-          className="touch-none"
-          style={{
-            cursor: isPanning || isSpacePressed ? "grab" : tool === "select" ? "default" : tool === "text" ? "text" : "crosshair",
-          }}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onWheel={handleWheel}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-        />
-
-        {/* Sticky note editor overlay */}
-        <AnimatePresence>
-          {editingSticky && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="absolute inset-0 flex items-center justify-center bg-black/50 z-10"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) updateStickyText();
-              }}
+        <DialogContent className="max-w-md">
+          <DialogTitle>
+            {textEditor?.kind === "edit"
+              ? "Edit your idea"
+              : textEditor?.kind === "child"
+                ? "Add a connected idea"
+                : "Put the thought down"}
+          </DialogTitle>
+          <DialogDescription>
+            Your text stays on the canvas. You can edit it again anytime.
+          </DialogDescription>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              saveText();
+            }}
+            className="space-y-4"
+          >
+            <label
+              className="block text-sm font-medium"
+              htmlFor="canvas-idea-text"
             >
-              <div className="bg-card rounded-xl shadow-xl p-4 w-[90vw] max-w-sm">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold">Edit Sticky Note</h3>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingSticky(null)}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-                <textarea
-                  value={stickyText}
-                  onChange={(e) => setStickyText(e.target.value)}
-                  placeholder="Enter your note..."
-                  className="w-full h-32 p-3 rounded-lg border resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                  autoFocus
-                />
-                <div className="flex justify-end gap-2 mt-3">
-                  <Button variant="outline" onClick={() => setEditingSticky(null)}>Cancel</Button>
-                  <Button onClick={updateStickyText}>Save</Button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Note embed selector panel */}
-        <AnimatePresence>
-          {tool === "noteEmbed" && notes && notes.length > 0 && (
-            <motion.div
-              initial={{ x: 300, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 300, opacity: 0 }}
-              className="absolute right-0 top-0 bottom-0 w-72 bg-card border-l shadow-xl z-10 overflow-y-auto"
-            >
-              <div className="p-4 border-b sticky top-0 bg-card">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">Embed Note</h3>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setTool("select")}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground mt-1">Click a note to add to canvas</p>
-              </div>
-              <div className="p-2 space-y-1">
-                {notes.map((note) => (
-                  <button
+              Text
+              <textarea
+                id="canvas-idea-text"
+                value={text}
+                onChange={(event) => setText(event.target.value)}
+                autoFocus
+                maxLength={5000}
+                className="mt-2 min-h-[140px] w-full rounded-lg border bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setTextEditor(null)}
+              >
+                Cancel
+              </Button>
+              <Button disabled={!text.trim()}>Save idea</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={notesOpen} onOpenChange={setNotesOpen}>
+        <DialogContent className="max-w-md">
+          <DialogTitle>Bring a note onto the canvas</DialogTitle>
+          <DialogDescription>
+            Add a preview here. The original note stays in your notes workspace.
+          </DialogDescription>
+          <Input
+            aria-label="Find a note to embed"
+            placeholder="Find a note..."
+            value={noteSearch}
+            onChange={(event) => setNoteSearch(event.target.value)}
+          />
+          <div className="max-h-[50dvh] space-y-1 overflow-y-auto">
+            {notes === undefined ? (
+              <p role="status" className="p-4 text-sm text-muted-foreground">
+                Loading notes...
+              </p>
+            ) : (
+              notes
+                .filter((note) =>
+                  note.title.toLowerCase().includes(noteSearch.toLowerCase()),
+                )
+                .map((note) => (
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start truncate"
                     key={note._id}
-                    onClick={() => {
-                      const { width, height } = getEmbedDimensions();
-                      createNoteEmbed(
-                        { x: stageSize.width / 2 - width / 2, y: stageSize.height / 2 - height / 2 },
-                        { _id: note._id, title: note.title, content: note.content }
-                      );
-                      setTool("select");
-                    }}
-                    className="w-full p-3 rounded-lg text-left hover:bg-accent transition-colors"
+                    disabled={loadingNote}
+                    onClick={() => void embedNote(note._id)}
                   >
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium truncate">{note.title || "Untitled"}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Mind map helper panel */}
-        <AnimatePresence>
-          {showMindMapPanel && mindMapRootId && (
-            <motion.div
-              initial={{ y: 50, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 50, opacity: 0 }}
-              className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-card rounded-xl shadow-xl p-4 z-10"
-            >
-              <div className="flex items-center gap-3">
-                <GitBranch className="h-5 w-5 text-primary" />
-                <span className="text-sm font-medium">Mind Map Mode</span>
+                    <FileText size={14} />
+                    {note.title || "Untitled"}
+                  </Button>
+                ))
+            )}
+            {notes?.length === 0 && (
+              <p className="p-4 text-sm text-muted-foreground">
+                Write your first note, then bring it here.
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={objectsOpen} onOpenChange={setObjectsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogTitle>Objects on this canvas</DialogTitle>
+          <DialogDescription>
+            Select an object to edit, move, resize, or delete it.
+          </DialogDescription>
+          <div className="max-h-[55dvh] space-y-1 overflow-y-auto">
+            {shapes
+              .filter((shape) => shape.type !== "connector")
+              .map((shape, index) => (
                 <Button
-                  size="sm"
+                  key={shape.id}
+                  variant={shape.id === selectedId ? "secondary" : "ghost"}
+                  className="w-full justify-start truncate"
                   onClick={() => {
-                    const selected = shapes.find(s => s.id === selectedId);
-                    if (selected?.type === "mindmapNode") {
-                      addMindMapChild(selected.id);
-                    } else {
-                      addMindMapChild(mindMapRootId);
-                    }
+                    setSelected(shape.id);
+                    setObjectsOpen(false);
+                    viewport(fitScene([shape], size.width, size.height, 100));
                   }}
                 >
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Node
+                  {index + 1}.{" "}
+                  {"text" in shape
+                    ? shape.text
+                    : shape.type === "noteEmbed"
+                      ? shape.noteTitle
+                      : shape.type}
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowMindMapPanel(false)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Select a node and click &quot;Add Node&quot; to create a child
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+              ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+      <AlertDialog open={clearing} onOpenChange={setClearing}>
+        <AlertDialogContent>
+          <AlertDialogTitle>Clear this canvas?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This removes the objects from this canvas. Undo can bring them back
+            while this canvas stays open.
+          </AlertDialogDescription>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                change([]);
+                setSelected(null);
+              }}
+            >
+              Clear canvas
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

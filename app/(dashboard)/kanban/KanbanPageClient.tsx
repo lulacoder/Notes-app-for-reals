@@ -1,104 +1,157 @@
 "use client";
 
-import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
-
 import { useState } from "react";
-import type { Preloaded } from "convex/react";
-import { useMutation } from "convex/react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
+import { useMutation, type Preloaded } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
 import { BoardSidebar } from "@/components/kanban/BoardSidebar";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Plus } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toast-notification";
+import { ArrowLeft, LayoutDashboard, PanelLeftOpen, Plus } from "lucide-react";
 
-interface KanbanPageClientProps {
+interface Props {
   preloadedBoards: Preloaded<typeof api.kanban.listBoards>;
   preloadedTags: Preloaded<typeof api.tags.listTags>;
-  initialBoardData: { boardId: Id<"kanbanBoards">; columns: Doc<"kanbanColumns">[]; cards: Doc<"kanbanCards">[] } | null;
+  initialBoardData: {
+    boardId: Id<"kanbanBoards">;
+    columns: Doc<"kanbanColumns">[];
+    cards: Doc<"kanbanCards">[];
+  } | null;
 }
 
 export function KanbanPageClient({
   preloadedBoards,
   preloadedTags,
   initialBoardData,
-}: KanbanPageClientProps) {
+}: Props) {
   const boards = usePreloadedAuthQuery(preloadedBoards) ?? [];
   const tags = usePreloadedAuthQuery(preloadedTags) ?? [];
+  const params = useSearchParams();
+  const selected =
+    boards.find((board) => board._id === params.get("board")) ?? boards[0];
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const { error } = useToast();
   const createBoard = useMutation(api.kanban.createBoard);
-
-  const [selectedBoardId, setSelectedBoardId] =
-    useState<Id<"kanbanBoards"> | null>(boards[0]?._id ?? null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-
-  const handleCreateBoard = async () => {
-    const id = await createBoard({ title: "New Board" });
-    setSelectedBoardId(id);
-  };
-
-  // Keep selected board valid if it gets deleted
-  const selectedBoard = boards.find((b) => b._id === selectedBoardId) ?? boards[0];
-
+  function select(id: Id<"kanbanBoards">) {
+    window.history.pushState(null, "", `/kanban?board=${id}`);
+    setDrawerOpen(false);
+  }
+  async function create() {
+    if (creating) return;
+    setCreating(true);
+    try {
+      const id = await createBoard({ title: "New board" });
+      select(id);
+    } catch (cause) {
+      error(
+        "Could not create board",
+        cause instanceof Error ? cause.message : "Try again.",
+      );
+    } finally {
+      setCreating(false);
+    }
+  }
+  const sidebar = (
+    <BoardSidebar
+      boards={boards}
+      selectedBoardId={selected?._id ?? null}
+      onSelectBoard={select}
+      onCreateBoard={() => void create()}
+      creating={creating}
+    />
+  );
   return (
-    <div className="flex-1 flex min-h-0 overflow-hidden bg-background">
-      {/* Board sidebar */}
-      <AnimatePresence initial={false}>
-        {sidebarOpen && (
-          <motion.div
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 260, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="border-r flex flex-col min-h-0 overflow-hidden shrink-0"
-          >
-            <BoardSidebar
-              boards={boards}
-              selectedBoardId={selectedBoardId}
-              onSelectBoard={setSelectedBoardId}
-              onCreateBoard={handleCreateBoard}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Main board area */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        {selectedBoard ? (
+    <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
+      {!collapsed && (
+        <div className="hidden shrink-0 border-r md:flex">{sidebar}</div>
+      )}
+      <Dialog open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <DialogContent className="left-0 top-0 h-dvh w-[280px] max-w-[85vw] translate-x-0 translate-y-0 gap-0 rounded-none p-0 md:hidden">
+          <DialogTitle className="sr-only">Your boards</DialogTitle>
+          <DialogDescription className="sr-only">
+            Choose or create a board.
+          </DialogDescription>
+          {sidebar}
+        </DialogContent>
+      </Dialog>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {selected ? (
           <KanbanBoard
-            key={selectedBoard._id}
-            board={selectedBoard}
-            initialColumns={initialBoardData?.boardId === selectedBoard._id ? initialBoardData.columns : undefined}
-            initialCards={initialBoardData?.boardId === selectedBoard._id ? initialBoardData.cards : undefined}
+            key={selected._id}
+            board={selected}
             tags={tags}
-            onToggleSidebar={() => setSidebarOpen((v) => !v)}
-            sidebarOpen={sidebarOpen}
+            initialColumns={
+              initialBoardData?.boardId === selected._id
+                ? initialBoardData.columns
+                : undefined
+            }
+            initialCards={
+              initialBoardData?.boardId === selected._id
+                ? initialBoardData.cards
+                : undefined
+            }
+            onToggleSidebar={() => {
+              if (window.matchMedia("(max-width: 767px)").matches)
+                setDrawerOpen(true);
+              else setCollapsed((value) => !value);
+            }}
+            sidebarOpen={!collapsed}
           />
         ) : (
-          <EmptyBoardState onCreateBoard={handleCreateBoard} />
+          <>
+            <div className="flex items-center gap-2 border-b p-3">
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/notes">
+                  <ArrowLeft size={15} />
+                  Back to notes
+                </Link>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="md:hidden"
+                onClick={() => setDrawerOpen(true)}
+              >
+                <PanelLeftOpen size={15} />
+                Boards
+              </Button>
+            </div>
+            <div className="flex flex-1 flex-col items-center justify-center gap-5 p-8 text-center">
+              <div className="rounded-2xl bg-primary/10 p-5">
+                <LayoutDashboard size={34} className="text-primary" />
+              </div>
+              <div>
+                <p className="mb-2 text-xs uppercase tracking-widest text-muted-foreground">
+                  From idea to next step
+                </p>
+                <h1 className="text-2xl font-semibold">
+                  Make room for a plan.
+                </h1>
+                <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">
+                  Give your tasks a home. Start a board, add a few next steps,
+                  and move them forward.
+                </p>
+              </div>
+              <Button disabled={creating} onClick={() => void create()}>
+                <Plus size={16} />
+                {creating ? "Creating..." : "Create your first board"}
+              </Button>
+            </div>
+          </>
         )}
       </div>
-    </div>
-  );
-}
-
-function EmptyBoardState({ onCreateBoard }: { onCreateBoard: () => void }) {
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
-      <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center">
-        <LayoutDashboard className="h-10 w-10 text-primary" />
-      </div>
-      <div>
-        <h2 className="text-2xl font-bold mb-2">No boards yet</h2>
-        <p className="text-muted-foreground max-w-sm">
-          Create your first Kanban board to start organizing your tasks and
-          projects.
-        </p>
-      </div>
-      <Button size="lg" onClick={onCreateBoard}>
-        <Plus className="h-5 w-5 mr-2" />
-        Create Board
-      </Button>
     </div>
   );
 }

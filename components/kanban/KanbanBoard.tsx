@@ -1,50 +1,42 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { useRef, useState } from "react";
+import Link from "next/link";
+import type { Doc } from "@/convex/_generated/dataModel";
 import { useQuery, useMutation, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { DragDropContext, type DropResult } from "@hello-pangea/dnd";
+import {
+  DragDropContext,
+  Draggable,
+  Droppable,
+  type DropResult,
+} from "@hello-pangea/dnd";
 import { KanbanColumn } from "./KanbanColumn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SaveStatus } from "@/components/SaveStatus";
+import { useToast } from "@/components/ui/toast-notification";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
-  Plus,
+  ArrowLeft,
   MoreHorizontal,
-  Pin,
-  Trash2,
-  PanelLeftOpen,
-  PanelLeftClose,
+  PanelLeft,
   Pencil,
+  Pin,
+  Plus,
+  Search,
+  Trash2,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { motion } from "framer-motion";
+import { stripHtmlToText } from "@/lib/html-utils";
 
-type Tag = {
-  _id: Id<"tags">;
-  name: string;
-  color: string;
-};
-
-type Board = {
-  _id: Id<"kanbanBoards">;
-  title: string;
-  updatedAt: number;
-  isPinned?: boolean;
-};
-
-const EMPTY: never[] = [];
-
-interface KanbanBoardProps {
-  board: Board;
-  tags: Tag[];
+interface Props {
+  board: Doc<"kanbanBoards">;
+  tags: Doc<"tags">[];
   onToggleSidebar: () => void;
   sidebarOpen: boolean;
   initialColumns?: Doc<"kanbanColumns">[];
@@ -58,288 +50,416 @@ export function KanbanBoard({
   sidebarOpen,
   initialColumns,
   initialCards,
-}: KanbanBoardProps) {
+}: Props) {
   const { isAuthenticated } = useConvexAuth();
-  const columns = useQuery(api.kanban.listColumns, isAuthenticated ? { boardId: board._id } : "skip") ?? initialColumns ?? EMPTY;
-  const cards = useQuery(api.kanban.listCards, isAuthenticated ? { boardId: board._id } : "skip") ?? initialCards ?? EMPTY;
-
-  const moveCard = useMutation(api.kanban.moveCard);
-  const reorderColumns = useMutation(api.kanban.reorderColumns);
+  const columns =
+    useQuery(
+      api.kanban.listColumns,
+      isAuthenticated ? { boardId: board._id } : "skip",
+    ) ?? initialColumns;
+  const cards =
+    useQuery(
+      api.kanban.listCards,
+      isAuthenticated ? { boardId: board._id } : "skip",
+    ) ?? initialCards;
+  const moveCard = useMutation(api.kanban.moveCard).withOptimisticUpdate(
+    (store, args) => {
+      const query = { boardId: board._id };
+      const current = store.getQuery(api.kanban.listCards, query);
+      if (current)
+        store.setQuery(
+          api.kanban.listCards,
+          query,
+          current.map((card) =>
+            card._id === args.id
+              ? { ...card, columnId: args.columnId, order: args.order }
+              : card,
+          ),
+        );
+    },
+  );
+  const reorder = useMutation(api.kanban.reorderColumns).withOptimisticUpdate(
+    (store, args) => {
+      const query = { boardId: board._id };
+      const current = store.getQuery(api.kanban.listColumns, query);
+      if (current)
+        store.setQuery(
+          api.kanban.listColumns,
+          query,
+          current
+            .map((col) => ({
+              ...col,
+              order: (args.orderedIds.indexOf(col._id) + 1) * 1000,
+            }))
+            .sort((a, b) => a.order - b.order),
+        );
+    },
+  );
   const createColumn = useMutation(api.kanban.createColumn);
   const updateBoard = useMutation(api.kanban.updateBoard);
-  const softDeleteBoard = useMutation(api.kanban.softDeleteBoard);
-  const togglePin = useMutation(api.kanban.togglePinBoard);
-
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [draftTitle, setDraftTitle] = useState(board.title);
-  const boardTitle = isEditingTitle ? draftTitle : board.title;
-  const setBoardTitle = setDraftTitle;
-  const [isAddingColumn, setIsAddingColumn] = useState(false);
-  const [newColumnTitle, setNewColumnTitle] = useState("");
-  const [isMobile, setIsMobile] = useState(false);
-
-  // Detect mobile
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, []);
-
-
-  const handleBoardTitleSave = async () => {
-    if (boardTitle.trim() && boardTitle !== board.title) {
-      await updateBoard({ id: board._id, title: boardTitle.trim() });
-    } else {
-      setBoardTitle(board.title);
+  const removeBoard = useMutation(api.kanban.softDeleteBoard);
+  const pin = useMutation(api.kanban.togglePinBoard);
+  const [title, setTitle] = useState(board.title);
+  const [editing, setEditing] = useState(false);
+  const [query, setQuery] = useState("");
+  const [tag, setTag] = useState("");
+  const [due, setDue] = useState("all");
+  const [columnTitle, setColumnTitle] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [pending, setPending] = useState(0);
+  const [failed, setFailed] = useState(false);
+  const retryRef = useRef<(() => Promise<unknown>) | null>(null);
+  const { error, success } = useToast();
+  async function run(action: () => Promise<unknown>) {
+    setPending((value) => value + 1);
+    setFailed(false);
+    try {
+      await action();
+      return true;
+    } catch (cause) {
+      retryRef.current = action;
+      setFailed(true);
+      error(
+        "Could not save board",
+        cause instanceof Error ? cause.message : "Try again.",
+      );
+      return false;
+    } finally {
+      setPending((value) => value - 1);
     }
-    setIsEditingTitle(false);
-  };
-
-  const handleAddColumn = async () => {
-    if (!newColumnTitle.trim()) {
-      setIsAddingColumn(false);
+  }
+  const filtering = !!query.trim() || !!tag || due !== "all";
+  const grouped = new Map(
+    (columns ?? []).map((col) => [col._id, Array<Doc<"kanbanCards">>()]),
+  );
+  for (const card of cards ?? []) grouped.get(card.columnId)?.push(card);
+  for (const group of grouped.values()) group.sort((a, b) => a.order - b.order);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = today.getTime() + 86400000;
+  function visible(card: Doc<"kanbanCards">) {
+    return (
+      (!query.trim() ||
+        `${card.title} ${stripHtmlToText(card.description ?? "")}`
+          .toLowerCase()
+          .includes(query.trim().toLowerCase())) &&
+      (!tag || card.tagIds?.some((id) => id === tag)) &&
+      (due === "all" ||
+        (card.dueDate !== undefined &&
+          (due === "overdue"
+            ? card.dueDate < today.getTime()
+            : due === "today"
+              ? card.dueDate >= today.getTime() && card.dueDate < tomorrow
+              : card.dueDate >= tomorrow)))
+    );
+  }
+  function drag(result: DropResult) {
+    const { destination, source, type, draggableId } = result;
+    if (
+      !destination ||
+      !columns ||
+      !cards ||
+      (destination.index === source.index &&
+        destination.droppableId === source.droppableId)
+    )
+      return;
+    if (type === "COLUMN") {
+      const ids = columns.map((col) => col._id);
+      const [moved] = ids.splice(source.index, 1);
+      if (!moved) return;
+      ids.splice(destination.index, 0, moved);
+      void run(() => reorder({ boardId: board._id, orderedIds: ids }));
       return;
     }
-    await createColumn({ boardId: board._id, title: newColumnTitle.trim() });
-    setNewColumnTitle("");
-    setIsAddingColumn(false);
-  };
-
-  const onDragEnd = useCallback(
-    async (result: DropResult) => {
-      const { destination, source, draggableId, type } = result;
-
-      if (!destination) return;
-      if (
-        destination.droppableId === source.droppableId &&
-        destination.index === source.index
-      )
-        return;
-
-      if (type === "COLUMN") {
-        // Reorder columns
-        const newColumnOrder = Array.from(columns.map((c) => c._id));
-        const [removed] = newColumnOrder.splice(source.index, 1);
-        newColumnOrder.splice(destination.index, 0, removed);
-        await reorderColumns({
-          boardId: board._id,
-          orderedIds: newColumnOrder,
-        });
-        return;
-      }
-
-      // Move card
-      const sourceColId = source.droppableId as Id<"kanbanColumns">;
-      const destColId = destination.droppableId as Id<"kanbanColumns">;
-      const cardId = draggableId as Id<"kanbanCards">;
-
-      const destCards = cards
-        .filter((c) => c.columnId === destColId)
-        .sort((a, b) => a.order - b.order);
-
-      // Calculate new order for the card
-      let newOrder: number;
-      if (destCards.length === 0) {
-        newOrder = 1000;
-      } else if (destination.index === 0) {
-        newOrder = destCards[0].order / 2;
-      } else if (destination.index >= destCards.length) {
-        newOrder = destCards[destCards.length - 1].order + 1000;
-      } else {
-        const before = destCards[destination.index - 1];
-        const after = destCards[destination.index];
-        // Adjust if moving within same column
-        const actualBefore =
-          sourceColId === destColId && source.index < destination.index
-            ? destCards[destination.index]
-            : before;
-        const actualAfter =
-          sourceColId === destColId && source.index < destination.index
-            ? destCards[destination.index + 1] ?? null
-            : after;
-        if (actualAfter) {
-          newOrder = (actualBefore.order + actualAfter.order) / 2;
-        } else {
-          newOrder = actualBefore.order + 1000;
-        }
-      }
-
-      await moveCard({ id: cardId, columnId: destColId, order: newOrder });
-    },
-    [board._id, cards, columns, moveCard, reorderColumns]
-  );
-
-  const cardsByColumn = columns.reduce<
-    Record<string, typeof cards>
-  >((acc, col) => {
-    acc[col._id] = cards
-      .filter((c) => c.columnId === col._id)
-      .sort((a, b) => a.order - b.order);
-    return acc;
-  }, {});
-
+    if (filtering) return;
+    const card = cards.find((item) => item._id === draggableId);
+    const column = columns.find((item) => item._id === destination.droppableId);
+    if (!card || !column) return;
+    const others = (grouped.get(column._id) ?? []).filter(
+      (item) => item._id !== card._id,
+    );
+    const before = others[destination.index - 1];
+    const after = others[destination.index];
+    const order =
+      before && after
+        ? (before.order + after.order) / 2
+        : before
+          ? before.order + 1000
+          : after
+            ? after.order / 2
+            : 1000;
+    void run(() => moveCard({ id: card._id, columnId: column._id, order }));
+  }
   return (
-    <div className="flex flex-col h-full min-h-0 overflow-hidden">
-      {/* Board header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b shrink-0 bg-background">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={onToggleSidebar}
-          title={sidebarOpen ? "Close sidebar" : "Open sidebar"}
-        >
-          {sidebarOpen ? (
-            <PanelLeftClose className="h-4 w-4" />
-          ) : (
-            <PanelLeftOpen className="h-4 w-4" />
-          )}
-        </Button>
-
-        {isEditingTitle ? (
-          <Input
-            value={boardTitle}
-            onChange={(e) => setBoardTitle(e.target.value)}
-            onBlur={handleBoardTitleSave}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleBoardTitleSave();
-              if (e.key === "Escape") {
-                setBoardTitle(board.title);
-                setIsEditingTitle(false);
-              }
-            }}
-            className="h-8 text-lg font-bold border-primary max-w-xs"
-            autoFocus
-          />
-        ) : (
-          <button
-            className="text-lg font-bold hover:text-primary transition-colors truncate max-w-xs"
-            onDoubleClick={() => setIsEditingTitle(true)}
-            title="Double-click to rename"
+    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+      <header className="space-y-3 border-b bg-background px-3 py-3 sm:px-5">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Button asChild variant="ghost" size="sm" className="px-2">
+            <Link href="/notes">
+              <ArrowLeft size={14} />
+              <span className="hidden sm:inline">Back to notes</span>
+              <span className="sm:hidden">Notes</span>
+            </Link>
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            aria-label="Choose boards"
+            aria-expanded={sidebarOpen}
+            onClick={onToggleSidebar}
           >
-            {board.title}
-          </button>
-        )}
-
-        <div className="ml-auto flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => { setDraftTitle(board.title); setIsEditingTitle(true); }}>
-                <Pencil className="h-4 w-4 mr-2" />
-                Rename Board
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => togglePin({ id: board._id })}>
-                <Pin className="h-4 w-4 mr-2" />
-                {board.isPinned ? "Unpin Board" : "Pin Board"}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onClick={() => softDeleteBoard({ id: board._id })}
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete Board
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
-      {/* Columns area */}
-      <DragDropContext onDragEnd={onDragEnd}>
-        <div
-          className={cn(
-            "flex-1 overflow-x-auto overflow-y-hidden",
-            isMobile && "scroll-smooth"
+            <PanelLeft size={16} />
+          </Button>
+          {editing ? (
+            <Input
+              aria-label="Board title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              autoFocus
+              className="h-8 max-w-[260px]"
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setEditing(false);
+                if (e.key === "Enter") {
+                  setEditing(false);
+                  if (title.trim())
+                    void run(() =>
+                      updateBoard({ id: board._id, title: title.trim() }),
+                    );
+                }
+              }}
+              onBlur={() => {
+                setEditing(false);
+                if (title.trim() && title.trim() !== board.title)
+                  void run(() =>
+                    updateBoard({ id: board._id, title: title.trim() }),
+                  );
+              }}
+            />
+          ) : (
+            <button
+              className="min-w-0 max-w-[220px] truncate text-left text-lg font-semibold tracking-tight"
+              aria-label="Rename board"
+              onClick={() => {
+                setTitle(board.title);
+                setEditing(true);
+              }}
+            >
+              {board.title}
+            </button>
           )}
-          style={
-            isMobile
-              ? { scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" }
-              : undefined
-          }
-        >
-          <div className="flex gap-4 p-4 h-full items-start min-w-max">
-            {columns.map((column) => (
-              <motion.div
-                key={column._id}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                layout
-              >
-                <KanbanColumn
-                  column={column}
-                  allColumns={columns}
-                  cards={cardsByColumn[column._id] ?? []}
-                  boardId={board._id}
-                  tags={tags}
-                  isMobile={isMobile}
-                />
-              </motion.div>
-            ))}
-
-            {/* Add column button / form */}
-            <div className="shrink-0 w-[300px]">
-              {isAddingColumn ? (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="bg-muted/40 border rounded-xl p-3 space-y-2"
-                >
-                  <Input
-                    value={newColumnTitle}
-                    onChange={(e) => setNewColumnTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleAddColumn();
-                      if (e.key === "Escape") {
-                        setIsAddingColumn(false);
-                        setNewColumnTitle("");
-                      }
-                    }}
-                    placeholder="Column title..."
-                    className="h-8 text-sm"
-                    autoFocus
-                  />
-                  <div className="flex gap-1.5">
-                    <Button
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={handleAddColumn}
-                    >
-                      Add
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => {
-                        setIsAddingColumn(false);
-                        setNewColumnTitle("");
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </motion.div>
-              ) : (
+          <div className="ml-auto flex items-center gap-2">
+            <SaveStatus
+              status={failed ? "error" : pending ? "saving" : "saved"}
+              retry={() => {
+                if (retryRef.current) void run(retryRef.current);
+              }}
+            />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <Button
-                  variant="outline"
-                  className="w-full border-dashed text-muted-foreground hover:text-foreground h-10 gap-2"
-                  onClick={() => setIsAddingColumn(true)}
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="Board options"
                 >
-                  <Plus className="h-4 w-4" />
-                  Add Column
+                  <MoreHorizontal size={16} />
                 </Button>
-              )}
-            </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => {
+                    setTitle(board.title);
+                    setEditing(true);
+                  }}
+                >
+                  <Pencil size={14} />
+                  Rename board
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => void run(() => pin({ id: board._id }))}
+                >
+                  <Pin size={14} />
+                  {board.isPinned ? "Unpin board" : "Pin board"}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={() =>
+                    void run(async () => {
+                      await removeBoard({ id: board._id });
+                      success("Board moved to recently deleted");
+                    })
+                  }
+                >
+                  <Trash2 size={14} />
+                  Delete board
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
-      </DragDropContext>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="relative min-w-[140px] flex-1 sm:max-w-[300px]">
+            <Search
+              size={14}
+              className="absolute left-2.5 top-2.5 text-muted-foreground"
+            />
+            <Input
+              aria-label="Search tasks"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Find a task..."
+              className="h-9 pl-8 text-xs"
+            />
+          </label>
+          <select
+            aria-label="Filter tasks by tag"
+            value={tag}
+            onChange={(e) => setTag(e.target.value)}
+            className="h-9 max-w-[160px] rounded-md border bg-background px-2 text-xs"
+          >
+            <option value="">All tags</option>
+            {tags.map((item) => (
+              <option key={item._id} value={item._id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Filter tasks by due date"
+            value={due}
+            onChange={(e) => setDue(e.target.value)}
+            className="h-9 rounded-md border bg-background px-2 text-xs"
+          >
+            <option value="all">Any due date</option>
+            <option value="overdue">Overdue</option>
+            <option value="today">Due today</option>
+            <option value="upcoming">Upcoming</option>
+          </select>
+          <span className="ml-auto text-xs text-muted-foreground">
+            {cards?.filter(visible).length ?? 0} tasks
+          </span>
+        </div>
+        {filtering && (
+          <p className="text-xs text-muted-foreground">
+            Move tasks using their Move button while filtering.{" "}
+            <button
+              className="text-primary underline"
+              onClick={() => {
+                setQuery("");
+                setTag("");
+                setDue("all");
+              }}
+            >
+              Clear filters to drag
+            </button>
+          </p>
+        )}
+      </header>
+      {!columns || !cards ? (
+        <div role="status" className="p-8 text-sm text-muted-foreground">
+          Loading your board...
+        </div>
+      ) : (
+        <DragDropContext onDragEnd={drag}>
+          <Droppable
+            droppableId="board-columns"
+            direction="horizontal"
+            type="COLUMN"
+          >
+            {(provided) => (
+              <div
+                ref={provided.innerRef}
+                {...provided.droppableProps}
+                className="flex flex-1 items-start gap-4 overflow-x-auto overflow-y-hidden bg-muted/15 p-4 sm:p-5"
+              >
+                {columns.map((column, index) => (
+                  <Draggable
+                    disableInteractiveElementBlocking
+                    key={column._id}
+                    draggableId={column._id}
+                    index={index}
+                  >
+                    {(dragProvided) => (
+                      <div
+                        ref={dragProvided.innerRef}
+                        {...dragProvided.draggableProps}
+                        className="h-full shrink-0"
+                      >
+                        <KanbanColumn
+                          column={column}
+                          allColumns={columns}
+                          cards={(grouped.get(column._id) ?? []).filter(
+                            visible,
+                          )}
+                          totalCards={(grouped.get(column._id) ?? []).length}
+                          boardId={board._id}
+                          tags={tags}
+                          dragHandleProps={dragProvided.dragHandleProps}
+                          filtering={filtering}
+                        />
+                      </div>
+                    )}
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+                <div className="w-[280px] shrink-0">
+                  {adding ? (
+                    <form
+                      className="space-y-3 rounded-xl border bg-card p-4"
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (
+                          columnTitle.trim() &&
+                          (await run(() =>
+                            createColumn({
+                              boardId: board._id,
+                              title: columnTitle.trim(),
+                            }),
+                          ))
+                        ) {
+                          setColumnTitle("");
+                          setAdding(false);
+                        }
+                      }}
+                    >
+                      <Input
+                        aria-label="New column title"
+                        value={columnTitle}
+                        onChange={(e) => setColumnTitle(e.target.value)}
+                        placeholder="Column title"
+                        autoFocus
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" disabled={pending > 0}>
+                          Add column
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          type="button"
+                          onClick={() => setAdding(false)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </form>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start border-dashed text-muted-foreground"
+                      onClick={() => setAdding(true)}
+                    >
+                      <Plus size={15} />
+                      Add column
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </Droppable>
+        </DragDropContext>
+      )}
     </div>
   );
 }

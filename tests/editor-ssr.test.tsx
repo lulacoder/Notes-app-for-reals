@@ -108,9 +108,12 @@ describe("server-loaded note editor", () => {
       await act(async () => editor.root.render(null));
       expect(editor.mutation.mock.calls.map((call) => call[1])).toEqual([
         { id: editor.id, title: "In flight" },
+      ]);
+      await act(async () => { confirm(); });
+      expect(editor.mutation.mock.calls.map((call) => call[1])).toEqual([
+        { id: editor.id, title: "In flight" },
         { id: editor.id, title: "Original" },
       ]);
-      confirm();
       expect(await editor.owner.query(api.notes.getNote, { id: editor.id })).toMatchObject({ title: "Original" });
     } finally {
       confirm();

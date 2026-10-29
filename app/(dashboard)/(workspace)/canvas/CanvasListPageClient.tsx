@@ -2,7 +2,8 @@
 
 import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import Link from "next/link";
 import type { Preloaded } from "convex/react";
 import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
@@ -29,14 +30,20 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CanvasPreview } from "@/components/CanvasPreview";
 import { getRelativeTime } from "@/lib/relative-time";
+import { useToast } from "@/components/ui/toast-notification";
 
 interface CanvasListPageClientProps {
   preloadedCanvases: Preloaded<typeof api.canvases.listCanvases>;
 }
 
-export function CanvasListPageClient({ preloadedCanvases }: CanvasListPageClientProps) {
+export function CanvasListPageClient({
+  preloadedCanvases,
+}: CanvasListPageClientProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
+  const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
+  const { error, success } = useToast();
 
   const canvases = usePreloadedAuthQuery(preloadedCanvases) ?? [];
   const createCanvas = useMutation(api.canvases.createCanvas);
@@ -44,20 +51,48 @@ export function CanvasListPageClient({ preloadedCanvases }: CanvasListPageClient
   const togglePin = useMutation(api.canvases.togglePin);
 
   const handleCreateCanvas = async () => {
-    const canvasId = await createCanvas({ title: "Untitled Canvas" });
-    router.push(`/canvas/${canvasId}`);
+    if (creatingRef.current) return;
+    creatingRef.current = true;
+    setCreating(true);
+    try {
+      const canvasId = await createCanvas({ title: "Untitled Canvas" });
+      router.push(`/canvas/${canvasId}`);
+    } catch (cause) {
+      error(
+        "Could not create canvas",
+        cause instanceof Error ? cause.message : "Try again.",
+      );
+    } finally {
+      creatingRef.current = false;
+      setCreating(false);
+    }
   };
 
   const handleDeleteCanvas = async (id: Id<"canvases">) => {
-    await softDeleteCanvas({ id });
+    try {
+      await softDeleteCanvas({ id });
+      success("Canvas moved to recently deleted");
+    } catch (cause) {
+      error(
+        "Could not delete canvas",
+        cause instanceof Error ? cause.message : "Try again.",
+      );
+    }
   };
 
   const handleTogglePin = async (id: Id<"canvases">) => {
-    await togglePin({ id });
+    try {
+      await togglePin({ id });
+    } catch (cause) {
+      error(
+        "Could not update canvas",
+        cause instanceof Error ? cause.message : "Try again.",
+      );
+    }
   };
 
   const filteredCanvases = canvases.filter((canvas) =>
-    canvas.title.toLowerCase().includes(searchQuery.toLowerCase())
+    canvas.title.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const pinnedCanvases = filteredCanvases.filter((c) => c.isPinned);
@@ -71,6 +106,7 @@ export function CanvasListPageClient({ preloadedCanvases }: CanvasListPageClient
             <Button
               variant="ghost"
               size="icon"
+              aria-label="Back to notes"
               onClick={() => router.push("/notes")}
             >
               <ArrowLeft className="h-5 w-5" />
@@ -80,11 +116,18 @@ export function CanvasListPageClient({ preloadedCanvases }: CanvasListPageClient
               <h1 className="text-xl font-semibold">Canvases</h1>
             </div>
           </div>
-          <Button onClick={handleCreateCanvas}>
+          <Button onClick={handleCreateCanvas} disabled={creating}>
             <Plus className="h-4 w-4 mr-2" />
-            New Canvas
+            {creating ? "Creating..." : "New Canvas"}
           </Button>
         </div>
+        <Link
+          href="/trash"
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <Trash2 size={13} />
+          Recently deleted
+        </Link>
 
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -102,6 +145,7 @@ export function CanvasListPageClient({ preloadedCanvases }: CanvasListPageClient
           <EmptyState
             hasCanvases={canvases.length > 0}
             onCreateCanvas={handleCreateCanvas}
+            creating={creating}
           />
         ) : (
           <div className="space-y-6">
@@ -166,11 +210,14 @@ function CanvasCard({
   onTogglePin: (id: Id<"canvases">) => void;
 }) {
   return (
-    <div
-      className="group cursor-pointer rounded-xl border bg-card hover:bg-accent/50 transition-all hover:shadow-lg overflow-hidden"
-    >
+    <div className="group cursor-pointer rounded-xl border bg-card hover:bg-accent/50 transition-all hover:shadow-lg overflow-hidden">
       <div className="aspect-video bg-muted/30 relative">
-        <DocumentLink kind="canvas" id={canvas._id} aria-label={`Open ${canvas.title}`} className="block h-full">
+        <DocumentLink
+          kind="canvas"
+          id={canvas._id}
+          aria-label={`Open ${canvas.title}`}
+          className="block h-full"
+        >
           <CanvasPreview content={canvas.content} className="w-full h-full" />
         </DocumentLink>
         {canvas.isPinned && (
@@ -178,10 +225,15 @@ function CanvasCard({
             <Pin className="h-4 w-4 text-primary fill-primary" />
           </div>
         )}
-        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute top-2 right-2 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity">
           <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <Button variant="secondary" size="icon" className="h-8 w-8">
+              <Button
+                variant="secondary"
+                size="icon"
+                className="h-8 w-8"
+                aria-label={`Options for ${canvas.title}`}
+              >
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -210,7 +262,11 @@ function CanvasCard({
         </div>
       </div>
 
-      <DocumentLink kind="canvas" id={canvas._id} className="block p-3 space-y-1">
+      <DocumentLink
+        kind="canvas"
+        id={canvas._id}
+        className="block p-3 space-y-1"
+      >
         <h3 className="font-medium truncate">{canvas.title}</h3>
         <p className="text-xs text-muted-foreground">
           {getRelativeTime(canvas.updatedAt)}
@@ -223,9 +279,11 @@ function CanvasCard({
 function EmptyState({
   hasCanvases,
   onCreateCanvas,
+  creating,
 }: {
   hasCanvases: boolean;
   onCreateCanvas: () => void;
+  creating: boolean;
 }) {
   return (
     <div className="flex flex-col items-center justify-center h-64 text-center">
@@ -241,9 +299,9 @@ function EmptyState({
           : "Create your first canvas to start drawing, organizing notes, and visualizing ideas"}
       </p>
       {!hasCanvases && (
-        <Button onClick={onCreateCanvas}>
+        <Button onClick={onCreateCanvas} disabled={creating}>
           <Plus className="h-4 w-4 mr-2" />
-          Create Canvas
+          {creating ? "Creating..." : "Create Canvas"}
         </Button>
       )}
     </div>

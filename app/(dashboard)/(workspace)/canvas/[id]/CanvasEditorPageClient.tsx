@@ -2,7 +2,7 @@
 
 import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Preloaded } from "convex/react";
 import { useConvexAuth, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
@@ -30,8 +30,21 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { TagAssigner } from "@/components/TagManager";
 import { ContentSkeleton } from "@/components/DashboardSkeleton";
+import { useToast } from "@/components/ui/toast-notification";
 
-const CanvasEditor = dynamic(() => import("@/components/CanvasEditor").then((module) => module.CanvasEditor), { ssr: false, loading: () => <div className="h-full bg-muted/30 animate-pulse" aria-label="Loading canvas" /> });
+const CanvasEditor = dynamic(
+  () =>
+    import("@/components/CanvasEditor").then((module) => module.CanvasEditor),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="h-full bg-muted/30 animate-pulse"
+        aria-label="Loading canvas"
+      />
+    ),
+  },
+);
 
 interface CanvasEditorPageClientProps {
   canvasId: Id<"canvases">;
@@ -47,6 +60,31 @@ export function CanvasEditorPageClient({
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
+  const [pending, setPending] = useState(false);
+  const running = useRef(false);
+  const { error, success } = useToast();
+  async function saveMetadata(
+    action: () => Promise<unknown>,
+    done?: () => void,
+  ) {
+    if (running.current) return;
+    running.current = true;
+    setPending(true);
+    try {
+      await action();
+      done?.();
+    } catch (cause) {
+      error(
+        "Could not update canvas",
+        cause instanceof Error
+          ? cause.message
+          : "Try again. Your changes are still here.",
+      );
+    } finally {
+      running.current = false;
+      setPending(false);
+    }
+  }
 
   const canvas = usePreloadedAuthQuery(preloadedCanvas);
   const updateCanvas = useMutation(api.canvases.updateCanvas);
@@ -68,7 +106,11 @@ export function CanvasEditorPageClient({
 
   const handleSaveTitle = async () => {
     if (editedTitle.trim() && editedTitle !== canvas?.title) {
-      await updateCanvas({ id: canvasId, title: editedTitle.trim() });
+      await saveMetadata(
+        () => updateCanvas({ id: canvasId, title: editedTitle.trim() }),
+        () => setIsEditingTitle(false),
+      );
+      return;
     }
     setIsEditingTitle(false);
   };
@@ -79,19 +121,25 @@ export function CanvasEditorPageClient({
   };
 
   const handleDelete = async () => {
-    await softDeleteCanvas({ id: canvasId });
-    router.push("/canvas");
+    await saveMetadata(
+      () => softDeleteCanvas({ id: canvasId }),
+      () => {
+        success("Canvas moved to recently deleted");
+        router.push("/canvas");
+      },
+    );
   };
 
   const handleTogglePin = async () => {
-    await togglePin({ id: canvasId });
+    await saveMetadata(() => togglePin({ id: canvasId }));
   };
 
   const handleUpdateTags = async (tagIds: Id<"tags">[]) => {
-    await updateCanvasTags({ id: canvasId, tagIds });
+    await saveMetadata(() => updateCanvasTags({ id: canvasId, tagIds }));
   };
 
-  if (canvas === undefined || (!isLoading && !isAuthenticated)) return <ContentSkeleton />;
+  if (canvas === undefined || (!isLoading && !isAuthenticated))
+    return <ContentSkeleton />;
 
   if (canvas === null) {
     return (
@@ -109,7 +157,12 @@ export function CanvasEditorPageClient({
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 py-2 flex items-center gap-3 shrink-0 z-20">
-        <Button variant="ghost" size="icon" onClick={handleBack}>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Back to canvases"
+          onClick={handleBack}
+        >
           <ArrowLeft className="h-5 w-5" />
         </Button>
 
@@ -128,10 +181,21 @@ export function CanvasEditorPageClient({
                 className="h-8 max-w-xs"
                 autoFocus
               />
-              <Button size="icon" variant="ghost" onClick={handleSaveTitle}>
+              <Button
+                disabled={pending}
+                size="icon"
+                variant="ghost"
+                aria-label="Save canvas title"
+                onClick={handleSaveTitle}
+              >
                 <Check className="h-4 w-4" />
               </Button>
-              <Button size="icon" variant="ghost" onClick={handleCancelEdit}>
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label="Cancel title edit"
+                onClick={handleCancelEdit}
+              >
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -157,7 +221,7 @@ export function CanvasEditorPageClient({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" aria-label="Canvas options">
               <MoreHorizontal className="h-5 w-5" />
             </Button>
           </DropdownMenuTrigger>
@@ -179,7 +243,11 @@ export function CanvasEditorPageClient({
       </div>
 
       <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
-        <CanvasEditor key={canvasId} canvasId={canvasId} initialCanvas={canvas} />
+        <CanvasEditor
+          key={canvasId}
+          canvasId={canvasId}
+          initialCanvas={canvas}
+        />
       </div>
     </div>
   );

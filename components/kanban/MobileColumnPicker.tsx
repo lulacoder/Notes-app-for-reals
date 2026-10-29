@@ -1,24 +1,26 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
-import { cn } from "@/lib/utils";
-import { Check } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast-notification";
+import { Check, MoveRight } from "lucide-react";
 
-type Column = {
-  _id: Id<"kanbanColumns">;
-  title: string;
-};
-
-interface MobileColumnPickerProps {
+interface Props {
   open: boolean;
   onClose: () => void;
-  columns: Column[];
+  columns: Doc<"kanbanColumns">[];
   currentColumnId: Id<"kanbanColumns">;
   cardId: Id<"kanbanCards">;
-  // cardOrder intentionally omitted: order is computed server-side by moveCardToColumnEnd
+  boardId: Id<"kanbanBoards">;
 }
 
 export function MobileColumnPicker({
@@ -27,83 +29,83 @@ export function MobileColumnPicker({
   columns,
   currentColumnId,
   cardId,
-}: MobileColumnPickerProps) {
-  const moveCardToColumnEnd = useMutation(api.kanban.moveCardToColumnEnd);
-
-  const handleMove = async (columnId: Id<"kanbanColumns">) => {
-    if (columnId === currentColumnId) {
-      onClose();
-      return;
-    }
-    // Server computes correct end-of-column order; no need to pass a stale source order.
-    await moveCardToColumnEnd({ id: cardId, columnId });
-    onClose();
-  };
-
+  boardId,
+}: Props) {
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState("");
+  const { error } = useToast();
+  const move = useMutation(api.kanban.moveCardToColumnEnd).withOptimisticUpdate(
+    (store, args) => {
+      const query = { boardId };
+      const cards = store.getQuery(api.kanban.listCards, query);
+      if (!cards) return;
+      const order =
+        Math.max(
+          0,
+          ...cards
+            .filter((card) => card.columnId === args.columnId)
+            .map((card) => card.order),
+        ) + 1000;
+      store.setQuery(
+        api.kanban.listCards,
+        query,
+        cards.map((card) =>
+          card._id === cardId
+            ? { ...card, columnId: args.columnId, order }
+            : card,
+        ),
+      );
+    },
+  );
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/40 z-50"
-            onClick={onClose}
-          />
-
-          {/* Bottom sheet */}
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-background rounded-t-2xl border-t shadow-2xl pb-safe"
-          >
-            {/* Handle */}
-            <div className="flex justify-center pt-3 pb-1">
-              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
-            </div>
-
-            <div className="px-4 pb-2">
-              <h3 className="text-sm font-semibold text-center mb-4">
-                Move to column
-              </h3>
-
-              <div className="space-y-1">
-                {columns.map((col) => (
-                  <button
-                    key={col._id}
-                    onClick={() => handleMove(col._id)}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors",
-                      col._id === currentColumnId
-                        ? "bg-primary/10 text-primary"
-                        : "hover:bg-muted text-foreground"
-                    )}
-                  >
-                    {col.title}
-                    {col._id === currentColumnId && (
-                      <Check className="h-4 w-4 ml-auto text-primary" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Cancel button */}
-            <div className="px-4 pt-2 pb-6 border-t mt-2">
-              <button
-                onClick={onClose}
-                className="w-full py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+    <Dialog
+      open={open}
+      onOpenChange={(value) => {
+        if (!value && !pending) onClose();
+      }}
+    >
+      <DialogContent className="max-w-sm">
+        <DialogTitle className="flex items-center gap-2">
+          <MoveRight size={18} />
+          Move task
+        </DialogTitle>
+        <DialogDescription>
+          Choose a column. The task will be placed at the end.
+        </DialogDescription>
+        {message && (
+          <p role="alert" className="text-sm text-destructive">
+            {message}
+          </p>
+        )}
+        <div className="space-y-2">
+          {columns.map((column) => (
+            <Button
+              key={column._id}
+              variant={column._id === currentColumnId ? "secondary" : "outline"}
+              className="w-full justify-between"
+              disabled={pending || column._id === currentColumnId}
+              onClick={async () => {
+                setPending(true);
+                setMessage("");
+                try {
+                  await move({ id: cardId, columnId: column._id });
+                  onClose();
+                } catch (cause) {
+                  const text =
+                    cause instanceof Error ? cause.message : "Try again.";
+                  setMessage(text);
+                  error("Could not move task", text);
+                } finally {
+                  setPending(false);
+                }
+              }}
+            >
+              {column.title}
+              {column._id === currentColumnId && <Check size={14} />}
+            </Button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

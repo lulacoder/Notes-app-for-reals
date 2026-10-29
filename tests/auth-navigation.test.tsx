@@ -17,7 +17,7 @@ vi.mock("@convex-dev/better-auth/nextjs/client", () => ({ usePreloadedAuthQuery:
 vi.mock("convex/react", async (importOriginal) => ({
   ...await importOriginal<typeof import("convex/react")>(), useConvexAuth: () => state.auth,
 }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => "/notes" }));
 vi.mock("../lib/auth-client", () => ({ signOut: vi.fn() }));
 vi.mock("../lib/auth-redirects", async (importOriginal) => ({
   ...await importOriginal<typeof import("../lib/auth-redirects")>(), replaceAuthLocation: vi.fn(),

@@ -1,6 +1,7 @@
 "use client";
 
-import { Activity, useState } from "react";
+import { Activity, useEffect, useState } from "react";
+import { useWorkspaceNavigation } from "@/providers/workspace-navigation";
 import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
@@ -16,8 +17,12 @@ import { useNoteSummaries } from "@/lib/use-notes-queries";
 import { useNotesViewMode } from "@/lib/use-notes-view-mode";
 import { useQuickSwitcherShortcut } from "@/lib/use-quick-switcher-shortcut";
 
-const QuickSwitcher = dynamic(() => import("@/components/QuickSwitcher").then((module) => module.QuickSwitcher));
-const TrashView = dynamic(() => import("@/components/TrashView").then((module) => module.TrashView));
+const QuickSwitcher = dynamic(() =>
+  import("@/components/QuickSwitcher").then((module) => module.QuickSwitcher),
+);
+const TrashView = dynamic(() =>
+  import("@/components/TrashView").then((module) => module.TrashView),
+);
 const EMPTY: never[] = [];
 
 export function WorkspaceShell({ children }: { children: ReactNode }) {
@@ -30,14 +35,22 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   const [sidebarPath, setSidebarPath] = useState<string | null>(null);
   const [trashPath, setTrashPath] = useState<string | null>(null);
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
+  const { registerSearch } = useWorkspaceNavigation();
+  useEffect(
+    () => registerSearch(() => setShowQuickSwitcher(true)),
+    [registerSearch],
+  );
   useQuickSwitcherShortcut(setShowQuickSwitcher);
 
   const showSidebarMobile = sidebarPath === pathname;
   const showTrash = trashPath === pathname;
-  const selectedNoteId = pathname === "/notes" && viewMode === "list"
-    ? notes[0]?._id ?? null
-    : notes.find((note) => pathname === `/notes/${note._id}`)?._id ?? null;
-  const selectedCanvasId = canvases.find((canvas) => pathname === `/canvas/${canvas._id}`)?._id ?? null;
+  const selectedNoteId =
+    pathname === "/notes" && viewMode === "list"
+      ? (notes[0]?._id ?? null)
+      : (notes.find((note) => pathname === `/notes/${note._id}`)?._id ?? null);
+  const selectedCanvasId =
+    canvases.find((canvas) => pathname === `/canvas/${canvas._id}`)?._id ??
+    null;
   const createNote = useMutation(api.notes.createNote);
   const softDeleteNote = useMutation(api.notes.softDeleteNote);
   const togglePin = useMutation(api.notes.togglePin);
@@ -65,7 +78,8 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   function changeViewMode(mode: "list" | "grid") {
     setViewMode(mode);
     closePanels();
-    if (mode === "grid" || pathname.startsWith("/canvas")) router.push("/notes");
+    if (mode === "grid" || pathname.startsWith("/canvas"))
+      router.push("/notes");
   }
 
   function adjacentNote(direction: number) {
@@ -77,21 +91,45 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
 
   useKeyboardShortcuts({
     onNewNote: newNote,
-    onDeleteNote: selectedNoteId ? () => { void softDeleteNote({ id: selectedNoteId }); } : undefined,
-    onTogglePin: selectedNoteId ? () => { void togglePin({ id: selectedNoteId }); } : undefined,
-    onSearch: () => document.querySelector<HTMLInputElement>('input[placeholder="Search notes..."]')?.focus(),
-    onNextNote: pathname.startsWith("/notes") ? () => adjacentNote(1) : undefined,
-    onPrevNote: pathname.startsWith("/notes") ? () => adjacentNote(-1) : undefined,
+    onDeleteNote: selectedNoteId
+      ? () => {
+          void softDeleteNote({ id: selectedNoteId });
+        }
+      : undefined,
+    onTogglePin: selectedNoteId
+      ? () => {
+          void togglePin({ id: selectedNoteId });
+        }
+      : undefined,
+    onSearch: () =>
+      document
+        .querySelector<HTMLInputElement>('input[placeholder="Search notes..."]')
+        ?.focus(),
+    onNextNote: pathname.startsWith("/notes")
+      ? () => adjacentNote(1)
+      : undefined,
+    onPrevNote: pathname.startsWith("/notes")
+      ? () => adjacentNote(-1)
+      : undefined,
   });
 
   const { containerRef } = useSwipeGesture({
-    onSwipeLeft: () => { if (pathname.startsWith("/notes")) setSidebarPath(null); },
-    onSwipeRight: () => { if (pathname.startsWith("/notes")) setSidebarPath(pathname); },
+    onSwipeLeft: () => {
+      if (pathname.startsWith("/notes")) setSidebarPath(null);
+    },
+    onSwipeRight: () => {
+      if (pathname.startsWith("/notes")) setSidebarPath(pathname);
+    },
   });
 
   return (
-    <div ref={containerRef} className="flex flex-1 min-w-0 min-h-0 overflow-hidden relative h-full">
-      <div className={`absolute md:relative inset-y-0 left-0 z-30 h-full min-h-0 shrink-0 transition-transform duration-200 ${showSidebarMobile ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}>
+    <div
+      ref={containerRef}
+      className="flex flex-1 min-w-0 min-h-0 overflow-hidden relative h-full"
+    >
+      <div
+        className={`absolute md:relative inset-y-0 left-0 z-30 h-full min-h-0 shrink-0 transition-transform duration-200 ${showSidebarMobile ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
+      >
         <Sidebar
           {...data}
           selectedNoteId={selectedNoteId}
@@ -103,10 +141,21 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
           onViewModeChange={changeViewMode}
         />
       </div>
-      {showSidebarMobile && <button aria-label="Close sidebar" className="fixed inset-0 bg-black/50 z-20 md:hidden" onClick={() => setSidebarPath(null)} />}
+      {showSidebarMobile && (
+        <button
+          aria-label="Close sidebar"
+          className="fixed inset-0 bg-black/50 z-20 md:hidden"
+          onClick={() => setSidebarPath(null)}
+        />
+      )}
       <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         <Activity mode={showTrash ? "hidden" : "visible"}>{children}</Activity>
-        {showTrash && <TrashView onClose={() => setTrashPath(null)} onSelectNote={selectNote} />}
+        {showTrash && (
+          <TrashView
+            onClose={() => setTrashPath(null)}
+            onSelectNote={selectNote}
+          />
+        )}
       </div>
       <QuickSwitcher
         open={showQuickSwitcher}
@@ -116,13 +165,20 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         preloadedNotes={data.preloadedNotes}
         preloadedTags={data.preloadedTags}
       />
-      <MobileNav
-        onToggleSidebar={() => setSidebarPath(showSidebarMobile ? null : pathname)}
-        onNewNote={newNote}
-        onOpenTrash={openTrash}
-        onOpenSearch={() => setShowQuickSwitcher(true)}
-        onOpenCanvas={() => { closePanels(); router.push("/canvas"); }}
-      />
+      {pathname.startsWith("/notes") && (
+        <MobileNav
+          onToggleSidebar={() =>
+            setSidebarPath(showSidebarMobile ? null : pathname)
+          }
+          onNewNote={newNote}
+          onOpenTrash={openTrash}
+          onOpenSearch={() => setShowQuickSwitcher(true)}
+          onOpenCanvas={() => {
+            closePanels();
+            router.push("/canvas");
+          }}
+        />
+      )}
     </div>
   );
 }
