@@ -39,7 +39,7 @@ export function shapeBounds(shape: Shape): Bounds {
     const lines = shape.text.split("\n");
     return {
       x: shape.x,
-      y: shape.y,
+      y: shape.y - shape.fontSize,
       width:
         Math.max(1, ...lines.map((line) => line.length)) *
         shape.fontSize *
@@ -81,7 +81,7 @@ export function fitScene(
   const zoom = Math.min(
     2,
     Math.max(
-      0.1,
+      Number.EPSILON,
       Math.min(
         Math.max(1, width - padding * 2) / Math.max(1, b.width),
         Math.max(1, height - padding * 2) / Math.max(1, b.height),
@@ -113,20 +113,23 @@ export function translateShape(shape: Shape, dx: number, dy: number): Shape {
   return { ...shape, x: shape.x + dx, y: shape.y + dy };
 }
 
-export function resizeShape(shape: Shape, point: Point): Shape {
+export function resizeShape(shape: Shape, point: Point, start?: Point): Shape {
+  const b = shapeBounds(shape);
+  const dx = point.x - (start?.x ?? b.x + b.width);
+  const dy = point.y - (start?.y ?? b.y + b.height);
+  if (dx === 0 && dy === 0) return shape;
   if (shape.type === "circle")
     return {
       ...shape,
-      radius: Math.max(8, Math.hypot(point.x - shape.x, point.y - shape.y)),
+      radius: Math.max(8, Math.abs(shape.radius) + (dx + dy) / 2),
     };
   if ("width" in shape) {
-    const b = shapeBounds(shape);
     return {
       ...shape,
       x: b.x,
       y: b.y,
-      width: Math.max(35, point.x - b.x),
-      height: Math.max(30, point.y - b.y),
+      width: Math.max(35, b.width + dx),
+      height: Math.max(30, b.height + dy),
     };
   }
   return shape;

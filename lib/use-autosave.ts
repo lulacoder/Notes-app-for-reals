@@ -17,8 +17,10 @@ export function useAutosave<T>(
     value: T;
     save: (value: T) => Promise<void>;
     revision: number;
+    generation: number;
   } | null>(null);
   const revision = useRef(0);
+  const generation = useRef(0);
   const mounted = useRef(false);
   const queue = useRef(Promise.resolve());
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -34,19 +36,39 @@ export function useAutosave<T>(
     if (!pending) return;
     if (mounted.current) setStatus("saving");
     queue.current = queue.current.then(async () => {
+      if (pending.generation !== generation.current) return;
       try {
         await pending.save(pending.value);
-        if (mounted.current && revision.current === pending.revision)
+        if (
+          mounted.current &&
+          pending.generation === generation.current &&
+          revision.current === pending.revision
+        )
           setStatus("saved");
       } catch (error: unknown) {
         // Never replace an edit made while this request was in flight.
-        if (revision.current === pending.revision) {
+        if (
+          pending.generation === generation.current &&
+          revision.current === pending.revision
+        ) {
           pendingRef.current = pending;
           if (mounted.current) setStatus("error");
         }
         console.error("Failed to autosave document:", error);
       }
     });
+  }, []);
+
+  // Skip queued drafts and let an already submitted request settle before a replacement write.
+  const discardPending = useCallback(() => {
+    generation.current++;
+    revision.current++;
+    pendingRef.current = null;
+    if (idleTimerRef.current !== null) clearTimeout(idleTimerRef.current);
+    if (maxTimerRef.current !== null) clearTimeout(maxTimerRef.current);
+    idleTimerRef.current = null;
+    maxTimerRef.current = null;
+    return queue.current;
   }, []);
 
   useEffect(() => {
@@ -58,7 +80,12 @@ export function useAutosave<T>(
       return;
     }
     const current = ++revision.current;
-    pendingRef.current = { value, save, revision: current };
+    pendingRef.current = {
+      value,
+      save,
+      revision: current,
+      generation: generation.current,
+    };
     queueMicrotask(() => {
       if (mounted.current && revision.current === current) setStatus("pending");
     });
@@ -85,5 +112,5 @@ export function useAutosave<T>(
     };
   }, [flush]);
 
-  return { status, retry: flush, flush };
+  return { status, retry: flush, flush, discardPending };
 }

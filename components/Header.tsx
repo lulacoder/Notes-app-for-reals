@@ -1,10 +1,20 @@
 "use client";
 
-import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
-
-import { useConvexAuth, type Preloaded } from "convex/react";
-
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+
+import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
+import { useConvexAuth, type Preloaded } from "convex/react";
+import {
+  LogOut,
+  Keyboard,
+  Download,
+  Command,
+  ShieldCheck,
+  Trash2,
+} from "lucide-react";
+
 import { api } from "@/convex/_generated/api";
 import { signOut } from "@/lib/auth-client";
 import { getAuthHref, replaceAuthLocation } from "@/lib/auth-redirects";
@@ -21,17 +31,8 @@ import {
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ShortcutHints } from "@/components/KeyboardShortcuts";
 import { usePWAInstall } from "@/components/MobileNav";
-import {
-  LogOut,
-  Keyboard,
-  Download,
-  Command,
-  ShieldCheck,
-  Trash2,
-} from "lucide-react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
 import { Brand } from "@/components/marketing/Brand";
+import { cn } from "@/lib/utils";
 import { useWorkspaceNavigation } from "@/providers/workspace-navigation";
 import {
   Popover,
@@ -128,7 +129,12 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
               key={item.href}
               href={item.href}
               aria-current={pathname.startsWith(item.href) ? "page" : undefined}
-              className={`rounded-md px-2.5 py-1.5 transition-colors sm:px-4 ${pathname.startsWith(item.href) ? "bg-background text-primary shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+              className={cn(
+                "rounded-md px-2.5 py-1.5 transition-colors sm:px-4",
+                pathname.startsWith(item.href)
+                  ? "bg-background text-primary shadow-sm font-medium"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
             >
               {item.label}
             </Link>

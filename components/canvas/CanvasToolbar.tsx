@@ -1,16 +1,5 @@
 "use client";
 
-import type { Tool } from "@/lib/canvas/model";
-import type { SaveState } from "@/lib/use-autosave";
-import { Button } from "@/components/ui/button";
-import { SaveStatus } from "@/components/SaveStatus";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Circle,
   Download,
@@ -31,7 +20,19 @@ import {
   Undo2,
 } from "lucide-react";
 
-interface Props {
+import type { Tool } from "@/lib/canvas/model";
+import type { SaveState } from "@/lib/use-autosave";
+import { Button } from "@/components/ui/button";
+import { SaveStatus } from "@/components/SaveStatus";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+interface CanvasToolbarProps {
   tool: Tool;
   onTool: (tool: Tool) => void;
   onNotes: () => void;
@@ -46,7 +47,7 @@ interface Props {
   retry: () => void;
 }
 
-export function CanvasToolbar(props: Props) {
+export function CanvasToolbar(props: CanvasToolbarProps) {
   return (
     <div
       role="toolbar"

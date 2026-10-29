@@ -1,16 +1,12 @@
 "use client";
 
-import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
-
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
+
+import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
 import type { Preloaded } from "convex/react";
 import { useConvexAuth, useMutation } from "convex/react";
-import { useRouter } from "next/navigation";
-import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
-import dynamic from "next/dynamic";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   ArrowLeft,
   Layers,
@@ -21,6 +17,11 @@ import {
   Check,
   X,
 } from "lucide-react";
+
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -60,30 +61,33 @@ export function CanvasEditorPageClient({
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
-  const [pending, setPending] = useState(false);
-  const running = useRef(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const pending = pendingCount > 0;
+  const metadataQueue = useRef(Promise.resolve());
   const { error, success } = useToast();
   async function saveMetadata(
     action: () => Promise<unknown>,
     done?: () => void,
   ) {
-    if (running.current) return;
-    running.current = true;
-    setPending(true);
-    try {
-      await action();
-      done?.();
-    } catch (cause) {
-      error(
-        "Could not update canvas",
-        cause instanceof Error
-          ? cause.message
-          : "Try again. Your changes are still here.",
-      );
-    } finally {
-      running.current = false;
-      setPending(false);
-    }
+    setPendingCount((count) => count + 1);
+    const request = metadataQueue.current.then(async () => {
+      try {
+        await action();
+        done?.();
+      } catch (cause) {
+        console.error("Failed to update canvas metadata:", cause);
+        error(
+          "Could not update canvas",
+          cause instanceof Error
+            ? cause.message
+            : "Try again. Your changes are still here.",
+        );
+      } finally {
+        setPendingCount((count) => count - 1);
+      }
+    });
+    metadataQueue.current = request;
+    await request;
   }
 
   const canvas = usePreloadedAuthQuery(preloadedCanvas);
@@ -172,6 +176,8 @@ export function CanvasEditorPageClient({
           {isEditingTitle ? (
             <div className="flex items-center gap-2 flex-1">
               <Input
+                disabled={pending}
+                aria-label="Canvas title"
                 value={editedTitle}
                 onChange={(e) => setEditedTitle(e.target.value)}
                 onKeyDown={(e) => {
@@ -194,6 +200,7 @@ export function CanvasEditorPageClient({
                 size="icon"
                 variant="ghost"
                 aria-label="Cancel title edit"
+                disabled={pending}
                 onClick={handleCancelEdit}
               >
                 <X className="h-4 w-4" />
@@ -201,6 +208,7 @@ export function CanvasEditorPageClient({
             </div>
           ) : (
             <button
+              disabled={pending}
               onClick={() => setIsEditingTitle(true)}
               className="font-medium truncate hover:text-primary transition-colors flex items-center gap-2 group"
             >
@@ -215,24 +223,31 @@ export function CanvasEditorPageClient({
         </div>
 
         <TagAssigner
+          disabled={pending}
           selectedTagIds={canvas.tagIds || []}
           onUpdateTags={handleUpdateTags}
         />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="Canvas options">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Canvas options"
+              disabled={pending}
+            >
               <MoreHorizontal className="h-5 w-5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={handleTogglePin}>
+            <DropdownMenuItem onClick={handleTogglePin} disabled={pending}>
               <Pin className="h-4 w-4 mr-2" />
               {canvas.isPinned ? "Unpin" : "Pin"} Canvas
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={handleDelete}
+              disabled={pending}
               className="text-destructive focus:text-destructive"
             >
               <Trash2 className="h-4 w-4 mr-2" />

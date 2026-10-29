@@ -1,12 +1,14 @@
 "use client";
 
 import { Activity, useEffect, useState } from "react";
-import { useWorkspaceNavigation } from "@/providers/workspace-navigation";
 import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
+
 import { useMutation } from "convex/react";
 import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
+
+import { useWorkspaceNavigation } from "@/providers/workspace-navigation";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Sidebar } from "@/components/Sidebar";

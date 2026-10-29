@@ -1,7 +1,19 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+
 import { useMutation } from "convex/react";
+import {
+  Calendar,
+  Check,
+  Loader2,
+  MoveRight,
+  Tag,
+  Trash2,
+  X,
+} from "lucide-react";
+import { format } from "date-fns";
+
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import {
@@ -21,20 +33,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Calendar,
-  Check,
-  Loader2,
-  MoveRight,
-  Tag,
-  Trash2,
-  X,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
 import { useToast } from "@/components/ui/toast-notification";
 
-interface Props {
+interface KanbanCardModalProps {
   card: Doc<"kanbanCards">;
   columns: Doc<"kanbanColumns">[];
   tags: Doc<"tags">[];
@@ -42,7 +44,13 @@ interface Props {
   onClose: () => void;
 }
 
-export function KanbanCardModal({ card, columns, tags, open, onClose }: Props) {
+export function KanbanCardModal({
+  card,
+  columns,
+  tags,
+  open,
+  onClose,
+}: KanbanCardModalProps) {
   const id = useId();
   const [title, setTitle] = useState(card.title);
   const [description, setDescription] = useState(card.description ?? "");
@@ -96,6 +104,7 @@ export function KanbanCardModal({ card, columns, tags, open, onClose }: Props) {
       await run();
       onClose();
     } catch (cause) {
+      console.error("Failed KanbanCardModal action:", cause);
       setMessage(
         cause instanceof Error
           ? cause.message

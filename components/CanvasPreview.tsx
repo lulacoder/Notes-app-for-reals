@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+
 import { useTheme } from "next-themes";
+
 import { readShapes } from "@/lib/canvas/model";
 import { fitScene } from "@/lib/canvas/geometry";
 import { renderScene } from "@/lib/canvas/render";

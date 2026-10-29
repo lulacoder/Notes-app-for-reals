@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+
 import type { Shape } from "@/lib/canvas/model";
 
 export function useCanvasHistory(initial: Shape[]) {

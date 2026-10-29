@@ -9,8 +9,23 @@ import {
   type PointerEvent,
 } from "react";
 import { useRouter } from "next/navigation";
+
 import { useTheme } from "next-themes";
 import { useConvex, useConvexAuth, useMutation, useQuery } from "convex/react";
+import {
+  Copy,
+  ExternalLink,
+  FileText,
+  GitBranch,
+  Maximize,
+  Pencil,
+  Plus,
+  StickyNote,
+  Trash2,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
+
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { api } from "@/convex/_generated/api";
 import { useAutosave } from "@/lib/use-autosave";
@@ -38,6 +53,7 @@ import {
 } from "@/lib/canvas/geometry";
 import { renderScene } from "@/lib/canvas/render";
 import { stripHtmlToText } from "@/lib/html-utils";
+import { cn } from "@/lib/utils";
 import { CanvasToolbar } from "@/components/canvas/CanvasToolbar";
 import { SaveStatus } from "@/components/SaveStatus";
 import { Button } from "@/components/ui/button";
@@ -58,19 +74,6 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/toast-notification";
-import {
-  Copy,
-  ExternalLink,
-  FileText,
-  GitBranch,
-  Maximize,
-  Pencil,
-  Plus,
-  StickyNote,
-  Trash2,
-  ZoomIn,
-  ZoomOut,
-} from "lucide-react";
 
 type Interaction =
   | { kind: "move" | "resize"; id: string; start: Point; base: Shape[] }
@@ -115,7 +118,9 @@ export function CanvasEditor({
                 : null,
           };
       }
-    } catch {}
+    } catch (cause) {
+      console.error("Could not access canvas draft storage:", cause);
+    }
     return { shapes: saved, baseline, recovered: false, conflict: null };
   });
   const history = useCanvasHistory(initial.shapes);
@@ -142,6 +147,8 @@ export function CanvasEditor({
   const [loadingNote, setLoadingNote] = useState(false);
   const [stickyColor, setStickyColor] = useState(0);
   const [remote, setRemote] = useState<Shape[] | null>(initial.conflict);
+  const [loadingSaved, setLoadingSaved] = useState(false);
+  const loadingSavedRef = useRef(false);
   const [recovered, setRecovered] = useState(initial.recovered);
   const lastSaved = useRef(initial.baseline),
     lastSubmitted = useRef(initial.baseline);
@@ -183,7 +190,9 @@ export function CanvasEditor({
           )
             sessionStorage.removeItem(`noteworthy:canvas-draft:${canvasId}`);
         }
-      } catch {}
+      } catch (cause) {
+        console.error("Could not access canvas draft storage:", cause);
+      }
     },
     [canvasId, update],
   );
@@ -202,10 +211,13 @@ export function CanvasEditor({
           JSON.stringify({ base: lastSaved.current, content }),
         );
       else sessionStorage.removeItem(storageKey);
-    } catch {}
+    } catch (cause) {
+      console.error("Could not access canvas draft storage:", cause);
+    }
   }, [shapes, storageKey]);
 
   useEffect(() => {
+    if (loadingSavedRef.current) return;
     const incoming = readShapes(initialCanvas.content),
       content = serializeShapes(incoming);
     if (content === lastSaved.current || content === lastSubmitted.current)
@@ -219,6 +231,39 @@ export function CanvasEditor({
       queueMicrotask(() => setRemote(incoming));
     }
   }, [initialCanvas.content, current, reset]);
+
+  async function loadSavedVersion() {
+    if (!remote || loadingSavedRef.current) return;
+    const chosen = remote;
+    const content = serializeShapes(chosen);
+    loadingSavedRef.current = true;
+    setLoadingSaved(true);
+    try {
+      await autosave.discardPending();
+      // A request already in flight may have overwritten this version. Restore it last.
+      await update({ id: canvasId, content });
+      lastSaved.current = content;
+      lastSubmitted.current = content;
+      remoteRef.current = null;
+      reset(chosen);
+      setRemote(null);
+      setRecovered(false);
+      try {
+        sessionStorage.removeItem(storageKey);
+      } catch (cause) {
+        console.error("Failed to remove discarded canvas draft:", cause);
+      }
+    } catch (cause) {
+      console.error("Failed to load saved canvas version:", cause);
+      showError(
+        "Could not load the saved version",
+        "Your draft is still here. Try again.",
+      );
+    } finally {
+      loadingSavedRef.current = false;
+      setLoadingSaved(false);
+    }
+  }
 
   useEffect(() => {
     function warn(event: BeforeUnloadEvent) {
@@ -477,7 +522,7 @@ export function CanvasEditor({
       active.base.map((shape) =>
         shape.id === active.id
           ? active.kind === "resize"
-            ? resizeShape(shape, point)
+            ? resizeShape(shape, point, active.start)
             : translateShape(
                 shape,
                 point.x - active.start.x,
@@ -640,6 +685,7 @@ export function CanvasEditor({
                 ...common,
                 ...point,
                 type: "text",
+                y: point.y + 22,
                 text: text.trim(),
                 fontSize: 22,
               };
@@ -678,6 +724,7 @@ export function CanvasEditor({
       setNotesOpen(false);
       setTool("select");
     } catch (cause) {
+      console.error("Failed to embed note:", cause);
       showError(
         "Could not embed note",
         cause instanceof Error ? cause.message : "Try again.",
@@ -806,7 +853,11 @@ export function CanvasEditor({
   const canResize =
     selected && ("width" in selected || selected.type === "circle");
   return (
-    <div className="absolute inset-0 flex min-h-0 min-w-0 flex-col bg-background">
+    <div
+      className="absolute inset-0 flex min-h-0 min-w-0 flex-col bg-background"
+      inert={loadingSaved}
+      aria-busy={loadingSaved}
+    >
       <CanvasToolbar
         tool={tool}
         onTool={setTool}
@@ -839,7 +890,11 @@ export function CanvasEditor({
           role="alert"
           className="flex flex-wrap items-center gap-2 border-b bg-amber-500/10 p-3 text-xs"
         >
-          <span>This canvas changed in another tab. Your draft is kept.</span>
+          <span role="status">
+            {loadingSaved
+              ? "Loading the saved version..."
+              : "This canvas changed in another tab. Your draft is kept."}
+          </span>
           <Button
             size="sm"
             variant="outline"
@@ -854,15 +909,7 @@ export function CanvasEditor({
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => {
-              const content = serializeShapes(remote);
-              lastSaved.current = content;
-              lastSubmitted.current = content;
-              remoteRef.current = null;
-              reset(remote);
-              setRemote(null);
-              sessionStorage.removeItem(storageKey);
-            }}
+            onClick={() => void loadSavedVersion()}
           >
             Load saved version
           </Button>
@@ -945,7 +992,12 @@ export function CanvasEditor({
                   key={color.bg}
                   aria-label={`Sticky color ${index + 1}`}
                   aria-pressed={selected.colorIndex === index}
-                  className={`h-6 w-6 shrink-0 rounded-full border-2 ${selected.colorIndex === index ? "border-primary" : "border-transparent"}`}
+                  className={cn(
+                    "h-6 w-6 shrink-0 rounded-full border-2",
+                    selected.colorIndex === index
+                      ? "border-primary"
+                      : "border-transparent",
+                  )}
                   style={{ background: color.bg }}
                   onClick={() => {
                     setStickyColor(index);

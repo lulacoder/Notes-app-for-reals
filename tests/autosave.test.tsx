@@ -1,24 +1,46 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import { useAutosave } from "../lib/use-autosave";
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let root: Root;
+let container: HTMLDivElement;
 
-function Editor({ value, save, enabled = true }: {
+function Editor({
+  value,
+  save,
+  enabled = true,
+  onDiscard,
+}: {
   value: string;
   save: (value: string) => Promise<void>;
   enabled?: boolean;
+  onDiscard?: () => Promise<void>;
 }) {
-  useAutosave(value, save, enabled);
-  return null;
+  const autosave = useAutosave(value, save, enabled);
+  return (
+    <>
+      <span>{autosave.status}</span>
+      <button
+        onClick={async () => {
+          await autosave.discardPending();
+          await onDiscard?.();
+        }}
+      >
+        Discard drafts
+      </button>
+    </>
+  );
 }
 
 beforeEach(() => {
   vi.useFakeTimers();
-  root = createRoot(document.createElement("div"));
+  container = document.createElement("div");
+  root = createRoot(container);
 });
 
 afterEach(async () => {
@@ -29,42 +51,68 @@ afterEach(async () => {
 
 describe("editor autosave", () => {
   it("combines short pauses and submits only the latest edit after two seconds", async () => {
-    const save = vi.fn<(value: string) => Promise<void>>().mockResolvedValue(undefined);
+    const save = vi
+      .fn<(value: string) => Promise<void>>()
+      .mockResolvedValue(undefined);
     await act(async () => root.render(<Editor value="first" save={save} />));
-    await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
     await act(async () => root.render(<Editor value="second" save={save} />));
-    await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
     expect(save).not.toHaveBeenCalled();
-    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
     expect(save.mock.calls).toEqual([["second"]]);
-    await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000);
+    });
     expect(save).toHaveBeenCalledTimes(1);
   });
 
   it("saves every ten seconds during continuous edits and resets the deadline", async () => {
-    const save = vi.fn<(value: string) => Promise<void>>().mockResolvedValue(undefined);
+    const save = vi
+      .fn<(value: string) => Promise<void>>()
+      .mockResolvedValue(undefined);
     await act(async () => root.render(<Editor value="0" save={save} />));
     for (let second = 1; second < 20; second++) {
-      await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
-      await act(async () => root.render(<Editor value={String(second)} save={save} />));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      await act(async () =>
+        root.render(<Editor value={String(second)} save={save} />),
+      );
     }
     expect(save.mock.calls).toEqual([["9"]]);
-    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
     expect(save.mock.calls).toEqual([["9"], ["19"]]);
   });
 
   it("submits pending edits on unmount and cancels the remaining timers", async () => {
-    const save = vi.fn<(value: string) => Promise<void>>().mockResolvedValue(undefined);
+    const save = vi
+      .fn<(value: string) => Promise<void>>()
+      .mockResolvedValue(undefined);
     await act(async () => root.render(<Editor value="latest" save={save} />));
     await act(async () => root.render(null));
     expect(save.mock.calls).toEqual([["latest"]]);
-    await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000);
+    });
     expect(save).toHaveBeenCalledTimes(1);
   });
 
   it("flushes a hidden tab once even if pagehide also fires", async () => {
-    const save = vi.fn<(value: string) => Promise<void>>().mockResolvedValue(undefined);
-    await act(async () => root.render(<Editor value="hidden edit" save={save} />));
+    const save = vi
+      .fn<(value: string) => Promise<void>>()
+      .mockResolvedValue(undefined);
+    await act(async () =>
+      root.render(<Editor value="hidden edit" save={save} />),
+    );
     vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
     await act(async () => {
       document.dispatchEvent(new Event("visibilitychange"));
@@ -75,55 +123,168 @@ describe("editor autosave", () => {
   });
 
   it("keeps pending saves attached to the document being left", async () => {
-    const first = vi.fn<(value: string) => Promise<void>>().mockResolvedValue(undefined);
-    const second = vi.fn<(value: string) => Promise<void>>().mockResolvedValue(undefined);
-    await act(async () => root.render(<Editor key="first" value="first edit" save={first} />));
-    await act(async () => root.render(<Editor key="second" value="second edit" save={second} />));
+    const first = vi
+      .fn<(value: string) => Promise<void>>()
+      .mockResolvedValue(undefined);
+    const second = vi
+      .fn<(value: string) => Promise<void>>()
+      .mockResolvedValue(undefined);
+    await act(async () =>
+      root.render(<Editor key="first" value="first edit" save={first} />),
+    );
+    await act(async () =>
+      root.render(<Editor key="second" value="second edit" save={second} />),
+    );
     expect(first.mock.calls).toEqual([["first edit"]]);
     expect(second).not.toHaveBeenCalled();
-    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
     expect(second.mock.calls).toEqual([["second edit"]]);
   });
 
   it("does not submit an empty draft while document data is loading", async () => {
-    const save = vi.fn<(value: string) => Promise<void>>().mockResolvedValue(undefined);
-    await act(async () => root.render(<Editor value="" save={save} enabled={false} />));
-    await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+    const save = vi
+      .fn<(value: string) => Promise<void>>()
+      .mockResolvedValue(undefined);
+    await act(async () =>
+      root.render(<Editor value="" save={save} enabled={false} />),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10000);
+    });
     await act(async () => root.render(null));
     expect(save).not.toHaveBeenCalled();
   });
 
   it("handles rejected saves without an unhandled promise rejection", async () => {
     const failure = new Error("Not authenticated");
-    const save = vi.fn<(value: string) => Promise<void>>().mockRejectedValue(failure);
+    const save = vi
+      .fn<(value: string) => Promise<void>>()
+      .mockRejectedValue(failure);
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     await act(async () => root.render(<Editor value="edit" save={save} />));
-    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
     expect(error).toHaveBeenCalledWith("Failed to autosave document:", failure);
   });
 
   it("keeps a failed draft and retries it when connectivity returns", async () => {
-    const save = vi.fn<(value: string) => Promise<void>>()
+    const save = vi
+      .fn<(value: string) => Promise<void>>()
       .mockRejectedValueOnce(new Error("offline"))
       .mockResolvedValue(undefined);
     vi.spyOn(console, "error").mockImplementation(() => {});
     await act(async () => root.render(<Editor value="keep me" save={save} />));
-    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
-    await act(async () => { window.dispatchEvent(new Event("online")); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
     expect(save.mock.calls).toEqual([["keep me"], ["keep me"]]);
   });
 
   it("serializes writes so an older slow save cannot overwrite a newer edit", async () => {
     let finish: (() => void) | undefined;
-    const save = vi.fn<(value: string) => Promise<void>>()
-      .mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }))
+    const save = vi
+      .fn<(value: string) => Promise<void>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+      )
       .mockResolvedValue(undefined);
     await act(async () => root.render(<Editor value="old" save={save} />));
-    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
     await act(async () => root.render(<Editor value="new" save={save} />));
-    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
     expect(save.mock.calls).toEqual([["old"]]);
-    await act(async () => { finish?.(); });
+    await act(async () => {
+      finish?.();
+    });
     expect(save.mock.calls).toEqual([["old"], ["new"]]);
+  });
+
+  it("discards queued and pending drafts before restoring the chosen version after an in-flight write", async () => {
+    let finish = () => {};
+    const save = vi
+      .fn<(value: string) => Promise<void>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+      )
+      .mockResolvedValue(undefined);
+    const restore = () => save("chosen saved version");
+    await act(async () =>
+      root.render(<Editor value="in flight" save={save} onDiscard={restore} />),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    await act(async () =>
+      root.render(
+        <Editor value="queued draft" save={save} onDiscard={restore} />,
+      ),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    await act(async () =>
+      root.render(
+        <Editor value="pending draft" save={save} onDiscard={restore} />,
+      ),
+    );
+    await act(async () => {
+      container.querySelector("button")?.click();
+    });
+    expect(save.mock.calls).toEqual([["in flight"]]);
+    await act(async () => {
+      finish();
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      window.dispatchEvent(new Event("pagehide"));
+      await vi.advanceTimersByTimeAsync(10000);
+    });
+    expect(save.mock.calls).toEqual([["in flight"], ["chosen saved version"]]);
+  });
+
+  it("does not resurrect a discarded draft when an older request rejects", async () => {
+    let reject: (error: Error) => void = () => {};
+    const save = vi
+      .fn<(value: string) => Promise<void>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((_resolve, fail) => {
+            reject = fail;
+          }),
+      );
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await act(async () =>
+      root.render(<Editor value="discard me" save={save} />),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    await act(async () => {
+      container.querySelector("button")?.click();
+    });
+    await act(async () => {
+      reject(new Error("late failure"));
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(container.textContent).not.toContain("error");
   });
 });

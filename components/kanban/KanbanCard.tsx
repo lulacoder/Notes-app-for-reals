@@ -1,21 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import type { Doc } from "@/convex/_generated/dataModel";
+
 import { Draggable } from "@hello-pangea/dnd";
-import { KanbanCardModal } from "./KanbanCardModal";
-import { MobileColumnPicker } from "./MobileColumnPicker";
 import { ArrowRightLeft, Calendar, GripVertical } from "lucide-react";
 import { format, isBefore, startOfDay } from "date-fns";
+
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { stripHtmlToText } from "@/lib/html-utils";
 
-interface Props {
+import { KanbanCardModal } from "./KanbanCardModal";
+
+interface KanbanCardProps {
   card: Doc<"kanbanCards">;
   index: number;
   tags: Doc<"tags">[];
   columns: Doc<"kanbanColumns">[];
   dragDisabled: boolean;
+  onMoveCard: (id: Id<"kanbanCards">) => void;
 }
 
 export function KanbanCard({
@@ -24,9 +27,9 @@ export function KanbanCard({
   tags,
   columns,
   dragDisabled,
-}: Props) {
+  onMoveCard,
+}: KanbanCardProps) {
   const [open, setOpen] = useState(false);
-  const [moving, setMoving] = useState(false);
   const cardTags = tags.filter((tag) => card.tagIds?.includes(tag._id));
   return (
     <>
@@ -97,7 +100,7 @@ export function KanbanCard({
                 <GripVertical size={13} />
               </button>
               <button
-                onClick={() => setMoving(true)}
+                onClick={() => onMoveCard(card._id)}
                 className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
                 aria-label={`Move ${card.title}`}
               >
@@ -118,14 +121,6 @@ export function KanbanCard({
           onClose={() => setOpen(false)}
         />
       )}
-      <MobileColumnPicker
-        open={moving}
-        onClose={() => setMoving(false)}
-        columns={columns}
-        currentColumnId={card.columnId}
-        cardId={card._id}
-        boardId={card.boardId}
-      />
     </>
   );
 }

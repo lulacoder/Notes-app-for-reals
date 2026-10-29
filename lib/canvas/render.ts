@@ -113,6 +113,7 @@ export function renderScene(
         break;
       }
       case "text":
+        ctx.textBaseline = "alphabetic";
         ctx.fillStyle = ctx.strokeStyle;
         ctx.font = `${shape.fontSize}px sans-serif`;
         text(

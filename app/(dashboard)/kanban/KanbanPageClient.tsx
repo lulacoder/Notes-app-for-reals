@@ -3,8 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+
 import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
 import { useMutation, type Preloaded } from "convex/react";
+import { ArrowLeft, LayoutDashboard, PanelLeftOpen, Plus } from "lucide-react";
+
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
@@ -17,9 +20,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast-notification";
-import { ArrowLeft, LayoutDashboard, PanelLeftOpen, Plus } from "lucide-react";
 
-interface Props {
+interface KanbanPageClientProps {
   preloadedBoards: Preloaded<typeof api.kanban.listBoards>;
   preloadedTags: Preloaded<typeof api.tags.listTags>;
   initialBoardData: {
@@ -33,7 +35,7 @@ export function KanbanPageClient({
   preloadedBoards,
   preloadedTags,
   initialBoardData,
-}: Props) {
+}: KanbanPageClientProps) {
   const boards = usePreloadedAuthQuery(preloadedBoards) ?? [];
   const tags = usePreloadedAuthQuery(preloadedTags) ?? [];
   const params = useSearchParams();
@@ -55,6 +57,7 @@ export function KanbanPageClient({
       const id = await createBoard({ title: "New board" });
       select(id);
     } catch (cause) {
+      console.error("Failed KanbanPageClient action:", cause);
       error(
         "Could not create board",
         cause instanceof Error ? cause.message : "Try again.",

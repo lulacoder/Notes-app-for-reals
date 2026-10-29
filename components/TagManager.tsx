@@ -1,9 +1,12 @@
 "use client";
 
 import { useState } from "react";
+
 import { useQuery, useMutation } from "convex/react";
+import { Plus, Tag, X, MoreHorizontal, Trash2 } from "lucide-react";
+
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -18,7 +21,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, Tag, X, MoreHorizontal, Trash2 } from "lucide-react";
 
 const TAG_COLORS = [
   { name: "Red", value: "bg-red-500" },
@@ -59,8 +61,14 @@ export function TagManager({ noteId, noteTagIds }: TagManagerProps) {
   const handleCreateTag = async () => {
     if (!newTagName.trim()) return;
     try {
-      const tagId = await createTag({ name: newTagName.trim(), color: selectedColor });
-      await updateNoteTags({ id: noteId, tagIds: [...(noteTagIds || []), tagId] });
+      const tagId = await createTag({
+        name: newTagName.trim(),
+        color: selectedColor,
+      });
+      await updateNoteTags({
+        id: noteId,
+        tagIds: [...(noteTagIds || []), tagId],
+      });
       setNewTagName("");
     } catch (error) {
       console.error("Failed to create tag:", error);
@@ -68,7 +76,10 @@ export function TagManager({ noteId, noteTagIds }: TagManagerProps) {
   };
 
   const handleAddTag = async (tagId: Id<"tags">) => {
-    await updateNoteTags({ id: noteId, tagIds: [...(noteTagIds || []), tagId] });
+    await updateNoteTags({
+      id: noteId,
+      tagIds: [...(noteTagIds || []), tagId],
+    });
   };
 
   const handleRemoveTag = async (tagId: Id<"tags">) => {
@@ -100,7 +111,9 @@ export function TagManager({ noteId, noteTagIds }: TagManagerProps) {
           {/* Current tags */}
           {noteTags.length > 0 && (
             <div className="space-y-1.5">
-              <div className="text-xs font-medium text-muted-foreground">Current tags</div>
+              <div className="text-xs font-medium text-muted-foreground">
+                Current tags
+              </div>
               <div className="flex flex-wrap gap-1.5">
                 {noteTags.map((tag) => (
                   <Badge
@@ -125,7 +138,9 @@ export function TagManager({ noteId, noteTagIds }: TagManagerProps) {
           {/* Available tags */}
           {availableTags.length > 0 && (
             <div className="space-y-1.5">
-              <div className="text-xs font-medium text-muted-foreground">Add tags</div>
+              <div className="text-xs font-medium text-muted-foreground">
+                Add tags
+              </div>
               <div className="flex flex-wrap gap-1.5">
                 {availableTags.map((tag) => (
                   <div key={tag._id} className="group relative">
@@ -161,7 +176,9 @@ export function TagManager({ noteId, noteTagIds }: TagManagerProps) {
 
           {/* Create new tag */}
           <div className="space-y-2 pt-2 border-t">
-            <div className="text-xs font-medium text-muted-foreground">Create new tag</div>
+            <div className="text-xs font-medium text-muted-foreground">
+              Create new tag
+            </div>
             <div className="flex gap-2">
               <Input
                 placeholder="Tag name"
@@ -170,7 +187,11 @@ export function TagManager({ noteId, noteTagIds }: TagManagerProps) {
                 className="h-8 text-sm"
                 onKeyDown={(e) => e.key === "Enter" && handleCreateTag()}
               />
-              <Button size="sm" onClick={handleCreateTag} disabled={!newTagName.trim()}>
+              <Button
+                size="sm"
+                onClick={handleCreateTag}
+                disabled={!newTagName.trim()}
+              >
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -179,7 +200,9 @@ export function TagManager({ noteId, noteTagIds }: TagManagerProps) {
                 <button
                   key={color.value}
                   className={`w-5 h-5 rounded-full ${color.value} ${
-                    selectedColor === color.value ? "ring-2 ring-offset-2 ring-primary" : ""
+                    selectedColor === color.value
+                      ? "ring-2 ring-offset-2 ring-primary"
+                      : ""
                   }`}
                   onClick={() => setSelectedColor(color.value)}
                   title={color.name}
@@ -204,7 +227,11 @@ interface TagFilterProps {
   }>;
 }
 
-export function TagFilter({ selectedTagId, onSelectTag, tags: providedTags }: TagFilterProps) {
+export function TagFilter({
+  selectedTagId,
+  onSelectTag,
+  tags: providedTags,
+}: TagFilterProps) {
   const queriedTags =
     useQuery(api.tags.listTags, providedTags ? "skip" : undefined) || [];
   const tags = providedTags ?? queriedTags;
@@ -237,11 +264,16 @@ export function TagFilter({ selectedTagId, onSelectTag, tags: providedTags }: Ta
 
 // Simple tag assigner for NoteEditor toolbar
 interface TagAssignerProps {
+  disabled?: boolean;
   selectedTagIds: Id<"tags">[];
   onUpdateTags: (tagIds: Id<"tags">[]) => void;
 }
 
-export function TagAssigner({ selectedTagIds, onUpdateTags }: TagAssignerProps) {
+export function TagAssigner({
+  selectedTagIds,
+  onUpdateTags,
+  disabled = false,
+}: TagAssignerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [selectedColor, setSelectedColor] = useState(TAG_COLORS[10].value);
@@ -250,6 +282,7 @@ export function TagAssigner({ selectedTagIds, onUpdateTags }: TagAssignerProps) 
   const createTag = useMutation(api.tags.createTag);
 
   const handleToggleTag = (tagId: Id<"tags">) => {
+    if (disabled) return;
     if (selectedTagIds.includes(tagId)) {
       onUpdateTags(selectedTagIds.filter((id) => id !== tagId));
     } else {
@@ -258,9 +291,12 @@ export function TagAssigner({ selectedTagIds, onUpdateTags }: TagAssignerProps) 
   };
 
   const handleCreateTag = async () => {
-    if (!newTagName.trim()) return;
+    if (disabled || !newTagName.trim()) return;
     try {
-      const tagId = await createTag({ name: newTagName.trim(), color: selectedColor });
+      const tagId = await createTag({
+        name: newTagName.trim(),
+        color: selectedColor,
+      });
       onUpdateTags([...selectedTagIds, tagId]);
       setNewTagName("");
     } catch (error) {
@@ -269,13 +305,14 @@ export function TagAssigner({ selectedTagIds, onUpdateTags }: TagAssignerProps) 
   };
 
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
+    <Popover open={isOpen && !disabled} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
           size="sm"
           className="h-8 w-8 p-0 text-muted-foreground"
           title="Manage tags"
+          disabled={disabled}
         >
           <Tag className="h-4 w-4" />
         </Button>
@@ -288,7 +325,9 @@ export function TagAssigner({ selectedTagIds, onUpdateTags }: TagAssignerProps) 
               {tags.map((tag) => (
                 <Badge
                   key={tag._id}
-                  variant={selectedTagIds.includes(tag._id) ? "default" : "outline"}
+                  variant={
+                    selectedTagIds.includes(tag._id) ? "default" : "outline"
+                  }
                   className="cursor-pointer gap-1"
                   onClick={() => handleToggleTag(tag._id)}
                 >
@@ -311,7 +350,11 @@ export function TagAssigner({ selectedTagIds, onUpdateTags }: TagAssignerProps) 
                 className="h-8 text-sm"
                 onKeyDown={(e) => e.key === "Enter" && handleCreateTag()}
               />
-              <Button size="sm" onClick={handleCreateTag} disabled={!newTagName.trim()}>
+              <Button
+                size="sm"
+                onClick={handleCreateTag}
+                disabled={!newTagName.trim()}
+              >
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -320,7 +363,9 @@ export function TagAssigner({ selectedTagIds, onUpdateTags }: TagAssignerProps) 
                 <button
                   key={color.value}
                   className={`w-4 h-4 rounded-full ${color.value} ${
-                    selectedColor === color.value ? "ring-2 ring-offset-1 ring-primary" : ""
+                    selectedColor === color.value
+                      ? "ring-2 ring-offset-1 ring-primary"
+                      : ""
                   }`}
                   onClick={() => setSelectedColor(color.value)}
                   title={color.name}

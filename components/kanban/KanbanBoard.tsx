@@ -2,26 +2,14 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import type { Doc } from "@/convex/_generated/dataModel";
+
 import { useQuery, useMutation, useConvexAuth } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import {
   DragDropContext,
   Draggable,
   Droppable,
   type DropResult,
 } from "@hello-pangea/dnd";
-import { KanbanColumn } from "./KanbanColumn";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { SaveStatus } from "@/components/SaveStatus";
-import { useToast } from "@/components/ui/toast-notification";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   ArrowLeft,
   MoreHorizontal,
@@ -32,9 +20,25 @@ import {
   Search,
   Trash2,
 } from "lucide-react";
+
+import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { api } from "@/convex/_generated/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { SaveStatus } from "@/components/SaveStatus";
+import { useToast } from "@/components/ui/toast-notification";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { stripHtmlToText } from "@/lib/html-utils";
 
-interface Props {
+import { KanbanColumn } from "./KanbanColumn";
+import { MobileColumnPicker } from "./MobileColumnPicker";
+
+interface KanbanBoardProps {
   board: Doc<"kanbanBoards">;
   tags: Doc<"tags">[];
   onToggleSidebar: () => void;
@@ -50,7 +54,7 @@ export function KanbanBoard({
   sidebarOpen,
   initialColumns,
   initialCards,
-}: Props) {
+}: KanbanBoardProps) {
   const { isAuthenticated } = useConvexAuth();
   const columns =
     useQuery(
@@ -106,6 +110,10 @@ export function KanbanBoard({
   const [due, setDue] = useState("all");
   const [columnTitle, setColumnTitle] = useState("");
   const [adding, setAdding] = useState(false);
+  const [movingCardId, setMovingCardId] = useState<Id<"kanbanCards"> | null>(
+    null,
+  );
+  const movingCard = cards?.find((card) => card._id === movingCardId);
   const [pending, setPending] = useState(0);
   const [failed, setFailed] = useState(false);
   const retryRef = useRef<(() => Promise<unknown>) | null>(null);
@@ -117,6 +125,7 @@ export function KanbanBoard({
       await action();
       return true;
     } catch (cause) {
+      console.error("Failed KanbanBoard action:", cause);
       retryRef.current = action;
       setFailed(true);
       error(
@@ -397,6 +406,7 @@ export function KanbanBoard({
                           tags={tags}
                           dragHandleProps={dragProvided.dragHandleProps}
                           filtering={filtering}
+                          onMoveCard={setMovingCardId}
                         />
                       </div>
                     )}
@@ -459,6 +469,17 @@ export function KanbanBoard({
             )}
           </Droppable>
         </DragDropContext>
+      )}
+      {movingCard && columns && (
+        <MobileColumnPicker
+          key={movingCard._id}
+          open
+          onClose={() => setMovingCardId(null)}
+          columns={columns}
+          currentColumnId={movingCard.columnId}
+          cardId={movingCard._id}
+          boardId={board._id}
+        />
       )}
     </div>
   );

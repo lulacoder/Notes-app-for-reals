@@ -1,18 +1,12 @@
 "use client";
 
-import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
-
 import { useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+
+import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
 import type { Preloaded } from "convex/react";
 import { useMutation } from "convex/react";
-import { useRouter } from "next/navigation";
-import { DocumentLink } from "@/components/DocumentLink";
-import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Plus,
   Layers,
@@ -22,6 +16,13 @@ import {
   Trash2,
   ArrowLeft,
 } from "lucide-react";
+
+import { DocumentLink } from "@/components/DocumentLink";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,6 +59,7 @@ export function CanvasListPageClient({
       const canvasId = await createCanvas({ title: "Untitled Canvas" });
       router.push(`/canvas/${canvasId}`);
     } catch (cause) {
+      console.error("Failed CanvasListPageClient action:", cause);
       error(
         "Could not create canvas",
         cause instanceof Error ? cause.message : "Try again.",
@@ -73,6 +75,7 @@ export function CanvasListPageClient({
       await softDeleteCanvas({ id });
       success("Canvas moved to recently deleted");
     } catch (cause) {
+      console.error("Failed CanvasListPageClient action:", cause);
       error(
         "Could not delete canvas",
         cause instanceof Error ? cause.message : "Try again.",
@@ -84,6 +87,7 @@ export function CanvasListPageClient({
     try {
       await togglePin({ id });
     } catch (cause) {
+      console.error("Failed CanvasListPageClient action:", cause);
       error(
         "Could not update canvas",
         cause instanceof Error ? cause.message : "Try again.",

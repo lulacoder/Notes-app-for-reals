@@ -1,14 +1,23 @@
 "use client";
 
 import { useRef, useState } from "react";
-import type { Doc, Id } from "@/convex/_generated/dataModel";
+
 import {
   Droppable,
   type DraggableProvidedDragHandleProps,
 } from "@hello-pangea/dnd";
 import { useMutation } from "convex/react";
+import {
+  GripVertical,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
+
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { api } from "@/convex/_generated/api";
-import { KanbanCard } from "./KanbanCard";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast-notification";
@@ -27,15 +36,10 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import {
-  GripVertical,
-  MoreHorizontal,
-  Pencil,
-  Plus,
-  Trash2,
-} from "lucide-react";
 
-interface Props {
+import { KanbanCard } from "./KanbanCard";
+
+interface KanbanColumnProps {
   column: Doc<"kanbanColumns">;
   allColumns: Doc<"kanbanColumns">[];
   cards: Doc<"kanbanCards">[];
@@ -44,6 +48,7 @@ interface Props {
   tags: Doc<"tags">[];
   dragHandleProps: DraggableProvidedDragHandleProps | null | undefined;
   filtering: boolean;
+  onMoveCard: (id: Id<"kanbanCards">) => void;
 }
 
 export function KanbanColumn({
@@ -55,7 +60,8 @@ export function KanbanColumn({
   tags,
   dragHandleProps,
   filtering,
-}: Props) {
+  onMoveCard,
+}: KanbanColumnProps) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(column.title);
   const [adding, setAdding] = useState(false);
@@ -78,6 +84,7 @@ export function KanbanColumn({
       await action();
       done();
     } catch (cause) {
+      console.error("Failed KanbanColumn action:", cause);
       error(
         "Could not update column",
         cause instanceof Error ? cause.message : "Try again.",
@@ -182,7 +189,10 @@ export function KanbanColumn({
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className={`min-h-[80px] flex-1 space-y-2 overflow-y-auto px-3 pb-2 ${snapshot.isDraggingOver ? "bg-primary/5" : ""}`}
+            className={cn(
+              "min-h-[80px] flex-1 space-y-2 overflow-y-auto px-3 pb-2",
+              snapshot.isDraggingOver && "bg-primary/5",
+            )}
           >
             {cards.map((card, index) => (
               <KanbanCard
@@ -192,6 +202,7 @@ export function KanbanColumn({
                 tags={tags}
                 columns={allColumns}
                 dragDisabled={filtering}
+                onMoveCard={onMoveCard}
               />
             ))}
             {provided.placeholder}

@@ -3,9 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+
 import { useMutation, useQuery, useConvexAuth } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import { ArrowLeft, RotateCcw, Trash2 } from "lucide-react";
+
+import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast-notification";
 import { TrashView } from "@/components/TrashView";
@@ -111,6 +113,7 @@ export function WorkspaceTrash() {
                           await restoreCard({ id: record._id });
                         success("Restored to your workspace");
                       } catch (cause) {
+                        console.error("Failed WorkspaceTrash action:", cause);
                         error(
                           "Could not restore",
                           cause instanceof Error ? cause.message : "Try again.",

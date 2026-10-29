@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { Doc, Id } from "@/convex/_generated/dataModel";
+
 import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import {
   ArrowLeft,
   LayoutDashboard,
@@ -15,6 +14,9 @@ import {
   Search,
   Trash2,
 } from "lucide-react";
+
+import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -50,6 +52,7 @@ export function BoardSidebar({
       await run();
       if (message) success(message);
     } catch (cause) {
+      console.error("Failed BoardSidebar action:", cause);
       error(
         "Could not update board",
         cause instanceof Error ? cause.message : "Try again.",

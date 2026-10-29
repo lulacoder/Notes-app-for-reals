@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
+
 import { useMutation } from "convex/react";
+import { Check, MoveRight } from "lucide-react";
+
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import {
@@ -12,9 +15,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast-notification";
-import { Check, MoveRight } from "lucide-react";
 
-interface Props {
+interface MobileColumnPickerProps {
   open: boolean;
   onClose: () => void;
   columns: Doc<"kanbanColumns">[];
@@ -30,7 +32,7 @@ export function MobileColumnPicker({
   currentColumnId,
   cardId,
   boardId,
-}: Props) {
+}: MobileColumnPickerProps) {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const { error } = useToast();
@@ -91,6 +93,7 @@ export function MobileColumnPicker({
                   await move({ id: cardId, columnId: column._id });
                   onClose();
                 } catch (cause) {
+                  console.error("Failed MobileColumnPicker action:", cause);
                   const text =
                     cause instanceof Error ? cause.message : "Try again.";
                   setMessage(text);

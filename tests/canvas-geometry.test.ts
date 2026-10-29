@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+
 import { readShapes, serializeShapes, type Shape } from "../lib/canvas/model";
 import {
   deleteShape,
   fitScene,
   reconnect,
+  resizeShape,
   shapeBounds,
   translateShape,
 } from "../lib/canvas/geometry";
@@ -33,6 +35,63 @@ const connector: Shape = {
 };
 
 describe("canvas geometry", () => {
+  it("keeps circles unchanged on handle clicks and resizes relative to the grab point", () => {
+    const circle: Shape = {
+      id: "circle",
+      type: "circle",
+      x: 80,
+      y: 60,
+      radius: 100,
+      stroke: "#000",
+      strokeWidth: 2,
+    };
+    expect(resizeShape(circle, { x: 180, y: 160 })).toBe(circle);
+    const start = { x: 176, y: 157 };
+    expect(resizeShape(circle, start, start)).toBe(circle);
+    expect(resizeShape(circle, { x: 196, y: 177 }, start)).toMatchObject({
+      x: 80,
+      y: 60,
+      radius: 120,
+    });
+    expect(
+      resizeShape(first, { x: -290, y: -80 }, { x: -300, y: -100 }),
+    ).toMatchObject({ width: 210, height: 120 });
+  });
+
+  it.each([
+    [800, 600, 48],
+    [240, 140, 16],
+  ])(
+    "fits large scenes into a %ipx viewport and previews",
+    (width, height, padding) => {
+      const large: Shape = {
+        ...first,
+        x: -5000,
+        y: -2000,
+        width: 10000,
+        height: 4000,
+      };
+      const view = fitScene([large], width, height, padding);
+      const b = shapeBounds(large);
+      expect(view.zoom).toBeGreaterThan(0);
+      expect(view.zoom).toBeLessThan(0.1);
+      expect(b.x * view.zoom + view.x).toBeCloseTo(padding);
+      expect((b.x + b.width) * view.zoom + view.x).toBeCloseTo(width - padding);
+      expect(b.y * view.zoom + view.y).toBeGreaterThanOrEqual(padding);
+      expect((b.y + b.height) * view.zoom + view.y).toBeLessThanOrEqual(
+        height - padding,
+      );
+    },
+  );
+
+  it("preserves saved text baseline coordinates and includes its height above the anchor", () => {
+    const [label] = readShapes(
+      '{"shapes":[{"id":"label","type":"text","x":100,"y":200,"text":"Existing label","fontSize":20,"stroke":"#000","strokeWidth":1}]}',
+    );
+    expect(label).toMatchObject({ x: 100, y: 200 });
+    expect(shapeBounds(label)).toMatchObject({ x: 100, y: 180, height: 28 });
+    expect(readShapes(serializeShapes([label]))[0]).toMatchObject({ y: 200 });
+  });
   it("compares a newly created scene and its saved response without losing history", () => {
     const created: Shape = {
       id: "idea",
