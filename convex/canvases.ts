@@ -78,7 +78,7 @@ export const getCanvas = query({
       return null;
     }
 
-    const canvas = await ctx.db.get(args.id);
+    const canvas = await ctx.db.get("canvases", args.id);
     if (!canvas || canvas.userId !== identity.subject) {
       return null;
     }
@@ -125,7 +125,7 @@ export const updateCanvas = mutation({
       throw new Error("Not authenticated");
     }
 
-    const canvas = await ctx.db.get(args.id);
+    const canvas = await ctx.db.get("canvases", args.id);
     if (!canvas || canvas.userId !== identity.subject) {
       throw new Error("Canvas not found or unauthorized");
     }
@@ -145,7 +145,7 @@ export const updateCanvas = mutation({
       updates.content = args.content;
     }
 
-    await ctx.db.patch(args.id, updates);
+    await ctx.db.patch("canvases", args.id, updates);
     return args.id;
   },
 });
@@ -159,12 +159,12 @@ export const softDeleteCanvas = mutation({
       throw new Error("Not authenticated");
     }
 
-    const canvas = await ctx.db.get(args.id);
+    const canvas = await ctx.db.get("canvases", args.id);
     if (!canvas || canvas.userId !== identity.subject) {
       throw new Error("Canvas not found or unauthorized");
     }
 
-    await ctx.db.patch(args.id, {
+    await ctx.db.patch("canvases", args.id, {
       isDeleted: true,
       deletedAt: Date.now(),
       isPinned: false,
@@ -183,12 +183,12 @@ export const restoreCanvas = mutation({
       throw new Error("Not authenticated");
     }
 
-    const canvas = await ctx.db.get(args.id);
+    const canvas = await ctx.db.get("canvases", args.id);
     if (!canvas || canvas.userId !== identity.subject) {
       throw new Error("Canvas not found or unauthorized");
     }
 
-    await ctx.db.patch(args.id, {
+    await ctx.db.patch("canvases", args.id, {
       isDeleted: false,
       deletedAt: undefined,
     });
@@ -206,7 +206,7 @@ export const deleteCanvas = mutation({
       throw new Error("Not authenticated");
     }
 
-    const canvas = await ctx.db.get(args.id);
+    const canvas = await ctx.db.get("canvases", args.id);
     if (!canvas || canvas.userId !== identity.subject) {
       throw new Error("Canvas not found or unauthorized");
     }
@@ -219,10 +219,10 @@ export const deleteCanvas = mutation({
 
     for (const asset of assets) {
       await ctx.storage.delete(asset.storageId);
-      await ctx.db.delete(asset._id);
+      await ctx.db.delete("canvasAssets", asset._id);
     }
 
-    await ctx.db.delete(args.id);
+    await ctx.db.delete("canvases", args.id);
     return args.id;
   },
 });
@@ -236,12 +236,12 @@ export const togglePin = mutation({
       throw new Error("Not authenticated");
     }
 
-    const canvas = await ctx.db.get(args.id);
+    const canvas = await ctx.db.get("canvases", args.id);
     if (!canvas || canvas.userId !== identity.subject) {
       throw new Error("Canvas not found or unauthorized");
     }
 
-    await ctx.db.patch(args.id, {
+    await ctx.db.patch("canvases", args.id, {
       isPinned: !canvas.isPinned,
       pinnedAt: !canvas.isPinned ? Date.now() : undefined,
     });
@@ -262,12 +262,12 @@ export const updateCanvasTags = mutation({
       throw new Error("Not authenticated");
     }
 
-    const canvas = await ctx.db.get(args.id);
+    const canvas = await ctx.db.get("canvases", args.id);
     if (!canvas || canvas.userId !== identity.subject) {
       throw new Error("Canvas not found or unauthorized");
     }
 
-    await ctx.db.patch(args.id, {
+    await ctx.db.patch("canvases", args.id, {
       tagIds: args.tagIds,
     });
 
@@ -302,7 +302,7 @@ export const saveAsset = mutation({
       throw new Error("Not authenticated");
     }
 
-    const canvas = await ctx.db.get(args.canvasId);
+    const canvas = await ctx.db.get("canvases", args.canvasId);
     if (!canvas || canvas.userId !== identity.subject) {
       throw new Error("Canvas not found or unauthorized");
     }
@@ -351,7 +351,7 @@ export const getCanvasAssets = query({
       return [];
     }
 
-    const canvas = await ctx.db.get(args.canvasId);
+    const canvas = await ctx.db.get("canvases", args.canvasId);
     if (!canvas || canvas.userId !== identity.subject) {
       return [];
     }

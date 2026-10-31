@@ -8,6 +8,9 @@ import { admin } from "better-auth/plugins";
 import authConfig from "./auth.config";
 import authSchema from "./betterAuth/schema";
 
+// The checked-in generated server does not export env yet. Keep this access until
+// codegen can be upgraded with declared variables and both deployments reviewed.
+// eslint-disable-next-line @convex-dev/no-process-env
 const siteUrl = process.env.SITE_URL!;
 
 export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {

@@ -11,7 +11,7 @@ export const listVersions = query({
     }
 
     // Verify note ownership
-    const note = await ctx.db.get(args.noteId);
+    const note = await ctx.db.get("notes", args.noteId);
     if (!note || note.userId !== identity.subject) {
       return [];
     }
@@ -32,7 +32,7 @@ export const getVersion = query({
       return null;
     }
 
-    const version = await ctx.db.get(args.id);
+    const version = await ctx.db.get("noteVersions", args.id);
     if (!version || version.userId !== identity.subject) {
       return null;
     }
@@ -53,7 +53,7 @@ export const createVersion = mutation({
       throw new Error("Not authenticated");
     }
 
-    const note = await ctx.db.get(args.noteId);
+    const note = await ctx.db.get("notes", args.noteId);
     if (!note || note.userId !== identity.subject) {
       throw new Error("Note not found or unauthorized");
     }
@@ -75,7 +75,7 @@ export const createVersion = mutation({
 
     const toDelete = versions.slice(50);
     for (const version of toDelete) {
-      await ctx.db.delete(version._id);
+      await ctx.db.delete("noteVersions", version._id);
     }
 
     return versionId;
@@ -90,12 +90,12 @@ export const restoreVersion = mutation({
       throw new Error("Not authenticated");
     }
 
-    const version = await ctx.db.get(args.versionId);
+    const version = await ctx.db.get("noteVersions", args.versionId);
     if (!version || version.userId !== identity.subject) {
       throw new Error("Version not found or unauthorized");
     }
 
-    const note = await ctx.db.get(version.noteId);
+    const note = await ctx.db.get("notes", version.noteId);
     if (!note || note.userId !== identity.subject) {
       throw new Error("Note not found or unauthorized");
     }
@@ -110,7 +110,7 @@ export const restoreVersion = mutation({
     });
 
     // Restore the version
-    await ctx.db.patch(version.noteId, {
+    await ctx.db.patch("notes", version.noteId, {
       title: version.title,
       content: version.content,
       updatedAt: Date.now(),
@@ -128,12 +128,12 @@ export const deleteVersion = mutation({
       throw new Error("Not authenticated");
     }
 
-    const version = await ctx.db.get(args.id);
+    const version = await ctx.db.get("noteVersions", args.id);
     if (!version || version.userId !== identity.subject) {
       throw new Error("Version not found or unauthorized");
     }
 
-    await ctx.db.delete(args.id);
+    await ctx.db.delete("noteVersions", args.id);
     return args.id;
   },
 });
@@ -147,7 +147,7 @@ export const cleanupVersions = mutation({
       throw new Error("Not authenticated");
     }
 
-    const note = await ctx.db.get(args.noteId);
+    const note = await ctx.db.get("notes", args.noteId);
     if (!note || note.userId !== identity.subject) {
       throw new Error("Note not found or unauthorized");
     }
@@ -161,7 +161,7 @@ export const cleanupVersions = mutation({
     // Keep only last 50 versions
     const toDelete = versions.slice(50);
     for (const version of toDelete) {
-      await ctx.db.delete(version._id);
+      await ctx.db.delete("noteVersions", version._id);
     }
 
     return toDelete.length;

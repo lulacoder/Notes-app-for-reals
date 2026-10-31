@@ -61,7 +61,7 @@ export const updateTag = mutation({
       throw new Error("Not authenticated");
     }
 
-    const tag = await ctx.db.get(args.id);
+    const tag = await ctx.db.get("tags", args.id);
     if (!tag || tag.userId !== identity.subject) {
       throw new Error("Tag not found or unauthorized");
     }
@@ -70,7 +70,7 @@ export const updateTag = mutation({
     if (args.name !== undefined) updates.name = args.name;
     if (args.color !== undefined) updates.color = args.color;
 
-    await ctx.db.patch(args.id, updates);
+    await ctx.db.patch("tags", args.id, updates);
     return args.id;
   },
 });
@@ -83,7 +83,7 @@ export const deleteTag = mutation({
       throw new Error("Not authenticated");
     }
 
-    const tag = await ctx.db.get(args.id);
+    const tag = await ctx.db.get("tags", args.id);
     if (!tag || tag.userId !== identity.subject) {
       throw new Error("Tag not found or unauthorized");
     }
@@ -96,13 +96,13 @@ export const deleteTag = mutation({
 
     for (const note of notes) {
       if (note.tagIds?.includes(args.id)) {
-        await ctx.db.patch(note._id, {
+        await ctx.db.patch("notes", note._id, {
           tagIds: note.tagIds.filter((id) => id !== args.id),
         });
       }
     }
 
-    await ctx.db.delete(args.id);
+    await ctx.db.delete("tags", args.id);
     return args.id;
   },
 });

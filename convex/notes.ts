@@ -88,7 +88,7 @@ export const getNote = query({
       return null;
     }
 
-    const note = await ctx.db.get(args.id);
+    const note = await ctx.db.get("notes", args.id);
     if (!note || note.userId !== identity.subject) {
       return null;
     }
@@ -137,7 +137,7 @@ export const updateNote = mutation({
       throw new Error("Not authenticated");
     }
 
-    const note = await ctx.db.get(args.id);
+    const note = await ctx.db.get("notes", args.id);
     if (!note || note.userId !== identity.subject) {
       throw new Error("Note not found or unauthorized");
     }
@@ -168,7 +168,7 @@ export const updateNote = mutation({
       updates.content = args.content;
     }
 
-    await ctx.db.patch(args.id, updates);
+    await ctx.db.patch("notes", args.id, updates);
     return args.id;
   },
 });
@@ -182,12 +182,12 @@ export const softDeleteNote = mutation({
       throw new Error("Not authenticated");
     }
 
-    const note = await ctx.db.get(args.id);
+    const note = await ctx.db.get("notes", args.id);
     if (!note || note.userId !== identity.subject) {
       throw new Error("Note not found or unauthorized");
     }
 
-    await ctx.db.patch(args.id, {
+    await ctx.db.patch("notes", args.id, {
       isDeleted: true,
       deletedAt: Date.now(),
       isPinned: false,
@@ -206,12 +206,12 @@ export const restoreNote = mutation({
       throw new Error("Not authenticated");
     }
 
-    const note = await ctx.db.get(args.id);
+    const note = await ctx.db.get("notes", args.id);
     if (!note || note.userId !== identity.subject) {
       throw new Error("Note not found or unauthorized");
     }
 
-    await ctx.db.patch(args.id, {
+    await ctx.db.patch("notes", args.id, {
       isDeleted: false,
       deletedAt: undefined,
     });
@@ -229,7 +229,7 @@ export const deleteNote = mutation({
       throw new Error("Not authenticated");
     }
 
-    const note = await ctx.db.get(args.id);
+    const note = await ctx.db.get("notes", args.id);
     if (!note || note.userId !== identity.subject) {
       throw new Error("Note not found or unauthorized");
     }
@@ -241,10 +241,10 @@ export const deleteNote = mutation({
       .collect();
 
     for (const version of versions) {
-      await ctx.db.delete(version._id);
+      await ctx.db.delete("noteVersions", version._id);
     }
 
-    await ctx.db.delete(args.id);
+    await ctx.db.delete("notes", args.id);
     return args.id;
   },
 });
@@ -278,10 +278,10 @@ export const emptyTrash = mutation({
         .collect();
 
       for (const version of versions) {
-        await ctx.db.delete(version._id);
+        await ctx.db.delete("noteVersions", version._id);
       }
 
-      await ctx.db.delete(note._id);
+      await ctx.db.delete("notes", note._id);
     }
 
     return toDelete.length;
@@ -297,12 +297,12 @@ export const togglePin = mutation({
       throw new Error("Not authenticated");
     }
 
-    const note = await ctx.db.get(args.id);
+    const note = await ctx.db.get("notes", args.id);
     if (!note || note.userId !== identity.subject) {
       throw new Error("Note not found or unauthorized");
     }
 
-    await ctx.db.patch(args.id, {
+    await ctx.db.patch("notes", args.id, {
       isPinned: !note.isPinned,
       pinnedAt: !note.isPinned ? Date.now() : undefined,
     });
@@ -323,12 +323,12 @@ export const updateNoteTags = mutation({
       throw new Error("Not authenticated");
     }
 
-    const note = await ctx.db.get(args.id);
+    const note = await ctx.db.get("notes", args.id);
     if (!note || note.userId !== identity.subject) {
       throw new Error("Note not found or unauthorized");
     }
 
-    await ctx.db.patch(args.id, {
+    await ctx.db.patch("notes", args.id, {
       tagIds: args.tagIds,
     });
 
