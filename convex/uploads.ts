@@ -31,11 +31,11 @@ export const saveUpload = mutation({
     }
 
     if (args.noteId) {
-      const note = await ctx.db.get(args.noteId);
+      const note = await ctx.db.get("notes", args.noteId);
       if (!note || note.userId !== identity.subject) throw new Error("Note not found");
     }
     if (args.canvasId) {
-      const canvas = await ctx.db.get(args.canvasId);
+      const canvas = await ctx.db.get("canvases", args.canvasId);
       if (!canvas || canvas.userId !== identity.subject) throw new Error("Canvas not found");
     }
 
@@ -78,7 +78,7 @@ export const listNoteUploads = query({
   handler: async (ctx, args) => {
     const identity = await getActiveIdentity(ctx);
     if (!identity) return [];
-    const note = await ctx.db.get(args.noteId);
+    const note = await ctx.db.get("notes", args.noteId);
     if (!note || note.userId !== identity.subject) return [];
 
     const uploads = await ctx.db
@@ -107,7 +107,7 @@ export const deleteUpload = mutation({
       throw new Error("Not authenticated");
     }
 
-    const upload = await ctx.db.get(args.uploadId);
+    const upload = await ctx.db.get("uploads", args.uploadId);
     if (!upload || upload.userId !== identity.subject) {
       throw new Error("Upload not found");
     }
@@ -116,6 +116,6 @@ export const deleteUpload = mutation({
     await ctx.storage.delete(upload.storageId);
     
     // Delete metadata
-    await ctx.db.delete(args.uploadId);
+    await ctx.db.delete("uploads", args.uploadId);
   },
 });

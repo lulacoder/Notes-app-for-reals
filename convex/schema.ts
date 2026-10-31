@@ -21,6 +21,8 @@ export default defineSchema({
     // Tags
     tagIds: v.optional(v.array(v.id("tags"))),
   })
+    // Preserve creation-time ordering for queries using this prefix index.
+    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_user", ["userId"])
     .index("by_user_updated", ["userId", "updatedAt"])
     .index("by_user_deleted", ["userId", "isDeleted"])
@@ -32,6 +34,8 @@ export default defineSchema({
     userId: v.string(),
     createdAt: v.number(),
   })
+    // Preserve creation-time ordering for queries using this prefix index.
+    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_user", ["userId"])
     .index("by_user_name", ["userId", "name"]),
 
@@ -42,6 +46,8 @@ export default defineSchema({
     userId: v.string(),
     createdAt: v.number(),
   })
+    // Preserve creation-time ordering for queries using this prefix index.
+    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_note", ["noteId"])
     .index("by_note_created", ["noteId", "createdAt"]),
 
@@ -59,6 +65,8 @@ export default defineSchema({
     .index("by_note", ["noteId"])
     .index("by_canvas", ["canvasId"])
     .index("by_user_storage", ["userId", "storageId"])
+    // Preserve creation-time ordering for queries using this prefix index.
+    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_user", ["userId"]),
 
   // Infinite Canvas tables
@@ -77,6 +85,8 @@ export default defineSchema({
     // Tags (reuse existing tag system)
     tagIds: v.optional(v.array(v.id("tags"))),
   })
+    // Preserve creation-time ordering for queries using this prefix index.
+    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_user", ["userId"])
     .index("by_user_updated", ["userId", "updatedAt"])
     .index("by_user_deleted", ["userId", "isDeleted"])
@@ -105,6 +115,8 @@ export default defineSchema({
     isPinned: v.optional(v.boolean()),
     pinnedAt: v.optional(v.number()),
   })
+    // Preserve creation-time ordering for queries using this prefix index.
+    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_user", ["userId"])
     .index("by_user_updated", ["userId", "updatedAt"])
     .index("by_user_deleted", ["userId", "isDeleted"]),
@@ -117,6 +129,8 @@ export default defineSchema({
     userId: v.string(),
     createdAt: v.number(),
   })
+    // Preserve creation-time ordering for queries using this prefix index.
+    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_board", ["boardId"])
     .index("by_board_order", ["boardId", "order"]),
 
@@ -135,6 +149,8 @@ export default defineSchema({
     isDeleted: v.optional(v.boolean()),
     deletedAt: v.optional(v.number()),
   })
+    // Preserve creation-time ordering for queries using this prefix index.
+    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_column", ["columnId"])
     .index("by_board", ["boardId"])
     .index("by_user_deleted", ["userId", "isDeleted"])

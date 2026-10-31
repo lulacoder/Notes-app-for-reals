@@ -436,9 +436,9 @@ export const deleteUser = mutation({
         .withIndex("by_note", (q) => q.eq("noteId", note._id))
         .collect();
       for (const ver of versions) {
-        await ctx.db.delete(ver._id);
+        await ctx.db.delete("noteVersions", ver._id);
       }
-      await ctx.db.delete(note._id);
+      await ctx.db.delete("notes", note._id);
     }
 
     // 2. Tags
@@ -447,7 +447,7 @@ export const deleteUser = mutation({
       .withIndex("by_user", (q) => q.eq("userId", targetUserId))
       .collect();
     for (const tag of userTags) {
-      await ctx.db.delete(tag._id);
+      await ctx.db.delete("tags", tag._id);
     }
 
     const storageIds = new Set<Id<"_storage">>();
@@ -463,9 +463,9 @@ export const deleteUser = mutation({
         .collect();
       for (const a of assets) {
         storageIds.add(a.storageId);
-        await ctx.db.delete(a._id);
+        await ctx.db.delete("canvasAssets", a._id);
       }
-      await ctx.db.delete(canvas._id);
+      await ctx.db.delete("canvases", canvas._id);
     }
 
     // 4. Kanban Boards, Columns, Cards
@@ -479,16 +479,16 @@ export const deleteUser = mutation({
         .withIndex("by_board", (q) => q.eq("boardId", board._id))
         .collect();
       for (const col of cols) {
-        await ctx.db.delete(col._id);
+        await ctx.db.delete("kanbanColumns", col._id);
       }
       const cards = await ctx.db
         .query("kanbanCards")
         .withIndex("by_board", (q) => q.eq("boardId", board._id))
         .collect();
       for (const card of cards) {
-        await ctx.db.delete(card._id);
+        await ctx.db.delete("kanbanCards", card._id);
       }
-      await ctx.db.delete(board._id);
+      await ctx.db.delete("kanbanBoards", board._id);
     }
 
     // 5. Uploads
@@ -498,7 +498,7 @@ export const deleteUser = mutation({
       .collect();
     for (const upload of userUploads) {
       storageIds.add(upload.storageId);
-      await ctx.db.delete(upload._id);
+      await ctx.db.delete("uploads", upload._id);
     }
     for (const storageId of storageIds) await ctx.storage.delete(storageId);
 
