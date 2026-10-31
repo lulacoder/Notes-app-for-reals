@@ -1,3 +1,4 @@
+import { getFunctionName, makeFunctionReference } from "convex/server";
 import { ConvexHttpClient } from "convex/browser";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../convex/_generated/api";
@@ -24,7 +25,7 @@ async function backend(banned = false) {
   const t = setup();
   const owner = await account(t, "user", banned);
   vi.spyOn(ConvexHttpClient.prototype, "query").mockImplementation(async (...[query, args]: Parameters<ConvexHttpClient["query"]>) => {
-    return owner.client.query(query, args ?? {});
+    return owner.client.query(makeFunctionReference<"query">(getFunctionName(query)), args ?? {});
   });
   return { t, owner };
 }

@@ -6,7 +6,7 @@ import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared
 import { ConvexProviderWithAuth, ConvexReactClient } from "convex/react";
 import { ConvexHttpClient } from "convex/browser";
 import { preloadQuery } from "convex/nextjs";
-import { getFunctionName } from "convex/server";
+import { getFunctionName, makeFunctionReference } from "convex/server";
 import { afterEach, expect, it, vi } from "vitest";
 
 import { CanvasEditorPageClient } from "../app/(dashboard)/(workspace)/canvas/[id]/CanvasEditorPageClient";
@@ -51,7 +51,7 @@ it("disables busy controls and queues an earlier tag creation that finishes duri
     .spyOn(ConvexHttpClient.prototype, "query")
     .mockImplementation(
       async (...[query, args]: Parameters<ConvexHttpClient["query"]>) =>
-        owner.query(query, args ?? {}),
+        owner.query(makeFunctionReference<"query">(getFunctionName(query)), args ?? {}),
     );
   const preloaded = await preloadQuery(
     api.canvases.getCanvas,
@@ -79,7 +79,7 @@ it("disables busy controls and queues an earlier tag creation that finishes duri
           getFunctionName(query) === getFunctionName(api.canvases.updateCanvas)
         )
           await titleResponse.promise;
-        return owner.mutation(query, args ?? {});
+        return owner.mutation(makeFunctionReference<"mutation">(getFunctionName(query)), args ?? {});
       },
     );
   vi.stubGlobal(

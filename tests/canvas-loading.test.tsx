@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { getFunctionName, makeFunctionReference } from "convex/server";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { ConvexProviderWithAuth, ConvexReactClient } from "convex/react";
@@ -31,7 +32,7 @@ describe("canvas loading during authentication changes", () => {
     // Use Convex's real preload serialization with the in-memory database as
     // transport, so this regression test does not require a cloud deployment.
     const transport = vi.spyOn(ConvexHttpClient.prototype, "query").mockImplementation(
-      async (...[query, args]: Parameters<ConvexHttpClient["query"]>) => owner.query(query, args ?? {}),
+      async (...[query, args]: Parameters<ConvexHttpClient["query"]>) => owner.query(makeFunctionReference<"query">(getFunctionName(query)), args ?? {}),
     );
     const preloaded = await preloadQuery(api.canvases.getCanvas, { id }, { url: "https://canvas-loading-test.convex.cloud" });
     transport.mockRestore();

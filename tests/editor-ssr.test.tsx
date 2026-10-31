@@ -3,7 +3,7 @@ import { renderToString } from "react-dom/server";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { ConvexReactClient, ConvexProviderWithAuth } from "convex/react";
-import { getFunctionName } from "convex/server";
+import { getFunctionName, makeFunctionReference } from "convex/server";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Doc } from "../convex/_generated/dataModel";
@@ -42,7 +42,7 @@ async function mountLoadedEditor() {
     };
   });
   const mutation = vi.spyOn(client, "mutation").mockImplementation(
-    async (...[query, args]: Parameters<ConvexReactClient["mutation"]>) => owner.mutation(query, args ?? {}),
+    async (...[query, args]: Parameters<ConvexReactClient["mutation"]>) => owner.mutation(makeFunctionReference<"mutation">(getFunctionName(query)), args ?? {}),
   );
   const container = document.createElement("div");
   const root = createRoot(container);
@@ -96,7 +96,7 @@ describe("server-loaded note editor", () => {
     let confirm: () => void = () => {};
     const confirmation = new Promise<void>((resolve) => { confirm = resolve; });
     editor.mutation.mockImplementationOnce(async (...[query, args]: Parameters<ConvexReactClient["mutation"]>) => {
-      const result = await editor.owner.mutation(query, args ?? {});
+      const result = await editor.owner.mutation(makeFunctionReference<"mutation">(getFunctionName(query)), args ?? {});
       await confirmation;
       return result;
     });

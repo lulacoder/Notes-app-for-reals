@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { getFunctionName, makeFunctionReference } from "convex/server";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -54,7 +55,7 @@ it("keeps the move dialog through optimistic reparenting, rollback, and retry", 
     )
     .mockImplementation(
       async (...[query, args]: Parameters<ConvexReactClient["mutation"]>) =>
-        owner.mutation(query, args ?? {}),
+        owner.mutation(makeFunctionReference<"mutation">(getFunctionName(query)), args ?? {}),
     );
   const container = document.createElement("div");
   document.body.append(container);

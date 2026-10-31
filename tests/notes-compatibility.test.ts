@@ -1,6 +1,6 @@
 import { ConvexHttpClient } from "convex/browser";
 import { preloadedQueryResult } from "convex/nextjs";
-import { getFunctionName } from "convex/server";
+import { getFunctionName, makeFunctionReference } from "convex/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import { getNoteSummaries } from "../lib/notes-data";
@@ -45,7 +45,7 @@ async function backend(missing: string[] = []) {
     if (missing.includes(name)) {
       throw new Error(`[Request ID: rollout-test] Server Error\nCould not find public function for '${name}'.\n`);
     }
-    return owner.query(query, args ?? {});
+    return owner.query(makeFunctionReference<"query">(getFunctionName(query)), args ?? {});
   });
   return { owner, id, trashId, transport };
 }
@@ -93,7 +93,7 @@ describe("frontend compatibility during a Convex rollout", () => {
     if (opaque) {
       vi.mocked(ConvexHttpClient.prototype.query).mockImplementation(async (...[query, args]: Parameters<ConvexHttpClient["query"]>) => {
         if (getFunctionName(query) === "canvases:listCanvasSummaries") throw new Error("[Request ID: rollout-test] Server Error\n");
-        return owner.query(query, args ?? {});
+        return owner.query(makeFunctionReference<"query">(getFunctionName(query)), args ?? {});
       });
     }
     const data = await getNotesData();
@@ -110,7 +110,7 @@ describe("frontend compatibility during a Convex rollout", () => {
     const { owner, transport } = await backend();
     transport.mockImplementation(async (...[query, args]: Parameters<ConvexHttpClient["query"]>) => {
       if (getFunctionName(query) === "canvases:listCanvasSummaries") throw new Error("Network request failed");
-      return owner.query(query, args ?? {});
+      return owner.query(makeFunctionReference<"query">(getFunctionName(query)), args ?? {});
     });
     await expect(getNotesData()).rejects.toThrow("Network request failed");
     expect(transport.mock.calls.map(([query]) => getFunctionName(query))).not.toContain("canvases:listCanvases");
@@ -123,7 +123,7 @@ describe("frontend compatibility during a Convex rollout", () => {
     transport.mockImplementation(async (...[query, args]: Parameters<ConvexHttpClient["query"]>) => {
       if (getFunctionName(query) === "canvases:listCanvasSummaries") throw failure;
       if (getFunctionName(query) === "canvases:listCanvases") throw new Error("Fallback also failed");
-      return owner.query(query, args ?? {});
+      return owner.query(makeFunctionReference<"query">(getFunctionName(query)), args ?? {});
     });
     await expect(getNotesData()).rejects.toBe(failure);
   });
@@ -133,7 +133,7 @@ describe("frontend compatibility during a Convex rollout", () => {
       const { owner, transport } = await backend();
       transport.mockImplementation(async (...[query, args]: Parameters<ConvexHttpClient["query"]>) => {
         if (getFunctionName(query) === "notes:listNoteSummaries") throw new Error(message);
-        return owner.query(query, args ?? {});
+        return owner.query(makeFunctionReference<"query">(getFunctionName(query)), args ?? {});
       });
       await expect(getNotesData()).rejects.toThrow(message);
       expect(transport.mock.calls.map(([query]) => getFunctionName(query))).not.toContain("notes:listNotes");

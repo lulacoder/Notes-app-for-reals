@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { getFunctionName, makeFunctionReference } from "convex/server";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
@@ -68,12 +69,12 @@ it("restores the chosen server version after an in-flight save and never submits
     .mockImplementationOnce(
       async (...[query, args]: Parameters<ConvexReactClient["mutation"]>) => {
         await inFlight.promise;
-        return owner.mutation(query, args ?? {});
+        return owner.mutation(makeFunctionReference<"mutation">(getFunctionName(query)), args ?? {});
       },
     )
     .mockImplementation(
       async (...[query, args]: Parameters<ConvexReactClient["mutation"]>) =>
-        owner.mutation(query, args ?? {}),
+        owner.mutation(makeFunctionReference<"mutation">(getFunctionName(query)), args ?? {}),
     );
   vi.stubGlobal(
     "ResizeObserver",
