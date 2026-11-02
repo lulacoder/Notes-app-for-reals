@@ -192,7 +192,10 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
                   </span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuContent
+                align="end"
+                className="w-56 data-[state=open]:animate-none data-[state=closed]:animate-none"
+              >
                 <div className="px-2 py-1.5">
                   <p className="text-sm font-medium">{userName || "User"}</p>
                   <p className="text-xs text-muted-foreground truncate">
@@ -203,24 +206,17 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
                 <DropdownMenuItem asChild>
                   <Link href="/account"><UserRound className="mr-2 h-4 w-4" />Account and sign-in</Link>
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
                 {currentUser?.role === "admin" && (
-                  <>
                     <DropdownMenuItem onClick={() => router.push("/admin")}>
                       <ShieldCheck className="mr-2 h-4 w-4 text-primary" />
                       Admin Panel
                     </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                  </>
                 )}
                 {isInstallable && (
-                  <>
                     <DropdownMenuItem onClick={install}>
                       <Download className="mr-2 h-4 w-4" />
                       Install App
                     </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                  </>
                 )}
                 <DropdownMenuItem asChild>
                   <Link href="/trash">
