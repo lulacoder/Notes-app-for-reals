@@ -13,6 +13,7 @@ import {
   Command,
   ShieldCheck,
   Trash2,
+  UserRound,
 } from "lucide-react";
 
 import { api } from "@/convex/_generated/api";
@@ -198,6 +199,10 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
                     {userEmail}
                   </p>
                 </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/account"><UserRound className="mr-2 h-4 w-4" />Account and sign-in</Link>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {currentUser?.role === "admin" && (
                   <>

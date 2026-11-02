@@ -23,5 +23,5 @@ async function AuthPageContent({ mode, searchParams }: AuthPageProps) {
   const returnTo = getReturnPath(params.next);
   if (session && !session.user.banned) redirect(returnTo);
   const notice = session?.user.banned || params.banned === "true" ? "banned" : params.reason === "expired" ? "expired" : undefined;
-  return <><LandingPage /><AuthDialog key={mode} mode={mode} returnTo={returnTo} notice={notice} /></>;
+  return <><LandingPage /><AuthDialog key={mode} mode={mode} returnTo={returnTo} notice={notice} oauthError={typeof params.error === "string" ? params.error : undefined} /></>;
 }

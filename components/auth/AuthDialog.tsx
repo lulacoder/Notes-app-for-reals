@@ -1,12 +1,13 @@
 "use client";
 
-import { useId, useRef, useState, useTransition, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ArrowRight, Eye, EyeOff, Loader2, X } from "lucide-react";
 import { signIn, signUp } from "@/lib/auth-client";
 import {
   getAuthHref,
+  getGoogleErrorMessage,
   getReturnPath,
   replaceAuthLocation,
 } from "@/lib/auth-redirects";
@@ -18,19 +19,30 @@ interface AuthDialogProps {
   mode: "login" | "register";
   returnTo: string;
   notice?: "banned" | "expired";
+  oauthError?: string;
 }
 
-export function AuthDialog({ mode, returnTo, notice }: AuthDialogProps) {
+export function AuthDialog({ mode, returnTo, notice, oauthError }: AuthDialogProps) {
   const router = useRouter();
   const formId = useId();
   const isRegister = mode === "register";
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
-  const [pending, setPending] = useState(false);
+  const [error, setError] = useState(getGoogleErrorMessage(oauthError));
+  const [pending, setPending] = useState<"email" | "google" | null>(null);
   const [closing, startTransition] = useTransition();
-  const busy = pending || closing;
+  const busy = pending !== null || closing;
   const submitting = useRef(false);
   const firstField = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function recoverFromProvider(event: PageTransitionEvent) {
+      if (!event.persisted) return;
+      submitting.current = false;
+      setPending(null);
+    }
+    window.addEventListener("pageshow", recoverFromProvider);
+    return () => window.removeEventListener("pageshow", recoverFromProvider);
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -44,7 +56,7 @@ export function AuthDialog({ mode, returnTo, notice }: AuthDialogProps) {
       return;
     }
     submitting.current = true;
-    setPending(true);
+    setPending("email");
     setError("");
     try {
       const result = isRegister
@@ -59,14 +71,36 @@ export function AuthDialog({ mode, returnTo, notice }: AuthDialogProps) {
         );
       } else {
         // Start with fresh server data and remove the auth page from browser history.
-        replaceAuthLocation(getReturnPath(returnTo));
+        replaceAuthLocation(oauthError === "account_not_linked"
+          ? `/account?connect=google&next=${encodeURIComponent(getReturnPath(returnTo))}`
+          : getReturnPath(returnTo));
         return;
       }
     } catch {
       setError("Could not connect. Check your connection and try again.");
     }
     submitting.current = false;
-    setPending(false);
+    setPending(null);
+  }
+
+  async function handleGoogleSignIn() {
+    if (submitting.current || closing) return;
+    submitting.current = true;
+    setPending("google");
+    setError("");
+    try {
+      const result = await signIn.social({
+        provider: "google",
+        callbackURL: getReturnPath(returnTo),
+        errorCallbackURL: getAuthHref("login", returnTo),
+      });
+      if (!result.error && result.data?.url) return;
+      setError("Could not start Google sign-in. Try again or use your password.");
+    } catch {
+      setError("Could not connect. Check your connection and try again.");
+    }
+    submitting.current = false;
+    setPending(null);
   }
 
   return (
@@ -126,6 +160,11 @@ export function AuthDialog({ mode, returnTo, notice }: AuthDialogProps) {
               </p>
             )}
             <fieldset disabled={busy} className={styles.authFields}>
+              <button type="button" className={styles.googleButton} onClick={handleGoogleSignIn}>
+                {pending === "google" ? <Loader2 size={18} className="animate-spin" /> : <GoogleMark />}
+                {pending === "google" ? "Connecting to Google..." : "Continue with Google"}
+              </button>
+              <div className={styles.authDivider}><span>or use email</span></div>
               {isRegister && (
                 <div className={styles.authField}>
                   <label htmlFor={`${formId}-name`}>Name</label>
@@ -196,7 +235,7 @@ export function AuthDialog({ mode, returnTo, notice }: AuthDialogProps) {
                 )}
               </div>
               <button type="submit" className={styles.primaryButton}>
-                {pending ? (
+                {pending === "email" ? (
                   <>
                     <Loader2 size={17} className="animate-spin" />
                     {isRegister ? "Creating account..." : "Signing in..."}
@@ -226,4 +265,8 @@ export function AuthDialog({ mode, returnTo, notice }: AuthDialogProps) {
       </Dialog.Content>
     </Dialog.Root>
   );
+}
+
+export function GoogleMark() {
+  return <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.89-1.74 2.98-4.3 2.98-7.36Z"/><path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.41l-3.24-2.51c-.9.6-2.05.96-3.38.96-2.6 0-4.8-1.76-5.59-4.13H3.07v2.59A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.41 13.91A6 6 0 0 1 6.1 12c0-.66.11-1.3.31-1.91V7.5H3.07A10 10 0 0 0 2 12c0 1.61.38 3.14 1.07 4.5l3.34-2.59Z"/><path fill="#EA4335" d="M12 5.96c1.47 0 2.79.5 3.83 1.5L18.7 4.6A9.6 9.6 0 0 0 12 2a10 10 0 0 0-8.93 5.5l3.34 2.59C7.2 7.72 9.4 5.96 12 5.96Z"/></svg>;
 }

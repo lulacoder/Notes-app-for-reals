@@ -8,7 +8,7 @@ import { replaceAuthLocation } from "../lib/auth-redirects";
 
 const { replaceRoute } = vi.hoisted(() => ({ replaceRoute: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: replaceRoute }) }));
-vi.mock("../lib/auth-client", () => ({ signIn: { email: vi.fn() }, signUp: { email: vi.fn() } }));
+vi.mock("../lib/auth-client", () => ({ signIn: { email: vi.fn(), social: vi.fn() }, signUp: { email: vi.fn() } }));
 vi.mock("../lib/auth-redirects", async (importOriginal) => ({
   ...await importOriginal<typeof import("../lib/auth-redirects")>(),
   replaceAuthLocation: vi.fn(),
@@ -23,11 +23,11 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 
-async function render(mode: "login" | "register" = "login", returnTo = "/canvas/saved?zoom=2") {
+async function render(mode: "login" | "register" = "login", returnTo = "/canvas/saved?zoom=2", oauthError?: string) {
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
-  await act(async () => { root?.render(<AuthDialog mode={mode} returnTo={returnTo} />); });
+  await act(async () => { root?.render(<AuthDialog mode={mode} returnTo={returnTo} oauthError={oauthError} />); });
 }
 
 function fill(name: string, value: string) {
@@ -44,6 +44,57 @@ function submit() {
 }
 
 describe("auth dialogs", () => {
+  it.each(["login", "register"] as const)("starts Google from %s without requiring form fields and preserves the destination", async (mode) => {
+    let finish: (() => void) | undefined;
+    vi.mocked(signIn.social).mockImplementation(() => new Promise((resolve) => { finish = () => resolve({ data: { url: "https://accounts.google.com", redirect: true }, error: null }); }));
+    await render(mode);
+    const button = Array.from(document.querySelectorAll("button")).find((item) => item.textContent === "Continue with Google");
+    if (!button) throw new Error("Missing Google button");
+    await act(async () => { button.click(); button.click(); submit(); });
+    expect(signIn.social).toHaveBeenCalledTimes(1);
+    expect(signIn.email).not.toHaveBeenCalled();
+    expect(signIn.social).toHaveBeenCalledWith({ provider: "google", callbackURL: "/canvas/saved?zoom=2", errorCallbackURL: "/login?next=%2Fcanvas%2Fsaved%3Fzoom%3D2" });
+    expect(document.querySelector("fieldset")?.disabled).toBe(true);
+    await act(async () => { finish?.(); });
+    expect(replaceAuthLocation).not.toHaveBeenCalled();
+  });
+
+  it("lets the user retry Google after an unavailable provider or network failure", async () => {
+    vi.mocked(signIn.social).mockRejectedValueOnce(new Error("Offline"));
+    await render("login", "https://example.com");
+    const button = Array.from(document.querySelectorAll("button")).find((item) => item.textContent === "Continue with Google");
+    if (!button) throw new Error("Missing Google button");
+    await act(async () => { button.click(); });
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain("Check your connection");
+    expect(document.querySelector("fieldset")?.disabled).toBe(false);
+    vi.mocked(signIn.social).mockResolvedValue({ data: null, error: { message: "Provider not found", status: 404, statusText: "Not found" } });
+    await act(async () => { button.click(); });
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain("Could not start Google sign-in");
+    expect(vi.mocked(signIn.social).mock.calls[0]?.[0]?.callbackURL).toBe("/notes");
+  });
+
+  it("unlocks Google and password sign-in when Back restores the page from browser cache", async () => {
+    vi.mocked(signIn.social).mockResolvedValue({ data: { url: "https://accounts.google.com", redirect: true }, error: null });
+    await render();
+    const button = Array.from(document.querySelectorAll("button")).find((item) => item.textContent === "Continue with Google");
+    if (!button) throw new Error("Missing Google button");
+    await act(async () => { button.click(); });
+    expect(document.querySelector("fieldset")?.disabled).toBe(true);
+    await act(async () => { window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })); });
+    expect(document.querySelector("fieldset")?.disabled).toBe(false);
+    await act(async () => { button.click(); });
+    expect(signIn.social).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks for the existing password before connecting an unverified account", async () => {
+    vi.mocked(signIn.email).mockResolvedValue({ data: null, error: null });
+    await render("login", "/canvas/saved?zoom=2", "account_not_linked");
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain("Sign in with your password once");
+    fill("email", "writer@example.com");
+    fill("password", "Password-123");
+    await act(async () => { submit(); });
+    expect(replaceAuthLocation).toHaveBeenCalledWith("/account?connect=google&next=%2Fcanvas%2Fsaved%3Fzoom%3D2");
+  });
   it("focuses email, preserves the destination when switching modes, and toggles the password", async () => {
     await render();
     expect(document.activeElement).toBe(document.querySelector('[name="email"]'));

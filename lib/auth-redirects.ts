@@ -1,4 +1,4 @@
-const APP_PATH = /^\/(notes|canvas|kanban|trash|admin)(\/|$)/;
+const APP_PATH = /^\/(notes|canvas|kanban|trash|admin|account)(\/|$)/;
 
 // Only return to app pages. Never accept an external URL or another auth page.
 export function getReturnPath(value: string | string[] | null | undefined): string {
@@ -27,4 +27,13 @@ export function getAuthHref(
 // Auth boundaries need a fresh request so private client route caches are dropped.
 export function replaceAuthLocation(path: string) {
   window.location.replace(path);
+}
+
+export function getGoogleErrorMessage(error: string | string[] | undefined): string {
+  if (!error) return "";
+  if (error === "account_not_linked") return "Sign in with your password once to connect Google to your existing account.";
+  if (error === "access_denied") return "Google sign-in was canceled. Try again or use your password.";
+  if (error === "email_doesn't_match") return "Choose the Google account with the same email as your Noteworthy account.";
+  if (error === "account_already_linked_to_different_user") return "This Google account is already connected to another account.";
+  return "Could not sign in with Google. Try again or use your password.";
 }
