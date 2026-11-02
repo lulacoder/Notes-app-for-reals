@@ -329,6 +329,7 @@ export function LandingPage() {
             <a href="#notes">Notes</a>
             <a href="#canvas">Canvas</a>
             <a href="#boards">Boards</a>
+            <NavigationLink href="/privacy">Privacy policy</NavigationLink>
             <NavigationLink href="/login">
               Sign in <ArrowRight size={13} />
             </NavigationLink>
