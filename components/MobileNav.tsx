@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 interface MobileNavProps {
+  hidden?: boolean;
   onToggleSidebar: () => void;
   onNewNote: () => void;
   onOpenTrash: () => void;
@@ -28,6 +29,7 @@ interface MobileNavProps {
 }
 
 export function MobileNav({
+  hidden = false,
   onToggleSidebar,
   onNewNote,
   onOpenTrash,
@@ -38,7 +40,7 @@ export function MobileNav({
   const router = useRouter();
   return (
     <div
-      className="md:hidden fixed bottom-4 left-4 right-4 z-50 pointer-events-none"
+      className={`${hidden ? "hidden" : ""} md:hidden fixed bottom-4 left-4 right-4 z-50 pointer-events-none`}
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
       <div className="pointer-events-auto max-w-sm mx-auto bg-card/85 backdrop-blur-xl border border-border/60 shadow-2xl rounded-full p-1.5 px-2 flex items-center justify-around">
@@ -130,12 +132,14 @@ export function MobileNav({
 
 // Swipe gesture hook for mobile
 interface SwipeGestureOptions {
+  isOpen: boolean;
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
   threshold?: number;
 }
 
 export function useSwipeGesture({
+  isOpen,
   onSwipeLeft,
   onSwipeRight,
   threshold = 50,
@@ -143,6 +147,8 @@ export function useSwipeGesture({
   const containerRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const touchEndY = useRef<number | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -150,19 +156,23 @@ export function useSwipeGesture({
 
     const handleTouchStart = (e: TouchEvent) => {
       touchEndX.current = null;
+      touchEndY.current = null;
       touchStartX.current = e.targetTouches[0].clientX;
+      touchStartY.current = e.targetTouches[0].clientY;
     };
 
     const handleTouchMove = (e: TouchEvent) => {
       touchEndX.current = e.targetTouches[0].clientX;
+      touchEndY.current = e.targetTouches[0].clientY;
     };
 
     const handleTouchEnd = () => {
-      if (!touchStartX.current || !touchEndX.current) return;
+      if (touchStartX.current === null || touchEndX.current === null || touchStartY.current === null || touchEndY.current === null) return;
 
       const distance = touchStartX.current - touchEndX.current;
-      const isLeftSwipe = distance > threshold;
-      const isRightSwipe = distance < -threshold;
+      const isHorizontal = Math.abs(distance) > Math.abs(touchStartY.current - touchEndY.current);
+      const isLeftSwipe = isOpen && isHorizontal && distance > threshold;
+      const isRightSwipe = !isOpen && touchStartX.current <= 32 && isHorizontal && distance < -threshold;
 
       if (isLeftSwipe) {
         onSwipeLeft?.();
@@ -184,7 +194,7 @@ export function useSwipeGesture({
       container.removeEventListener("touchmove", handleTouchMove);
       container.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [onSwipeLeft, onSwipeRight, threshold]);
+  }, [isOpen, onSwipeLeft, onSwipeRight, threshold]);
 
   return { containerRef };
 }

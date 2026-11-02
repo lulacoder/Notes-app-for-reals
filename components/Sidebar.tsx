@@ -248,8 +248,9 @@ export function Sidebar({
           <Button
             variant="ghost"
             size="sm"
+            aria-label={`${note.isPinned ? "Unpin" : "Pin"} ${note.title || "Untitled"}`}
             className={cn(
-              "h-7 w-7 p-0",
+              "h-9 w-9 p-0 md:h-7 md:w-7",
               note.isPinned ? "text-amber-500" : "text-muted-foreground"
             )}
             onClick={(e) => handleTogglePin(e, note._id)}
@@ -262,7 +263,8 @@ export function Sidebar({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 w-7 p-0 text-muted-foreground"
+                aria-label={`More options for ${note.title || "Untitled"}`}
+                className="h-9 w-9 p-0 text-muted-foreground md:h-7 md:w-7"
                 onClick={(e) => e.stopPropagation()}
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />
@@ -309,11 +311,11 @@ export function Sidebar({
     <motion.div
       initial={{ x: -20, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
-      className="w-72 border-r bg-sidebar flex flex-col h-full min-h-0 overflow-hidden"
+      className="w-[min(18rem,calc(100vw-3rem))] md:w-72 border-r bg-sidebar flex flex-col h-full min-h-0 overflow-hidden"
     >
       {/* Search */}
       <div className="p-2 border-b shrink-0 bg-sidebar">
-        <div className="relative">
+        <div className="relative mr-11 md:mr-0">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search notes..."
@@ -354,7 +356,7 @@ export function Sidebar({
       </div>
 
       {/* Notes list */}
-      <ScrollArea className="flex-1 min-h-0 overflow-hidden">
+      <ScrollArea className="flex-1 min-h-0 overflow-hidden [&_[data-slot=scroll-area-viewport]>div]:!block">
         {filteredNotes.length === 0 && canvases.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}

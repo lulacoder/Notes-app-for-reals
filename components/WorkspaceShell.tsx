@@ -4,6 +4,7 @@ import { Activity, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
+import { X } from "lucide-react";
 
 import { useMutation } from "convex/react";
 import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
@@ -45,6 +46,14 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   useQuickSwitcherShortcut(setShowQuickSwitcher);
 
   const showSidebarMobile = sidebarPath === pathname;
+  useEffect(() => {
+    if (!showSidebarMobile) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setSidebarPath(null);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showSidebarMobile]);
   const showTrash = trashPath === pathname;
   const selectedNoteId =
     pathname === "/notes" && viewMode === "list"
@@ -116,6 +125,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   });
 
   const { containerRef } = useSwipeGesture({
+    isOpen: showSidebarMobile,
     onSwipeLeft: () => {
       if (pathname.startsWith("/notes")) setSidebarPath(null);
     },
@@ -130,8 +140,16 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
       className="flex flex-1 min-w-0 min-h-0 overflow-hidden relative h-full"
     >
       <div
-        className={`absolute md:relative inset-y-0 left-0 z-30 h-full min-h-0 shrink-0 transition-transform duration-200 ${showSidebarMobile ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
+        className={`absolute md:relative inset-y-0 left-0 z-30 h-full min-h-0 shrink-0 transition-transform duration-200 motion-reduce:transition-none ${showSidebarMobile ? "translate-x-0" : "invisible -translate-x-full md:visible md:translate-x-0"}`}
       >
+        <button
+          type="button"
+          aria-label="Close sidebar"
+          onClick={() => setSidebarPath(null)}
+          className="absolute right-2 top-2 z-10 flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent md:hidden"
+        >
+          <X className="h-5 w-5" />
+        </button>
         <Sidebar
           {...data}
           selectedNoteId={selectedNoteId}
@@ -172,6 +190,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
           onToggleSidebar={() =>
             setSidebarPath(showSidebarMobile ? null : pathname)
           }
+          hidden={showSidebarMobile}
           onNewNote={newNote}
           onOpenTrash={openTrash}
           onOpenSearch={() => setShowQuickSwitcher(true)}
