@@ -126,6 +126,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
 
   const { containerRef } = useSwipeGesture({
     isOpen: showSidebarMobile,
+    enabled: pathname.startsWith("/notes"),
     onSwipeLeft: () => {
       if (pathname.startsWith("/notes")) setSidebarPath(null);
     },
@@ -140,7 +141,9 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
       className="flex flex-1 min-w-0 min-h-0 overflow-hidden relative h-full"
     >
       <div
-        className={`absolute md:relative inset-y-0 left-0 z-30 h-full min-h-0 shrink-0 transition-transform duration-200 motion-reduce:transition-none ${showSidebarMobile ? "translate-x-0" : "invisible -translate-x-full md:visible md:translate-x-0"}`}
+        data-mobile-sidebar
+        data-open={showSidebarMobile}
+        className="mobile-sidebar absolute md:relative inset-y-0 left-0 z-30 h-full min-h-0 shrink-0"
       >
         <button
           type="button"
@@ -161,13 +164,14 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
           onViewModeChange={changeViewMode}
         />
       </div>
-      {showSidebarMobile && (
-        <button
-          aria-label="Close sidebar"
-          className="fixed inset-0 bg-black/50 z-20 md:hidden"
-          onClick={() => setSidebarPath(null)}
-        />
-      )}
+      <button
+        aria-label="Close sidebar"
+        tabIndex={showSidebarMobile ? 0 : -1}
+        data-mobile-sidebar-backdrop
+        data-open={showSidebarMobile}
+        className="mobile-sidebar-backdrop fixed inset-0 bg-black/50 z-20 md:hidden"
+        onClick={() => setSidebarPath(null)}
+      />
       <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         <Activity mode={showTrash ? "hidden" : "visible"}>{children}</Activity>
         {showTrash && (

@@ -130,71 +130,112 @@ export function MobileNav({
 }
 
 
-// Swipe gesture hook for mobile
+// Track the drawer directly during touch movement to keep the gesture responsive.
 interface SwipeGestureOptions {
   isOpen: boolean;
+  enabled?: boolean;
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
-  threshold?: number;
 }
 
-export function useSwipeGesture({
-  isOpen,
-  onSwipeLeft,
-  onSwipeRight,
-  threshold = 50,
-}: SwipeGestureOptions) {
+export function useSwipeGesture(options: SwipeGestureOptions) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const touchStartX = useRef<number | null>(null);
-  const touchEndX = useRef<number | null>(null);
-  const touchStartY = useRef<number | null>(null);
-  const touchEndY = useRef<number | null>(null);
+  const optionsRef = useRef(options);
+  useEffect(() => {
+    optionsRef.current = options;
+  });
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const handleTouchStart = (e: TouchEvent) => {
-      touchEndX.current = null;
-      touchEndY.current = null;
-      touchStartX.current = e.targetTouches[0].clientX;
-      touchStartY.current = e.targetTouches[0].clientY;
-    };
+    let gesture: { x: number; y: number; lastX: number; startTime: number; width: number; open: boolean; dragging: boolean; editable: boolean } | null = null;
+    let resetFrame = 0;
 
-    const handleTouchMove = (e: TouchEvent) => {
-      touchEndX.current = e.targetTouches[0].clientX;
-      touchEndY.current = e.targetTouches[0].clientY;
-    };
+    function resetVisuals() {
+      container!.removeAttribute("data-sidebar-dragging");
+      container!.style.removeProperty("--sidebar-drag-x");
+      container!.style.removeProperty("--sidebar-drag-opacity");
+    }
 
-    const handleTouchEnd = () => {
-      if (touchStartX.current === null || touchEndX.current === null || touchStartY.current === null || touchEndY.current === null) return;
-
-      const distance = touchStartX.current - touchEndX.current;
-      const isHorizontal = Math.abs(distance) > Math.abs(touchStartY.current - touchEndY.current);
-      const isLeftSwipe = isOpen && isHorizontal && distance > threshold;
-      const isRightSwipe = !isOpen && touchStartX.current <= 32 && isHorizontal && distance < -threshold;
-
-      if (isLeftSwipe) {
-        onSwipeLeft?.();
+    function handleTouchStart(event: TouchEvent) {
+      const { isOpen, enabled = true } = optionsRef.current;
+      if (event.touches.length !== 1) {
+        finish(true);
+        return;
       }
-      if (isRightSwipe) {
-        onSwipeRight?.();
+      if (!enabled || window.innerWidth >= 768) return;
+      const touch = event.touches[0];
+      // Leave form controls and horizontally scrollable content to their native gestures.
+      const target = event.target instanceof Element ? event.target : null;
+      if (!isOpen && (touch.clientX > Math.min(120, window.innerWidth * 0.3) ||
+        target?.closest('input, textarea, select, button, a'))) return;
+      const editable = !!target?.closest('[contenteditable]:not([contenteditable="false"]), [role="textbox"]');
+      const selection = window.getSelection();
+      if (!isOpen && editable && selection && !selection.isCollapsed) return;
+      for (let element = target; element && element !== container; element = element.parentElement) {
+        const overflow = window.getComputedStyle(element).overflowX;
+        if (!isOpen && /(auto|scroll)/.test(overflow) && element.scrollWidth > element.clientWidth) return;
       }
+      const drawer = container!.querySelector<HTMLElement>("[data-mobile-sidebar]");
+      if (!drawer) return;
+      cancelAnimationFrame(resetFrame);
+      resetVisuals();
+      gesture = { x: touch.clientX, y: touch.clientY, lastX: touch.clientX, startTime: Date.now(), width: drawer.offsetWidth, open: isOpen, dragging: false, editable };
+    }
 
-      touchStartX.current = null;
-      touchEndX.current = null;
-    };
+    function handleTouchMove(event: TouchEvent) {
+      if (!gesture || event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      const dx = touch.clientX - gesture.x;
+      const dy = touch.clientY - gesture.y;
+      if (!gesture.dragging) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
+        if ((gesture.editable && Date.now() - gesture.startTime > 250) ||
+          Math.abs(dy) >= Math.abs(dx) || (gesture.open ? dx >= 0 : dx <= 0)) {
+          gesture = null;
+          return;
+        }
+        gesture.dragging = true;
+        container!.setAttribute("data-sidebar-dragging", "");
+      }
+      if (event.cancelable) event.preventDefault();
+      gesture.lastX = touch.clientX;
+      const x = Math.max(-gesture.width, Math.min(0, (gesture.open ? 0 : -gesture.width) + dx));
+      container!.style.setProperty("--sidebar-drag-x", `${x}px`);
+      container!.style.setProperty("--sidebar-drag-opacity", String(gesture.width ? (gesture.width + x) / gesture.width : 0));
+    }
 
-    container.addEventListener("touchstart", handleTouchStart);
-    container.addEventListener("touchmove", handleTouchMove);
+    function finish(cancelled = false) {
+      if (!gesture) return;
+      const { x, lastX, startTime, open, dragging } = gesture;
+      gesture = null;
+      if (!dragging) return;
+      const distance = lastX - x;
+      const fastSwipe = Math.abs(distance) >= 15 && Math.abs(distance) / Math.max(1, Date.now() - startTime) > 0.4;
+      if (!cancelled && (Math.abs(distance) >= 40 || fastSwipe)) {
+        if (open && distance < 0) optionsRef.current.onSwipeLeft?.();
+        if (!open && distance > 0) optionsRef.current.onSwipeRight?.();
+      }
+      // Let React commit the final open state before the drawer settles into place.
+      resetFrame = requestAnimationFrame(resetVisuals);
+    }
+
+    const handleTouchEnd = () => finish();
+    const handleTouchCancel = () => finish(true);
+    container.addEventListener("touchstart", handleTouchStart, { passive: true });
+    container.addEventListener("touchmove", handleTouchMove, { passive: false });
     container.addEventListener("touchend", handleTouchEnd);
-
+    container.addEventListener("touchcancel", handleTouchCancel);
     return () => {
+      cancelAnimationFrame(resetFrame);
+      resetVisuals();
       container.removeEventListener("touchstart", handleTouchStart);
       container.removeEventListener("touchmove", handleTouchMove);
       container.removeEventListener("touchend", handleTouchEnd);
+      container.removeEventListener("touchcancel", handleTouchCancel);
     };
-  }, [isOpen, onSwipeLeft, onSwipeRight, threshold]);
+  }, []);
 
   return { containerRef };
 }
