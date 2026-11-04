@@ -879,7 +879,7 @@ export function CanvasEditor({
             : `${shapes.filter((shape) => shape.type !== "connector").length} objects · Select, drag, or add an idea`}
         </span>
         <span className="md:hidden">
-          <SaveStatus status={autosave.status} retry={autosave.retry} />
+          <SaveStatus status={autosave.status} retry={autosave.retry} quiet />
         </span>
         <span className="hidden md:inline">
           V select · H pan · Enter edit · Arrow keys move

@@ -156,7 +156,7 @@ export function CanvasToolbar(props: CanvasToolbarProps) {
         <Redo2 size={17} />
       </Button>
       <div className="ml-auto hidden px-2 md:block">
-        <SaveStatus status={props.status} retry={props.retry} />
+        <SaveStatus status={props.status} retry={props.retry} quiet />
       </div>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

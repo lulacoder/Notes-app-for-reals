@@ -316,7 +316,7 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
             )}
 
             {/* Tag assigner */}
-            <SaveStatus status={autosave.status} retry={autosave.retry} />
+            <SaveStatus status={autosave.status} retry={autosave.retry} quiet />
             <TagAssigner
               selectedTagIds={note.tagIds || []}
               onUpdateTags={handleUpdateTags}
