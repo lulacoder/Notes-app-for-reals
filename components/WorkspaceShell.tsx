@@ -76,6 +76,11 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
     router.push(`/notes/${id}`, { scroll: false });
   }
 
+  function selectCanvas(id: Id<"canvases">) {
+    closePanels();
+    router.push(`/canvas/${id}`, { scroll: false });
+  }
+
   async function newNote() {
     const id = await createNote({});
     selectNote(id);
@@ -185,8 +190,10 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         open={showQuickSwitcher}
         onOpenChange={setShowQuickSwitcher}
         onSelectNote={selectNote}
+        onSelectCanvas={selectCanvas}
         onOpenTrash={openTrash}
         preloadedNotes={data.preloadedNotes}
+        preloadedCanvases={data.preloadedCanvases}
         preloadedTags={data.preloadedTags}
       />
       {pathname.startsWith("/notes") && (
