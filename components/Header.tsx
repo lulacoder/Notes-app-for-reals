@@ -10,7 +10,6 @@ import {
   LogOut,
   Keyboard,
   Download,
-  Command,
   ShieldCheck,
   Trash2,
   UserRound,
@@ -31,6 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ShortcutHints } from "@/components/KeyboardShortcuts";
+import { modifierLabel, useKeyboardPlatform } from "@/lib/use-keyboard-platform";
 import { usePWAInstall } from "@/components/MobileNav";
 import { Brand } from "@/components/marketing/Brand";
 import { cn } from "@/lib/utils";
@@ -47,6 +47,7 @@ interface HeaderProps {
 }
 
 export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
+  const platform = useKeyboardPlatform();
   const currentUser = usePreloadedAuthQuery(preloadedCurrentUser);
   const router = useRouter();
   const pathname = usePathname();
@@ -151,15 +152,14 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
                 size="sm"
                 className="hidden sm:flex items-center gap-2 text-muted-foreground"
                 onClick={search}
-                aria-label="Search notes"
+                aria-label="Search notes and canvases"
               >
-                <Command className="h-3 w-3" />
-                <span>K</span>
+                <span>{modifierLabel(platform)}+K</span>
               </Button>
             )}
 
             {/* Keyboard shortcuts */}
-            <Popover>
+            {search && <Popover>
               <PopoverTrigger asChild>
                 <Button
                   variant="ghost"
@@ -173,7 +173,7 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
               <PopoverContent className="w-64" align="end">
                 <ShortcutHints />
               </PopoverContent>
-            </Popover>
+            </Popover>}
 
             {/* Theme toggle */}
             <ThemeToggle />

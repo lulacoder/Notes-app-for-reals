@@ -798,7 +798,7 @@ export function CanvasEditor({
       return;
     }
     const selected = current.current.find((shape) => shape.id === selectedId);
-    if (selected && (key === "delete" || key === "backspace")) {
+    if (selected && !event.altKey && !event.ctrlKey && !event.metaKey && (key === "delete" || key === "backspace")) {
       event.preventDefault();
       event.stopPropagation();
       change(deleteShape(current.current, selected.id));
@@ -807,6 +807,7 @@ export function CanvasEditor({
     if (selected && key === "enter") edit(selected);
     if (
       selected &&
+      !event.altKey && !event.ctrlKey && !event.metaKey &&
       ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
     ) {
       event.preventDefault();
@@ -832,7 +833,7 @@ export function CanvasEditor({
         ),
       );
     }
-    if (!event.ctrlKey && !event.metaKey) {
+    if (!event.altKey && !event.ctrlKey && !event.metaKey) {
       const shortcuts: Record<string, Tool> = {
         v: "select",
         h: "pan",

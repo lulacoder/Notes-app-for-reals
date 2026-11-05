@@ -21,6 +21,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useImageUpload } from "@/lib/use-image-upload";
 import { extractTitleFromHtml } from "@/lib/html-utils";
 import { useAutosave } from "@/lib/use-autosave";
+import { optionLabel, useKeyboardPlatform } from "@/lib/use-keyboard-platform";
 import { SaveStatus } from "@/components/SaveStatus";
 
 type NoteDraft = Pick<Doc<"notes">, "title" | "content">;
@@ -36,6 +37,7 @@ const VersionHistory = dynamic(
 );
 
 export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
+  const platform = useKeyboardPlatform();
   const router = useRouter();
   const { isAuthenticated } = useConvexAuth();
   const liveNote = useQuery(api.notes.getNote, noteId && isAuthenticated ? { id: noteId } : "skip");
@@ -236,7 +238,7 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
             transition={{ delay: 0.3 }}
             className="text-sm mt-2 opacity-75"
           >
-            Press <kbd className="px-2 py-1 rounded-md bg-muted text-xs font-mono">Ctrl+N</kbd> to create
+            Press <kbd className="px-2 py-1 rounded-md bg-muted text-xs font-mono">{optionLabel(platform)}+Shift+N</kbd> to create
           </motion.p>
         </div>
       </motion.div>

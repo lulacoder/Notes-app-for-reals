@@ -136,7 +136,7 @@ export function QuickSwitcher({
       </CommandList>
       <div className="hidden items-center gap-3 border-t border-border/70 px-5 py-3 text-[11px] text-muted-foreground sm:flex" aria-hidden="true">
         <span><kbd className="rounded border bg-muted px-1.5 py-0.5">↑</kbd> <kbd className="rounded border bg-muted px-1.5 py-0.5">↓</kbd> to navigate</span>
-        <span><kbd className="rounded border bg-muted px-1.5 py-0.5">↵</kbd> to open</span>
+        <span><kbd className="rounded border bg-muted px-1.5 py-0.5">Enter</kbd> to open</span>
         <span className="ml-auto"><kbd className="rounded border bg-muted px-1.5 py-0.5">esc</kbd> to close</span>
       </div>
     </CommandDialog>

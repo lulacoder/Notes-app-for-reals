@@ -63,7 +63,6 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
     canvases.find((canvas) => pathname === `/canvas/${canvas._id}`)?._id ??
     null;
   const createNote = useMutation(api.notes.createNote);
-  const softDeleteNote = useMutation(api.notes.softDeleteNote);
   const togglePin = useMutation(api.notes.togglePin);
 
   function closePanels() {
@@ -107,20 +106,11 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
 
   useKeyboardShortcuts({
     onNewNote: newNote,
-    onDeleteNote: selectedNoteId
-      ? () => {
-          void softDeleteNote({ id: selectedNoteId });
-        }
-      : undefined,
     onTogglePin: selectedNoteId
       ? () => {
           void togglePin({ id: selectedNoteId });
         }
       : undefined,
-    onSearch: () =>
-      document
-        .querySelector<HTMLInputElement>('input[placeholder="Search notes..."]')
-        ?.focus(),
     onNextNote: pathname.startsWith("/notes")
       ? () => adjacentNote(1)
       : undefined,

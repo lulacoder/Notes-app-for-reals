@@ -35,6 +35,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { modifierLabel, useKeyboardPlatform } from "@/lib/use-keyboard-platform";
 import { useEffect, useRef, useState } from "react";
 
 interface EditorToolbarProps {
@@ -43,6 +44,7 @@ interface EditorToolbarProps {
 }
 
 export function EditorToolbar({ editor, onImageUpload }: EditorToolbarProps) {
+  const mod = modifierLabel(useKeyboardPlatform());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [, setRenderTick] = useState(0);
 
@@ -108,14 +110,14 @@ export function EditorToolbar({ editor, onImageUpload }: EditorToolbarProps) {
         <ToolbarButton
           onClick={() => editor.chain().focus().undo().run()}
           disabled={!editor.can().undo()}
-          title="Undo (Ctrl+Z)"
+          title={`Undo (${mod}+Z)`}
         >
           <Undo className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().redo().run()}
           disabled={!editor.can().redo()}
-          title="Redo (Ctrl+Y)"
+          title={`Redo (${mod}+Shift+Z)`}
         >
           <Redo className="h-4 w-4" />
         </ToolbarButton>
@@ -173,14 +175,14 @@ export function EditorToolbar({ editor, onImageUpload }: EditorToolbarProps) {
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
           active={editor.isActive("bold")}
-          title="Bold (Ctrl+B)"
+          title={`Bold (${mod}+B)`}
         >
           <Bold className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleItalic().run()}
           active={editor.isActive("italic")}
-          title="Italic (Ctrl+I)"
+          title={`Italic (${mod}+I)`}
         >
           <Italic className="h-4 w-4" />
         </ToolbarButton>
@@ -189,7 +191,7 @@ export function EditorToolbar({ editor, onImageUpload }: EditorToolbarProps) {
           <ToolbarButton
             onClick={() => editor.chain().focus().toggleUnderline().run()}
             active={editor.isActive("underline")}
-            title="Underline (Ctrl+U)"
+            title={`Underline (${mod}+U)`}
           >
             <Underline className="h-4 w-4" />
           </ToolbarButton>

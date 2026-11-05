@@ -1,95 +1,44 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useCallback, useEffect } from "react";
+
+import { modifierLabel, optionLabel, useKeyboardPlatform } from "@/lib/use-keyboard-platform";
 
 interface KeyboardShortcutsProps {
   onNewNote: () => void;
-  onDeleteNote?: () => void;
   onTogglePin?: () => void;
-  onSearch?: () => void;
   onNextNote?: () => void;
   onPrevNote?: () => void;
-  onSave?: () => void;
 }
 
 export function useKeyboardShortcuts({
   onNewNote,
-  onDeleteNote,
   onTogglePin,
-  onSearch,
   onNextNote,
   onPrevNote,
-  onSave,
 }: KeyboardShortcutsProps) {
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
-      const modifier = isMac ? e.metaKey : e.ctrlKey;
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if (!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey || event.repeat) return;
+    const target = event.target;
+    const isInput = target instanceof HTMLElement &&
+      (target.isContentEditable || !!target.closest('input, textarea, select, [contenteditable="true"]'));
 
-      // Don't trigger shortcuts when typing in inputs
-      const target = e.target as HTMLElement;
-      const isInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+    if (event.code === "KeyN") {
+      event.preventDefault();
+      onNewNote();
+      return;
+    }
+    if (isInput) return;
 
-      // Cmd/Ctrl + N: New note (always works)
-      if (modifier && e.key === "n") {
-        e.preventDefault();
-        onNewNote();
-        return;
-      }
-
-      // Skip other shortcuts if in input
-      if (isInput) return;
-
-      // Cmd/Ctrl + S: Save
-      if (modifier && e.key === "s") {
-        e.preventDefault();
-        onSave?.();
-        return;
-      }
-
-      // Cmd/Ctrl + P: Toggle pin
-      if (modifier && e.key === "p" && !e.shiftKey) {
-        e.preventDefault();
-        onTogglePin?.();
-        return;
-      }
-
-      // Cmd/Ctrl + F: Focus search
-      if (modifier && e.key === "f") {
-        e.preventDefault();
-        onSearch?.();
-        return;
-      }
-
-      // Cmd/Ctrl + Backspace or Delete: Delete note
-      if (modifier && (e.key === "Backspace" || e.key === "Delete")) {
-        e.preventDefault();
-        onDeleteNote?.();
-        return;
-      }
-
-      // Cmd/Ctrl + J or Down: Next note
-      if (modifier && (e.key === "j" || e.key === "ArrowDown")) {
-        e.preventDefault();
-        onNextNote?.();
-        return;
-      }
-
-      // Cmd/Ctrl + K or Up: Prev note (if not searching)
-      if (modifier && (e.key === "ArrowUp")) {
-        e.preventDefault();
-        onPrevNote?.();
-        return;
-      }
-
-      // Escape: Blur active element
-      if (e.key === "Escape") {
-        (document.activeElement as HTMLElement)?.blur();
-        return;
-      }
-    },
-    [onNewNote, onDeleteNote, onTogglePin, onSearch, onNextNote, onPrevNote, onSave]
-  );
+    const action = event.code === "KeyP" ? onTogglePin
+      : event.code === "ArrowDown" ? onNextNote
+        : event.code === "ArrowUp" ? onPrevNote
+          : undefined;
+    if (action) {
+      event.preventDefault();
+      action();
+    }
+  }, [onNewNote, onTogglePin, onNextNote, onPrevNote]);
 
   useEffect(() => {
     document.addEventListener("keydown", handleKeyDown);
@@ -97,32 +46,29 @@ export function useKeyboardShortcuts({
   }, [handleKeyDown]);
 }
 
-// Keyboard shortcut hints component
 export function ShortcutHints() {
-  const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase().indexOf("MAC") >= 0;
-  const mod = isMac ? "⌘" : "Ctrl";
-
+  const platform = useKeyboardPlatform();
+  const mod = modifierLabel(platform);
+  const option = optionLabel(platform);
   const shortcuts = [
-    { keys: `${mod}+N`, action: "New note" },
     { keys: `${mod}+K`, action: "Quick search" },
-    { keys: `${mod}+S`, action: "Save" },
-    { keys: `${mod}+P`, action: "Toggle pin" },
-    { keys: `${mod}+F`, action: "Search" },
-    { keys: `${mod}+⌫`, action: "Delete" },
-    { keys: `${mod}+↓`, action: "Next note" },
-    { keys: `${mod}+↑`, action: "Previous note" },
-    { keys: "Esc", action: "Close/blur" },
+    { keys: `${option}+Shift+N`, action: "New note" },
+    { keys: `${option}+Shift+P`, action: "Toggle selected note pin" },
+    { keys: `${option}+Shift+↓`, action: "Next note" },
+    { keys: `${option}+Shift+↑`, action: "Previous note" },
+    { keys: "Esc", action: "Close dialogs" },
   ];
 
   return (
-    <div className="p-4 space-y-2">
-      <h3 className="font-semibold text-sm mb-3">Keyboard Shortcuts</h3>
+    <div className="space-y-2 p-4">
+      <h3 className="mb-3 text-sm font-semibold">Keyboard Shortcuts</h3>
       {shortcuts.map((shortcut) => (
-        <div key={shortcut.keys} className="flex justify-between text-sm">
+        <div key={shortcut.keys} className="flex items-center justify-between gap-3 text-sm">
           <span className="text-muted-foreground">{shortcut.action}</span>
-          <kbd className="px-2 py-0.5 text-xs bg-muted rounded border">{shortcut.keys}</kbd>
+          <kbd className="whitespace-nowrap rounded border bg-muted px-2 py-0.5 text-xs">{shortcut.keys}</kbd>
         </div>
       ))}
+      <p className="pt-1 text-xs text-muted-foreground">Pin and navigation shortcuts work in notes, outside text fields.</p>
     </div>
   );
 }
