@@ -44,6 +44,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { PreloadedCanvases, PreloadedNotes, PreloadedTrashCount } from "@/lib/notes-data";
 import { useNoteSummaries, useTrashCount } from "@/lib/use-notes-queries";
+import { useUndoDelete } from "@/lib/use-undo-delete";
+import { useToast } from "@/components/ui/toast-notification";
 
 const EMPTY: never[] = [];
 
@@ -92,6 +94,8 @@ export function Sidebar({
   const createNote = useMutation(api.notes.createNote);
   const createCanvas = useMutation(api.canvases.createCanvas);
   const softDeleteNote = useMutation(api.notes.softDeleteNote);
+  const notifyDeleted = useUndoDelete();
+  const { error } = useToast();
   const togglePin = useMutation(api.notes.togglePin);
 
   const searchIndex = useMemo(() => {
@@ -153,12 +157,16 @@ export function Sidebar({
   };
 
   const handleDeleteNote = async (id: Id<"notes">) => {
-    await softDeleteNote({ id });
-    if (selectedNoteId === id) {
-      const remaining = notes.filter((n) => n._id !== id);
-      if (remaining.length > 0) {
-        onSelectNote(remaining[0]._id);
+    try {
+      await softDeleteNote({ id });
+      notifyDeleted("note", id);
+      if (selectedNoteId === id) {
+        const remaining = notes.filter((n) => n._id !== id);
+        if (remaining.length > 0) onSelectNote(remaining[0]._id);
       }
+    } catch (cause) {
+      console.error("Failed to delete note:", cause);
+      error("Could not delete note", "Please try again.");
     }
   };
 

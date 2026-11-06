@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,7 @@ export interface ToastMessage {
   type: "success" | "error" | "info";
   title: string;
   description?: string;
+  action?: { label: string; onClick: () => void };
 }
 
 interface ToastContextType {
@@ -23,9 +24,25 @@ const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
   const removeToast = useCallback((id: string) => {
+    clearTimeout(timers.current.get(id));
+    timers.current.delete(id);
     setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const scheduleRemoval = useCallback((id: string, duration: number) => {
+    clearTimeout(timers.current.get(id));
+    timers.current.set(id, setTimeout(() => removeToast(id), duration));
+  }, [removeToast]);
+
+  useEffect(() => {
+    const activeTimers = timers.current;
+    return () => {
+      activeTimers.forEach(clearTimeout);
+      activeTimers.clear();
+    };
   }, []);
 
   const addToast = useCallback(
@@ -34,11 +51,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       const newToast: ToastMessage = { ...options, id };
       setToasts((prev) => [...prev, newToast]);
 
-      setTimeout(() => {
-        removeToast(id);
-      }, 4500);
+      scheduleRemoval(id, options.action ? 10000 : 4500);
     },
-    [removeToast]
+    [scheduleRemoval]
   );
 
   const success = useCallback(
@@ -83,6 +98,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 t.type === "info" &&
                   "bg-card/95 border-blue-500/40 text-card-foreground shadow-blue-500/10"
               )}
+              onMouseEnter={() => { if (t.action) clearTimeout(timers.current.get(t.id)); }}
+              onMouseLeave={() => { if (t.action && !document.activeElement?.closest(`[data-toast-id="${t.id}"]`)) scheduleRemoval(t.id, 10000); }}
+              onFocus={() => { if (t.action) clearTimeout(timers.current.get(t.id)); }}
+              onBlur={(event) => { if (t.action && !event.currentTarget.contains(event.relatedTarget)) scheduleRemoval(t.id, 10000); }}
+              data-toast-id={t.id}
               role="alert"
             >
               {t.type === "success" && (
@@ -103,6 +123,19 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   </p>
                 )}
               </div>
+
+              {t.action && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    removeToast(t.id);
+                    t.action?.onClick();
+                  }}
+                  className="rounded-md px-2 py-1 text-sm font-semibold text-primary hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                >
+                  {t.action.label}
+                </button>
+              )}
 
               <button
                 type="button"

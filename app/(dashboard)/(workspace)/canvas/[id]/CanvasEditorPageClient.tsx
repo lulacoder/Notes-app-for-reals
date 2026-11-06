@@ -32,6 +32,7 @@ import {
 import { TagAssigner } from "@/components/TagManager";
 import { ContentSkeleton } from "@/components/DashboardSkeleton";
 import { useToast } from "@/components/ui/toast-notification";
+import { useUndoDelete } from "@/lib/use-undo-delete";
 
 const CanvasEditor = dynamic(
   () =>
@@ -64,7 +65,8 @@ export function CanvasEditorPageClient({
   const [pendingCount, setPendingCount] = useState(0);
   const pending = pendingCount > 0;
   const metadataQueue = useRef(Promise.resolve());
-  const { error, success } = useToast();
+  const { error } = useToast();
+  const notifyDeleted = useUndoDelete();
   async function saveMetadata(
     action: () => Promise<unknown>,
     done?: () => void,
@@ -128,7 +130,7 @@ export function CanvasEditorPageClient({
     await saveMetadata(
       () => softDeleteCanvas({ id: canvasId }),
       () => {
-        success("Canvas moved to recently deleted");
+        notifyDeleted("canvas", canvasId);
         router.push("/canvas");
       },
     );

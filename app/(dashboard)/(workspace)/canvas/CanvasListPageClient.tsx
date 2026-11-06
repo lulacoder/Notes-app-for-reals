@@ -32,6 +32,7 @@ import {
 import { CanvasPreview } from "@/components/CanvasPreview";
 import { getRelativeTime } from "@/lib/relative-time";
 import { useToast } from "@/components/ui/toast-notification";
+import { useUndoDelete } from "@/lib/use-undo-delete";
 
 interface CanvasListPageClientProps {
   preloadedCanvases: Preloaded<typeof api.canvases.listCanvases>;
@@ -44,7 +45,8 @@ export function CanvasListPageClient({
   const [searchQuery, setSearchQuery] = useState("");
   const [creating, setCreating] = useState(false);
   const creatingRef = useRef(false);
-  const { error, success } = useToast();
+  const { error } = useToast();
+  const notifyDeleted = useUndoDelete();
 
   const canvases = usePreloadedAuthQuery(preloadedCanvases) ?? [];
   const createCanvas = useMutation(api.canvases.createCanvas);
@@ -73,7 +75,7 @@ export function CanvasListPageClient({
   const handleDeleteCanvas = async (id: Id<"canvases">) => {
     try {
       await softDeleteCanvas({ id });
-      success("Canvas moved to recently deleted");
+      notifyDeleted("canvas", id);
     } catch (cause) {
       console.error("Failed CanvasListPageClient action:", cause);
       error(
