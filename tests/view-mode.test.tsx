@@ -2,7 +2,7 @@
 import { act } from "react";
 import { hydrateRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useNotesViewMode } from "../lib/use-notes-view-mode";
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -13,11 +13,20 @@ function Preference() {
   return <button onClick={() => setMode(mode === "list" ? "grid" : "list")}>{mode}</button>;
 }
 
+beforeEach(() => {
+  // Node's global localStorage can shadow jsdom's browser storage.
+  const { jsdom } = globalThis as typeof globalThis & {
+    jsdom: { window: { localStorage: Storage } };
+  };
+  vi.stubGlobal("localStorage", jsdom.window.localStorage);
+});
+
 afterEach(async () => {
   await act(async () => { root?.unmount(); });
   root = undefined;
   document.body.innerHTML = "";
   localStorage.clear();
+  vi.unstubAllGlobals();
 });
 
 describe("saved view mode", () => {
