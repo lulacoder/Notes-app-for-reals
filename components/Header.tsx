@@ -35,6 +35,7 @@ import { usePWAInstall } from "@/components/MobileNav";
 import { Brand } from "@/components/marketing/Brand";
 import { cn } from "@/lib/utils";
 import { useWorkspaceNavigation } from "@/providers/workspace-navigation";
+import styles from "./Header.module.css";
 import {
   Popover,
   PopoverContent,
@@ -181,7 +182,7 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
             {/* User menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="gap-2">
+                <Button variant="ghost" size="sm" className={cn("gap-2", styles.accountTrigger)}>
                   <Avatar className="h-7 w-7">
                     <AvatarFallback className="bg-primary/10 text-primary text-xs">
                       {userInitial}
@@ -194,7 +195,7 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                className="w-56 data-[state=open]:animate-none data-[state=closed]:animate-none"
+                className={cn("w-56 border-border/60 shadow-sm data-[state=open]:animate-none data-[state=closed]:animate-none", styles.accountMenu)}
               >
                 <div className="px-2 py-1.5">
                   <p className="text-sm font-medium">{userName || "User"}</p>

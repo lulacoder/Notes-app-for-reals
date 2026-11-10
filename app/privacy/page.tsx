@@ -12,16 +12,23 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <div className={styles.page}>
-      <header className={styles.header}>
-        <Link href="/" aria-label="Noteworthy home"><Brand /></Link>
-        <Link href="/" className={styles.back}><ArrowLeft size={15} /> Back to Noteworthy</Link>
-      </header>
-      <main className={styles.main}>
+      <div className={styles.darkSection}>
+        <header className={styles.header}>
+          <Link href="/" aria-label="Noteworthy home"><Brand /></Link>
+          <Link href="/" className={styles.back}><ArrowLeft size={15} /> Back to Noteworthy</Link>
+        </header>
         <div className={styles.intro}>
           <p className={styles.eyebrow}>Noteworthy / Your information</p>
           <h1>Privacy policy</h1>
           <p>How your account and the things you create are handled in Noteworthy.</p>
           <span>Last updated November 2, 2026</span>
+        </div>
+      </div>
+      <main className={styles.main}>
+        <div className={styles.summary}>
+          <p className={styles.eyebrow}>Your information</p>
+          <h2>A little clarity goes a long way.</h2>
+          <p>Here&apos;s how we handle your account and the work you create.</p>
         </div>
         <article className={styles.content}>
           <section><h2>Information we handle</h2><p>When you create an account, Noteworthy stores your name, email address, and account and session information. If you use a password, the authentication service stores a protected password rather than a plain-text password.</p><p>We also store the content you add, such as notes, canvases, boards, tags, uploaded images, and saved versions. The service may process technical information, such as IP address and browser information, to operate and secure sessions.</p></section>
@@ -33,6 +40,13 @@ export default function PrivacyPage() {
           <section><h2>Changes to this policy</h2><p>We may update this page as the service changes. The date at the top shows when the policy was last updated.</p></section>
         </article>
       </main>
+      <footer className={styles.footer}>
+        <div className={styles.footerInner}>
+          <Link href="/" aria-label="Noteworthy home"><Brand /></Link>
+          <p>Make a little room for your ideas.</p>
+          <Link href="/" className={styles.back}><ArrowLeft size={15} /> Back to Noteworthy</Link>
+        </div>
+      </footer>
     </div>
   );
 }
