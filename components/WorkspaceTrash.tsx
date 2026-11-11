@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 import { useMutation, useQuery, useConvexAuth } from "convex/react";
 import { ArrowLeft, RotateCcw, Trash2 } from "lucide-react";
@@ -15,8 +14,7 @@ import { TrashView } from "@/components/TrashView";
 type Kind = "notes" | "canvases" | "boards" | "cards";
 
 export function WorkspaceTrash() {
-  const router = useRouter();
-  const [kind, setKind] = useState<Kind>("canvases");
+  const [kind, setKind] = useState<Kind>("notes");
   const [restoring, setRestoring] = useState<string | null>(null);
   const { isAuthenticated } = useConvexAuth();
   const canvases = useQuery(
@@ -68,10 +66,7 @@ export function WorkspaceTrash() {
         )}
       </nav>
       {kind === "notes" ? (
-        <TrashView
-          onClose={() => setKind("canvases")}
-          onSelectNote={(id) => router.push(`/notes/${id}`)}
-        />
+        <TrashView />
       ) : (
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           <p className="mb-5 text-sm text-muted-foreground">

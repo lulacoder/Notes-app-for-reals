@@ -103,7 +103,7 @@ export function MobileNav({
           <PopoverContent
             side="top"
             align="end"
-            className="w-44 p-1 rounded-xl shadow-xl border border-border/60 bg-card/95 backdrop-blur-md"
+            className="w-56 p-1 rounded-xl shadow-xl border border-border/60 bg-card/95 backdrop-blur-md"
             sideOffset={12}
           >
             <Button
@@ -112,7 +112,7 @@ export function MobileNav({
               onClick={onOpenSearch}
             >
               <Search className="h-4 w-4 text-muted-foreground" />
-              Search Notes
+              Search notes and canvases
             </Button>
             <Button
               variant="ghost"
