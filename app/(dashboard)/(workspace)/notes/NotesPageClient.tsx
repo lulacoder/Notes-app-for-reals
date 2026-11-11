@@ -12,6 +12,7 @@ import { useNotesViewMode } from "@/lib/use-notes-view-mode";
 import { useNoteSummaries } from "@/lib/use-notes-queries";
 import { ContentSkeleton } from "@/components/DashboardSkeleton";
 import { useToast } from "@/components/ui/toast-notification";
+import { NotesEmptyState } from "@/components/NotesEmptyState";
 
 const NoteEditor = dynamic(() => import("@/components/NoteEditor").then((module) => module.NoteEditor));
 const NotesGrid = dynamic(() => import("@/components/NotesGrid").then((module) => module.NotesGrid));
@@ -58,5 +59,9 @@ export function NotesPageClient({ initialNote }: NotesPageClientProps) {
     );
   }
 
-  return <NoteEditor key={selectedNoteId ?? "empty"} noteId={selectedNoteId} initialNote={initialNote?._id === selectedNoteId ? initialNote : undefined} />;
+  if (!selectedNoteId) {
+    return <NotesEmptyState onCreateNote={() => void handleCreateNote()} creating={creating} />;
+  }
+
+  return <NoteEditor key={selectedNoteId} noteId={selectedNoteId} initialNote={initialNote?._id === selectedNoteId ? initialNote : undefined} />;
 }

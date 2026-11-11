@@ -3,10 +3,8 @@
 import type { Id } from "@/convex/_generated/dataModel";
 import { NoteCard } from "./NoteCard";
 import { motion, AnimatePresence } from "framer-motion";
-import { FileText, Plus } from "lucide-react";
 import { CanvasCard } from "@/components/CanvasCard";
-import { WorkspaceEmptyState } from "@/components/WorkspaceEmptyState";
-import { Button } from "@/components/ui/button";
+import { NotesEmptyState } from "@/components/NotesEmptyState";
 
 interface Note {
   _id: Id<"notes">;
@@ -51,15 +49,7 @@ export function NotesGrid({
 }: NotesGridProps) {
   if (notes.length === 0 && canvases.length === 0) {
     return (
-      <WorkspaceEmptyState
-        icon={<FileText size={34} />}
-        title="Make room for an idea."
-        description="Create a note to start collecting your thoughts, or open Canvas to map them out."
-      >
-        <Button onClick={onCreateNote} disabled={creating}>
-          <Plus size={16} /> {creating ? "Creating..." : "Create your first note"}
-        </Button>
-      </WorkspaceEmptyState>
+      <NotesEmptyState onCreateNote={onCreateNote} creating={creating} />
     );
   }
 
