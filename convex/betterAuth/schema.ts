@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { tables as generatedTables } from "./schema.generated";
 
 // Preserve the existing optional user fields, custom indexes, and unused plugin tables.
-// The active core tables use the schema generated for Better Auth 1.6.
+// The active core tables use the schema generated for Better Auth 1.7.
 export const tables = {
   user: defineTable({
     name: v.string(),

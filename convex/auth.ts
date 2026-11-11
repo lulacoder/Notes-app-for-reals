@@ -40,10 +40,6 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
     session: {
       expiresIn: 60 * 60 * 24 * 7, // 7 days
       updateAge: 60 * 60 * 24, // Refresh session after 1 day of activity
-      cookieCache: {
-        enabled: true,
-        maxAge: 5 * 60, // 5 minute cache to reduce DB hits
-      },
     },
     plugins: [
       convex({
@@ -61,8 +57,12 @@ export const createAuthOptions = (ctx: GenericCtx<DataModel>) => {
   } satisfies BetterAuthOptions;
 };
 
+// Convex codegen will include these newly exported adapter methods when a
+// deployment is configured. The runtime component reference is a path proxy.
+const betterAuthComponent = components.betterAuth as unknown as Parameters<typeof createClient>[0];
+
 export const authComponent = createClient<DataModel, typeof authSchema>(
-  components.betterAuth,
+  betterAuthComponent,
   {
     local: {
       schema: authSchema,
