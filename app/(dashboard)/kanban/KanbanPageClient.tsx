@@ -13,6 +13,7 @@ import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
 import { BoardSidebar } from "@/components/kanban/BoardSidebar";
 import { Button } from "@/components/ui/button";
+import { WorkspaceEmptyState } from "@/components/WorkspaceEmptyState";
 import {
   Dialog,
   DialogContent,
@@ -131,27 +132,18 @@ export function KanbanPageClient({
                 Boards
               </Button>
             </div>
-            <div className="flex flex-1 flex-col items-center justify-center gap-5 p-8 text-center">
-              <div className="rounded-2xl bg-primary/10 p-5">
-                <LayoutDashboard size={34} className="text-primary" />
-              </div>
-              <div>
-                <p className="mb-2 text-xs uppercase tracking-widest text-muted-foreground">
-                  From idea to next step
-                </p>
-                <h1 className="text-2xl font-semibold">
-                  Make room for a plan.
-                </h1>
-                <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">
-                  Give your tasks a home. Start a board, add a few next steps,
-                  and move them forward.
-                </p>
-              </div>
+            <WorkspaceEmptyState
+              className="flex-1"
+              icon={<LayoutDashboard size={34} />}
+              headingAs="h1"
+              title="Make room for a plan."
+              description="Give your tasks a home. Start a board, add a few next steps, and move them forward."
+            >
               <Button disabled={creating} onClick={() => void create()}>
                 <Plus size={16} />
                 {creating ? "Creating..." : "Create your first board"}
               </Button>
-            </div>
+            </WorkspaceEmptyState>
           </>
         )}
       </div>

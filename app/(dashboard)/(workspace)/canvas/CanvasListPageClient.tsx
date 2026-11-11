@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CanvasCard } from "@/components/CanvasCard";
+import { WorkspaceEmptyState } from "@/components/WorkspaceEmptyState";
 import { useToast } from "@/components/ui/toast-notification";
 
 interface CanvasListPageClientProps {
@@ -168,24 +169,19 @@ function EmptyState({
   creating: boolean;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center h-64 text-center">
-      <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-        <Layers className="h-8 w-8 text-primary" />
-      </div>
-      <h3 className="text-lg font-medium mb-2">
-        {hasCanvases ? "No canvases found" : "No canvases yet"}
-      </h3>
-      <p className="text-muted-foreground text-sm mb-4 max-w-sm">
-        {hasCanvases
-          ? "Try a different search term"
-          : "Create your first canvas to start drawing, organizing notes, and visualizing ideas"}
-      </p>
+    <WorkspaceEmptyState
+      icon={<Layers size={34} />}
+      title={hasCanvases ? "No canvases found" : "Make room for ideas."}
+      description={hasCanvases
+        ? "Try a different search term."
+        : "Create a canvas to draw, organize notes, and visualize ideas."}
+    >
       {!hasCanvases && (
         <Button onClick={onCreateCanvas} disabled={creating}>
           <Plus className="h-4 w-4 mr-2" />
           {creating ? "Creating..." : "Create Canvas"}
         </Button>
       )}
-    </div>
+    </WorkspaceEmptyState>
   );
 }
