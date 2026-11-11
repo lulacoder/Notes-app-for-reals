@@ -2,11 +2,9 @@
 
 import type { Id } from "@/convex/_generated/dataModel";
 import { NoteCard } from "./NoteCard";
-import { DocumentLink } from "@/components/DocumentLink";
 import { motion, AnimatePresence } from "framer-motion";
-import { FileText, Layers } from "lucide-react";
-import { CanvasPreview } from "@/components/CanvasPreview";
-import { getRelativeTime } from "@/lib/relative-time";
+import { FileText } from "lucide-react";
+import { CanvasCard } from "@/components/CanvasCard";
 
 interface Note {
   _id: Id<"notes">;
@@ -207,35 +205,3 @@ export function NotesGrid({
   );
 }
 
-function CanvasCard({
-  canvas,
-}: {
-  canvas: Canvas;
-}) {
-  return (
-    <DocumentLink kind="canvas" id={canvas._id} className="block min-w-0">
-    <motion.div
-      layout
-      initial={{ opacity: 0, scale: 0.98 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.98 }}
-      whileHover={{ scale: 1.01 }}
-      whileTap={{ scale: 0.98 }}
-      className="group cursor-pointer rounded-xl border bg-card hover:bg-accent/50 transition-all hover:shadow-lg overflow-hidden"
-    >
-      <div className="aspect-video bg-muted/30 relative">
-        <CanvasPreview content={canvas.content} className="w-full h-full" />
-      </div>
-      <div className="p-3 space-y-1">
-        <div className="flex items-center gap-2">
-          <Layers className="h-4 w-4 text-muted-foreground" />
-          <h3 className="font-medium truncate">{canvas.title || "Untitled"}</h3>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {getRelativeTime(canvas.updatedAt)}
-        </p>
-      </div>
-    </motion.div>
-    </DocumentLink>
-  );
-}
