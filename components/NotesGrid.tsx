@@ -201,4 +201,3 @@ export function NotesGrid({
     </div>
   );
 }
-
