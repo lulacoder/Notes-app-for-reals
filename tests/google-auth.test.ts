@@ -1,11 +1,42 @@
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
+import type { createClient } from "@convex-dev/better-auth";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, components } from "../convex/_generated/api";
-import { createAuthOptions } from "../convex/auth";
+import { createAuth, createAuthOptions } from "../convex/auth";
 import { account, setup } from "./convex";
 
 afterEach(() => { vi.unstubAllEnvs(); });
+
+it("registers and signs in through the upgraded Convex authentication adapter", async () => {
+  vi.stubEnv("SITE_URL", "http://localhost:3000");
+  vi.stubEnv("BETTER_AUTH_SECRET", "test-only-better-auth-secret-at-least-32-characters");
+  const t = setup();
+  await t.run(async (ctx) => {
+    const auth = createAuth(ctx);
+    const created = await auth.api.signUpEmail({ body: { email: "new@example.com", name: "Writer", password: "Original-password-123" } });
+    const signedIn = await auth.api.signInEmail({ body: { email: "new@example.com", password: "Original-password-123" } });
+    expect(signedIn.user.id).toBe(created.user.id);
+  });
+});
+
+it("exports the atomic adapter operations needed by Better Auth 1.7", async () => {
+  const t = setup();
+  const adapter = (components.betterAuth as unknown as Parameters<typeof createClient>[0]).adapter;
+  const now = Date.now();
+  await t.mutation(adapter.create, { input: { model: "verification", data: {
+    identifier: "single-use", value: "token", expiresAt: now + 60000, createdAt: now, updatedAt: now,
+  } } });
+  const consume = { input: { model: "verification", where: [{ field: "identifier", value: "single-use" }] } };
+  expect(await t.mutation(adapter.consumeOne, consume)).toMatchObject({ value: "token" });
+  expect(await t.mutation(adapter.consumeOne, consume)).toBeNull();
+
+  await t.mutation(adapter.create, { input: { model: "rateLimit", data: { key: "attempts", count: 1, lastRequest: now } } });
+  const updated = await t.mutation(adapter.incrementOne, { input: {
+    model: "rateLimit", where: [{ field: "key", value: "attempts" }], increment: { count: 1 },
+  } });
+  expect(updated).toMatchObject({ count: 2 });
+});
 
 async function authFixture(emailVerified: boolean, googleEmail = "writer@example.com") {
   vi.stubEnv("SITE_URL", "http://localhost:3000");
@@ -28,7 +59,15 @@ async function authFixture(emailVerified: boolean, googleEmail = "writer@example
         clientSecret: "test-client-secret",
         // Stub only Google's remote token validation. Better Auth still runs its real linking rules.
         verifyIdToken: async () => true,
-        getUserInfo: async () => ({ user: { id: "google-writer", email: googleEmail, name: "Google writer", emailVerified: true }, data: {} }),
+        getUserInfo: async () => ({
+          user: { email: googleEmail, name: "Google writer", emailVerified: true },
+          data: {
+            sub: "google-writer", email: googleEmail, email_verified: true,
+            name: "Google writer", given_name: "Google", family_name: "writer",
+            aud: "test-client-id", azp: "test-client-id", iss: "https://accounts.google.com",
+            iat: 1, exp: 9999999999, picture: "",
+          },
+        }),
       },
     },
   });
