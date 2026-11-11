@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
@@ -23,9 +23,6 @@ import { useQuickSwitcherShortcut } from "@/lib/use-quick-switcher-shortcut";
 const QuickSwitcher = dynamic(() =>
   import("@/components/QuickSwitcher").then((module) => module.QuickSwitcher),
 );
-const TrashView = dynamic(() =>
-  import("@/components/TrashView").then((module) => module.TrashView),
-);
 const EMPTY: never[] = [];
 
 export function WorkspaceShell({ children }: { children: ReactNode }) {
@@ -36,7 +33,6 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   const canvases = usePreloadedAuthQuery(data.preloadedCanvases) ?? EMPTY;
   const [viewMode, setViewMode] = useNotesViewMode();
   const [sidebarPath, setSidebarPath] = useState<string | null>(null);
-  const [trashPath, setTrashPath] = useState<string | null>(null);
   const [showQuickSwitcher, setShowQuickSwitcher] = useState(false);
   const { registerSearch } = useWorkspaceNavigation();
   useEffect(
@@ -54,7 +50,6 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [showSidebarMobile]);
-  const showTrash = trashPath === pathname;
   const selectedNoteId =
     pathname === "/notes" && viewMode === "list"
       ? (notes[0]?._id ?? null)
@@ -67,7 +62,6 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
 
   function closePanels() {
     setSidebarPath(null);
-    setTrashPath(null);
   }
 
   function selectNote(id: Id<"notes">) {
@@ -86,8 +80,8 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   }
 
   function openTrash() {
-    setTrashPath(pathname);
     setSidebarPath(null);
+    router.push("/trash");
   }
 
   function changeViewMode(mode: "list" | "grid") {
@@ -168,13 +162,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         onClick={() => setSidebarPath(null)}
       />
       <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
-        <Activity mode={showTrash ? "hidden" : "visible"}>{children}</Activity>
-        {showTrash && (
-          <TrashView
-            onClose={() => setTrashPath(null)}
-            onSelectNote={selectNote}
-          />
-        )}
+        {children}
       </div>
       <QuickSwitcher
         open={showQuickSwitcher}

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -20,18 +20,15 @@ import {
 import { Trash2, RotateCcw, FileText, Clock } from "lucide-react";
 import { getRelativeTime } from "@/lib/relative-time";
 import { addDays, isAfter } from "date-fns";
+import { useToast } from "@/components/ui/toast-notification";
 
-interface TrashViewProps {
-  onClose: () => void;
-  onSelectNote: (id: Id<"notes">) => void;
-}
-
-export function TrashView({ onClose }: TrashViewProps) {
+export function TrashView() {
   const [now, setNow] = useState(() => Date.now());
   const trash = useQuery(api.notes.listTrash) || [];
   const restoreNote = useMutation(api.notes.restoreNote);
   const deleteNote = useMutation(api.notes.deleteNote);
   const emptyTrash = useMutation(api.notes.emptyTrash);
+  const { error } = useToast();
 
   // Update timestamp periodically for accurate countdown
   useEffect(() => {
@@ -40,15 +37,24 @@ export function TrashView({ onClose }: TrashViewProps) {
   }, []);
 
   const handleRestore = async (id: Id<"notes">) => {
-    await restoreNote({ id });
+    try { await restoreNote({ id }); } catch (cause) {
+      console.error("Failed to restore note:", cause);
+      error("Could not restore note", "Please try again.");
+    }
   };
 
   const handlePermanentDelete = async (id: Id<"notes">) => {
-    await deleteNote({ id });
+    try { await deleteNote({ id }); } catch (cause) {
+      console.error("Failed to delete note permanently:", cause);
+      error("Could not delete note", "Please try again.");
+    }
   };
 
   const handleEmptyTrash = async () => {
-    await emptyTrash({ all: true });
+    try { await emptyTrash({ all: true }); } catch (cause) {
+      console.error("Failed to empty deleted notes:", cause);
+      error("Could not delete notes", "Please try again.");
+    }
   };
 
   // Calculate days until auto-delete
@@ -65,7 +71,7 @@ export function TrashView({ onClose }: TrashViewProps) {
       <div className="p-4 border-b flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Trash2 className="h-5 w-5 text-muted-foreground" />
-          <h2 className="font-semibold">Trash</h2>
+          <h2 className="font-semibold">Deleted notes</h2>
           <span className="text-sm text-muted-foreground">({trash.length})</span>
         </div>
         <div className="flex items-center gap-2">
@@ -73,12 +79,12 @@ export function TrashView({ onClose }: TrashViewProps) {
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" size="sm">
-                  Empty Trash
+                  Delete all notes
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Empty trash?</AlertDialogTitle>
+                  <AlertDialogTitle>Delete all notes permanently?</AlertDialogTitle>
                   <AlertDialogDescription>
                     This will permanently delete all {trash.length} notes in the trash.
                     This action cannot be undone.
@@ -90,15 +96,12 @@ export function TrashView({ onClose }: TrashViewProps) {
                     onClick={handleEmptyTrash}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
-                    Empty Trash
+                    Delete all notes
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
           )}
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            ✕
-          </Button>
         </div>
       </div>
 
@@ -106,7 +109,7 @@ export function TrashView({ onClose }: TrashViewProps) {
         {trash.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">
             <Trash2 className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            <p>Trash is empty</p>
+            <p>No deleted notes</p>
             <p className="text-sm mt-1">Deleted notes will appear here</p>
           </div>
         ) : (
@@ -130,7 +133,7 @@ export function TrashView({ onClose }: TrashViewProps) {
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity">
                       <Button
                         variant="ghost"
                         size="sm"

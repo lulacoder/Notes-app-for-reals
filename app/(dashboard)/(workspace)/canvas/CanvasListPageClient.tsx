@@ -12,27 +12,17 @@ import {
   Layers,
   Search,
   Pin,
-  MoreHorizontal,
   Trash2,
   ArrowLeft,
 } from "lucide-react";
 
-import { DocumentLink } from "@/components/DocumentLink";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { CanvasPreview } from "@/components/CanvasPreview";
-import { getRelativeTime } from "@/lib/relative-time";
+import { CanvasCard } from "@/components/CanvasCard";
+import { WorkspaceEmptyState } from "@/components/WorkspaceEmptyState";
 import { useToast } from "@/components/ui/toast-notification";
-import { useUndoDelete } from "@/lib/use-undo-delete";
 
 interface CanvasListPageClientProps {
   preloadedCanvases: Preloaded<typeof api.canvases.listCanvases>;
@@ -46,12 +36,9 @@ export function CanvasListPageClient({
   const [creating, setCreating] = useState(false);
   const creatingRef = useRef(false);
   const { error } = useToast();
-  const notifyDeleted = useUndoDelete();
 
   const canvases = usePreloadedAuthQuery(preloadedCanvases) ?? [];
   const createCanvas = useMutation(api.canvases.createCanvas);
-  const softDeleteCanvas = useMutation(api.canvases.softDeleteCanvas);
-  const togglePin = useMutation(api.canvases.togglePin);
 
   const handleCreateCanvas = async () => {
     if (creatingRef.current) return;
@@ -69,31 +56,6 @@ export function CanvasListPageClient({
     } finally {
       creatingRef.current = false;
       setCreating(false);
-    }
-  };
-
-  const handleDeleteCanvas = async (id: Id<"canvases">) => {
-    try {
-      await softDeleteCanvas({ id });
-      notifyDeleted("canvas", id);
-    } catch (cause) {
-      console.error("Failed CanvasListPageClient action:", cause);
-      error(
-        "Could not delete canvas",
-        cause instanceof Error ? cause.message : "Try again.",
-      );
-    }
-  };
-
-  const handleTogglePin = async (id: Id<"canvases">) => {
-    try {
-      await togglePin({ id });
-    } catch (cause) {
-      console.error("Failed CanvasListPageClient action:", cause);
-      error(
-        "Could not update canvas",
-        cause instanceof Error ? cause.message : "Try again.",
-      );
     }
   };
 
@@ -166,8 +128,6 @@ export function CanvasListPageClient({
                     <CanvasCard
                       key={canvas._id}
                       canvas={canvas}
-                      onDelete={handleDeleteCanvas}
-                      onTogglePin={handleTogglePin}
                     />
                   ))}
                 </div>
@@ -186,8 +146,6 @@ export function CanvasListPageClient({
                     <CanvasCard
                       key={canvas._id}
                       canvas={canvas}
-                      onDelete={handleDeleteCanvas}
-                      onTogglePin={handleTogglePin}
                     />
                   ))}
                 </div>
@@ -200,87 +158,6 @@ export function CanvasListPageClient({
   );
 }
 
-function CanvasCard({
-  canvas,
-  onDelete,
-  onTogglePin,
-}: {
-  canvas: {
-    _id: Id<"canvases">;
-    title: string;
-    content: string;
-    updatedAt: number;
-    isPinned?: boolean;
-  };
-  onDelete: (id: Id<"canvases">) => void;
-  onTogglePin: (id: Id<"canvases">) => void;
-}) {
-  return (
-    <div className="group cursor-pointer rounded-xl border bg-card hover:bg-accent/50 transition-all hover:shadow-lg overflow-hidden">
-      <div className="aspect-video bg-muted/30 relative">
-        <DocumentLink
-          kind="canvas"
-          id={canvas._id}
-          aria-label={`Open ${canvas.title}`}
-          className="block h-full"
-        >
-          <CanvasPreview content={canvas.content} className="w-full h-full" />
-        </DocumentLink>
-        {canvas.isPinned && (
-          <div className="absolute top-2 left-2">
-            <Pin className="h-4 w-4 text-primary fill-primary" />
-          </div>
-        )}
-        <div className="absolute top-2 right-2 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <Button
-                variant="secondary"
-                size="icon"
-                className="h-8 w-8"
-                aria-label={`Options for ${canvas.title}`}
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onTogglePin(canvas._id);
-                }}
-              >
-                <Pin className="h-4 w-4 mr-2" />
-                {canvas.isPinned ? "Unpin" : "Pin"}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(canvas._id);
-                }}
-                className="text-destructive focus:text-destructive"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
-      <DocumentLink
-        kind="canvas"
-        id={canvas._id}
-        className="block p-3 space-y-1"
-      >
-        <h3 className="font-medium truncate">{canvas.title}</h3>
-        <p className="text-xs text-muted-foreground">
-          {getRelativeTime(canvas.updatedAt)}
-        </p>
-      </DocumentLink>
-    </div>
-  );
-}
 
 function EmptyState({
   hasCanvases,
@@ -292,24 +169,19 @@ function EmptyState({
   creating: boolean;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center h-64 text-center">
-      <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-        <Layers className="h-8 w-8 text-primary" />
-      </div>
-      <h3 className="text-lg font-medium mb-2">
-        {hasCanvases ? "No canvases found" : "No canvases yet"}
-      </h3>
-      <p className="text-muted-foreground text-sm mb-4 max-w-sm">
-        {hasCanvases
-          ? "Try a different search term"
-          : "Create your first canvas to start drawing, organizing notes, and visualizing ideas"}
-      </p>
+    <WorkspaceEmptyState
+      icon={<Layers size={34} />}
+      title={hasCanvases ? "No canvases found" : "Make room for ideas."}
+      description={hasCanvases
+        ? "Try a different search term."
+        : "Create a canvas to draw, organize notes, and visualize ideas."}
+    >
       {!hasCanvases && (
         <Button onClick={onCreateCanvas} disabled={creating}>
           <Plus className="h-4 w-4 mr-2" />
           {creating ? "Creating..." : "Create Canvas"}
         </Button>
       )}
-    </div>
+    </WorkspaceEmptyState>
   );
 }

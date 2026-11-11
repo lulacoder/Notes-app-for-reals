@@ -10,6 +10,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast-notification";
 import {
   Popover,
   PopoverContent,
@@ -54,43 +55,61 @@ export function TagManager({ noteId, noteTagIds }: TagManagerProps) {
   const createTag = useMutation(api.tags.createTag);
   const deleteTag = useMutation(api.tags.deleteTag);
   const updateNoteTags = useMutation(api.notes.updateNoteTags);
+  const { error: showError } = useToast();
 
   const noteTags = tags.filter((tag) => noteTagIds?.includes(tag._id));
   const availableTags = tags.filter((tag) => !noteTagIds?.includes(tag._id));
 
   const handleCreateTag = async () => {
     if (!newTagName.trim()) return;
+    let tagId: Id<"tags">;
     try {
-      const tagId = await createTag({
+      tagId = await createTag({
         name: newTagName.trim(),
         color: selectedColor,
       });
+      setNewTagName("");
+    } catch (cause) {
+      console.error("Failed to create tag:", cause);
+      showError("Could not create tag", "Please try again.");
+      return;
+    }
+    try {
       await updateNoteTags({
         id: noteId,
         tagIds: [...(noteTagIds || []), tagId],
       });
-      setNewTagName("");
-    } catch (error) {
-      console.error("Failed to create tag:", error);
+    } catch (cause) {
+      console.error("Failed to add new tag to note:", cause);
+      showError("Tag created, but could not be added", "Try adding it to the note again.");
     }
   };
 
   const handleAddTag = async (tagId: Id<"tags">) => {
-    await updateNoteTags({
-      id: noteId,
-      tagIds: [...(noteTagIds || []), tagId],
-    });
+    try {
+      await updateNoteTags({ id: noteId, tagIds: [...(noteTagIds || []), tagId] });
+    } catch (cause) {
+      console.error("Failed to add tag:", cause);
+      showError("Could not add tag", "Please try again.");
+    }
   };
 
   const handleRemoveTag = async (tagId: Id<"tags">) => {
-    await updateNoteTags({
-      id: noteId,
-      tagIds: (noteTagIds || []).filter((id) => id !== tagId),
-    });
+    try {
+      await updateNoteTags({ id: noteId, tagIds: (noteTagIds || []).filter((id) => id !== tagId) });
+    } catch (cause) {
+      console.error("Failed to remove tag:", cause);
+      showError("Could not remove tag", "Please try again.");
+    }
   };
 
   const handleDeleteTag = async (tagId: Id<"tags">) => {
-    await deleteTag({ id: tagId });
+    try {
+      await deleteTag({ id: tagId });
+    } catch (cause) {
+      console.error("Failed to delete tag:", cause);
+      showError("Could not delete tag", "Please try again.");
+    }
   };
 
   return (
@@ -266,7 +285,7 @@ export function TagFilter({
 interface TagAssignerProps {
   disabled?: boolean;
   selectedTagIds: Id<"tags">[];
-  onUpdateTags: (tagIds: Id<"tags">[]) => void;
+  onUpdateTags: (tagIds: Id<"tags">[]) => Promise<void>;
 }
 
 export function TagAssigner({
@@ -280,27 +299,39 @@ export function TagAssigner({
 
   const tags = useQuery(api.tags.listTags) || [];
   const createTag = useMutation(api.tags.createTag);
+  const { error: showError } = useToast();
 
-  const handleToggleTag = (tagId: Id<"tags">) => {
+  const handleToggleTag = async (tagId: Id<"tags">) => {
     if (disabled) return;
-    if (selectedTagIds.includes(tagId)) {
-      onUpdateTags(selectedTagIds.filter((id) => id !== tagId));
-    } else {
-      onUpdateTags([...selectedTagIds, tagId]);
+    try {
+      await onUpdateTags(selectedTagIds.includes(tagId)
+        ? selectedTagIds.filter((id) => id !== tagId)
+        : [...selectedTagIds, tagId]);
+    } catch (cause) {
+      console.error("Failed to update tags:", cause);
+      showError("Could not update tags", "Please try again.");
     }
   };
 
   const handleCreateTag = async () => {
     if (disabled || !newTagName.trim()) return;
+    let tagId: Id<"tags">;
     try {
-      const tagId = await createTag({
+      tagId = await createTag({
         name: newTagName.trim(),
         color: selectedColor,
       });
-      onUpdateTags([...selectedTagIds, tagId]);
       setNewTagName("");
-    } catch (error) {
-      console.error("Failed to create tag:", error);
+    } catch (cause) {
+      console.error("Failed to create tag:", cause);
+      showError("Could not create tag", "Please try again.");
+      return;
+    }
+    try {
+      await onUpdateTags([...selectedTagIds, tagId]);
+    } catch (cause) {
+      console.error("Failed to assign new tag:", cause);
+      showError("Tag created, but could not be added", "Try adding it again.");
     }
   };
 
