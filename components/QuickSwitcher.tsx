@@ -10,6 +10,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { getRelativeTime } from "@/lib/relative-time";
 import type { PreloadedCanvases, PreloadedNotes } from "@/lib/notes-data";
 import { useNoteSummaries } from "@/lib/use-notes-queries";
+import { cn } from "@/lib/utils";
 import {
   CommandDialog,
   CommandEmpty,
@@ -18,6 +19,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import styles from "./QuickSwitcher.module.css";
 
 const EMPTY: never[] = [];
 
@@ -58,16 +60,15 @@ export function QuickSwitcher({
       onOpenChange={onOpenChange}
       title="Search workspace"
       description="Search notes and canvases, or open recently deleted items."
-      className="gap-0 rounded-2xl border-border/70 shadow-2xl sm:max-w-xl [&_[data-slot=dialog-close]]:right-5 [&_[data-slot=dialog-close]]:top-5"
+      className={cn("gap-0 rounded-2xl border-border/60 shadow-xl sm:max-w-xl [&_[data-slot=dialog-close]]:right-5 [&_[data-slot=dialog-close]]:top-5", styles.palette)}
     >
-      <div className="border-b border-border/70 px-5 pb-4 pt-5 pr-12">
-        <p className="text-sm font-semibold text-foreground">Search your workspace</p>
-        <p className="mt-1 text-xs text-muted-foreground">Find a note or canvas and jump right in.</p>
+      <div className="px-5 pb-2 pt-5 pr-12">
+        <p className="text-sm font-semibold text-foreground">Search workspace</p>
       </div>
       <CommandInput
         aria-label="Search notes and canvases"
-        placeholder="Search notes and canvases..."
-        className="text-base focus:outline-none"
+        placeholder="Search notes and canvases"
+        className="text-sm sm:text-base"
       />
       <CommandList className="max-h-[min(55vh,420px)] scroll-py-2 px-1 py-2">
         <CommandEmpty className="px-6 py-12 text-muted-foreground">
