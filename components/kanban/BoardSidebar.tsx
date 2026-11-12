@@ -26,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/components/ui/toast-notification";
+import styles from "./Kanban.module.css";
 import { cn } from "@/lib/utils";
 
 interface BoardSidebarProps {
@@ -63,7 +64,7 @@ export function BoardSidebar({
     board.title.toLowerCase().includes(query.trim().toLowerCase()),
   );
   return (
-    <aside className="flex h-full w-[260px] flex-col bg-sidebar">
+    <aside className={cn("flex h-full w-[260px] flex-col bg-sidebar", styles.surface)}>
       <div className="space-y-4 border-b p-4">
         <Link
           href="/notes"
@@ -123,7 +124,7 @@ export function BoardSidebar({
                   <MoreHorizontal size={15} />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent>
+              <DropdownMenuContent className={styles.menu}>
                 <DropdownMenuItem
                   onClick={() => void action(() => pin({ id: board._id }))}
                 >

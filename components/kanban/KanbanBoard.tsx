@@ -37,6 +37,8 @@ import { stripHtmlToText } from "@/lib/html-utils";
 
 import { KanbanColumn } from "./KanbanColumn";
 import { MobileColumnPicker } from "./MobileColumnPicker";
+import { BoardFilter } from "./BoardFilter";
+import styles from "./Kanban.module.css";
 
 interface KanbanBoardProps {
   board: Doc<"kanbanBoards">;
@@ -200,7 +202,7 @@ export function KanbanBoard({
     void run(() => moveCard({ id: card._id, columnId: column._id, order }));
   }
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+    <div className={`flex h-full min-h-0 min-w-0 flex-col overflow-hidden ${styles.surface}`}>
       <header className="space-y-3 border-b bg-background px-3 py-3 sm:px-5">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Button asChild variant="ghost" size="sm" className="px-2">
@@ -275,7 +277,7 @@ export function KanbanBoard({
                   <MoreHorizontal size={16} />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className={styles.menu}>
                 <DropdownMenuItem
                   onClick={() => {
                     setTitle(board.title);
@@ -321,30 +323,23 @@ export function KanbanBoard({
               className="h-9 pl-8 text-xs"
             />
           </label>
-          <select
-            aria-label="Filter tasks by tag"
+          <BoardFilter
+            label="Filter tasks by tag"
             value={tag}
-            onChange={(e) => setTag(e.target.value)}
-            className="h-9 max-w-[160px] rounded-md border bg-background px-2 text-xs"
-          >
-            <option value="">All tags</option>
-            {tags.map((item) => (
-              <option key={item._id} value={item._id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label="Filter tasks by due date"
+            onChange={setTag}
+            options={[{ value: "", label: "All tags" }, ...tags.map((item) => ({ value: item._id, label: item.name }))]}
+          />
+          <BoardFilter
+            label="Filter tasks by due date"
             value={due}
-            onChange={(e) => setDue(e.target.value)}
-            className="h-9 rounded-md border bg-background px-2 text-xs"
-          >
-            <option value="all">Any due date</option>
-            <option value="overdue">Overdue</option>
-            <option value="today">Due today</option>
-            <option value="upcoming">Upcoming</option>
-          </select>
+            onChange={setDue}
+            options={[
+              { value: "all", label: "Any due date" },
+              { value: "overdue", label: "Overdue" },
+              { value: "today", label: "Due today" },
+              { value: "upcoming", label: "Upcoming" },
+            ]}
+          />
           <span className="ml-auto text-xs text-muted-foreground">
             {cards?.filter(visible).length ?? 0} tasks
           </span>

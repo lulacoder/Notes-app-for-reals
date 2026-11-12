@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast-notification";
+import styles from "./Kanban.module.css";
 
 interface KanbanCardModalProps {
   card: Doc<"kanbanCards">;
@@ -124,7 +125,7 @@ export function KanbanCardModal({
         }}
       >
         <DialogContent
-          className="max-h-[calc(100dvh-32px)] max-w-xl gap-0 overflow-y-auto p-0"
+          className={cn("max-h-[calc(100dvh-32px)] max-w-xl gap-0 overflow-y-auto p-0", styles.surface)}
           showCloseButton={false}
           onEscapeKeyDown={(e) => {
             e.preventDefault();

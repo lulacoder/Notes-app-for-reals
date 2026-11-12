@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import { KanbanCard } from "./KanbanCard";
+import styles from "./Kanban.module.css";
 
 interface KanbanColumnProps {
   column: Doc<"kanbanColumns">;
@@ -164,7 +165,7 @@ export function KanbanColumn({
               <MoreHorizontal size={15} />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent>
+          <DropdownMenuContent className={styles.menu}>
             <DropdownMenuItem
               onClick={() => {
                 setTitle(column.title);
@@ -275,7 +276,7 @@ export function KanbanColumn({
         )}
       </div>
       <AlertDialog open={deleting} onOpenChange={setDeleting}>
-        <AlertDialogContent>
+        <AlertDialogContent className={styles.surface}>
           <AlertDialogTitle>Delete {column.title}?</AlertDialogTitle>
           <AlertDialogDescription>
             {totalCards
