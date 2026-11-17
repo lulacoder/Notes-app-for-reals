@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import { KanbanCard } from "./KanbanCard";
+import { KanbanCardModal } from "./KanbanCardModal";
 import styles from "./Kanban.module.css";
 
 interface KanbanColumnProps {
@@ -66,7 +67,6 @@ export function KanbanColumn({
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(column.title);
   const [adding, setAdding] = useState(false);
-  const [cardTitle, setCardTitle] = useState("");
   const [pending, setPending] = useState(false);
   const running = useRef(false);
   const [deleting, setDeleting] = useState(false);
@@ -75,7 +75,6 @@ export function KanbanColumn({
   );
   const update = useMutation(api.kanban.updateColumn);
   const remove = useMutation(api.kanban.deleteColumn);
-  const create = useMutation(api.kanban.createCard);
   const { error } = useToast();
   async function run(action: () => Promise<unknown>, done: () => void) {
     if (running.current) return;
@@ -218,63 +217,26 @@ export function KanbanColumn({
         )}
       </Droppable>
       <div className="p-3">
-        {adding ? (
-          <form
-            className="space-y-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (cardTitle.trim())
-                void run(
-                  () =>
-                    create({
-                      boardId,
-                      columnId: column._id,
-                      title: cardTitle.trim(),
-                    }),
-                  () => {
-                    setCardTitle("");
-                    setAdding(false);
-                  },
-                );
-            }}
-          >
-            <Input
-              autoFocus
-              aria-label={`New task in ${column.title}`}
-              placeholder="What needs doing?"
-              value={cardTitle}
-              onChange={(e) => setCardTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") setAdding(false);
-              }}
-            />
-            <div className="flex gap-2">
-              <Button size="sm" disabled={pending || !cardTitle.trim()}>
-                {pending ? "Adding..." : "Add task"}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setAdding(false)}
-                disabled={pending}
-              >
-                Cancel
-              </Button>
-            </div>
-          </form>
-        ) : (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start text-muted-foreground"
-            onClick={() => setAdding(true)}
-          >
-            <Plus size={15} />
-            Add task
-          </Button>
-        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-muted-foreground"
+          onClick={() => setAdding(true)}
+        >
+          <Plus size={15} />
+          Add task
+        </Button>
       </div>
+      {adding && (
+        <KanbanCardModal
+          boardId={boardId}
+          columnId={column._id}
+          columns={allColumns}
+          tags={tags}
+          open
+          onClose={() => setAdding(false)}
+        />
+      )}
       <AlertDialog open={deleting} onOpenChange={setDeleting}>
         <AlertDialogContent className={styles.surface}>
           <AlertDialogTitle>Delete {column.title}?</AlertDialogTitle>

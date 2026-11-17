@@ -15,7 +15,7 @@ import {
 import { format } from "date-fns";
 
 import { api } from "@/convex/_generated/api";
-import type { Doc } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import {
   Dialog,
   DialogContent,
@@ -37,8 +37,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast-notification";
 import styles from "./Kanban.module.css";
 
-interface KanbanCardModalProps {
-  card: Doc<"kanbanCards">;
+type KanbanCardModalProps = ({ card: Doc<"kanbanCards">; boardId?: never; columnId?: never } | { card?: never; boardId: Id<"kanbanBoards">; columnId: Id<"kanbanColumns"> }) & {
   columns: Doc<"kanbanColumns">[];
   tags: Doc<"tags">[];
   open: boolean;
@@ -47,18 +46,21 @@ interface KanbanCardModalProps {
 
 export function KanbanCardModal({
   card,
+  boardId,
+  columnId,
   columns,
   tags,
   open,
   onClose,
 }: KanbanCardModalProps) {
   const id = useId();
-  const [title, setTitle] = useState(card.title);
-  const [description, setDescription] = useState(card.description ?? "");
+  const [title, setTitle] = useState(card?.title ?? "");
+  const [description, setDescription] = useState(card?.description ?? "");
   const [date, setDate] = useState(
-    card.dueDate === undefined ? "" : format(card.dueDate, "yyyy-MM-dd"),
+    card?.dueDate === undefined ? "" : format(card.dueDate, "yyyy-MM-dd"),
   );
-  const [tagIds, setTagIds] = useState(card.tagIds ?? []);
+  const [tagIds, setTagIds] = useState(card?.tagIds ?? []);
+  const [selectedColumn, setSelectedColumn] = useState(card?.columnId ?? columnId);
   const [pending, setPending] = useState(false);
   const running = useRef(false);
   const [message, setMessage] = useState("");
@@ -66,15 +68,16 @@ export function KanbanCardModal({
   const [deleting, setDeleting] = useState(false);
   const [initial, setInitial] = useState(() =>
     JSON.stringify({
-      title: card.title,
-      description: card.description ?? "",
+      title: card?.title ?? "",
+      description: card?.description ?? "",
       date:
-        card.dueDate === undefined ? "" : format(card.dueDate, "yyyy-MM-dd"),
-      tagIds: card.tagIds ?? [],
+        card?.dueDate === undefined ? "" : format(card.dueDate, "yyyy-MM-dd"),
+      tagIds: card?.tagIds ?? [],
     }),
   );
   const dirty =
     initial !== JSON.stringify({ title, description, date, tagIds });
+  const create = useMutation(api.kanban.createCard);
   const update = useMutation(api.kanban.updateCard);
   const move = useMutation(api.kanban.moveCardToColumnEnd);
   const remove = useMutation(api.kanban.softDeleteCard);
@@ -85,7 +88,10 @@ export function KanbanCardModal({
     else onClose();
   }
   async function save() {
-    if (dirty) {
+    if (!card) {
+      if (!boardId || !selectedColumn) return;
+      await create({ boardId, columnId: selectedColumn, title: title.trim(), description, dueDate: date ? new Date(`${date}T00:00:00`).getTime() : undefined, tagIds });
+    } else if (dirty) {
       await update({
         id: card._id,
         title: title.trim() || "Untitled",
@@ -139,7 +145,7 @@ export function KanbanCardModal({
           <header className="border-b p-5 sm:p-6">
             <div className="flex items-center justify-between">
               <DialogTitle className="text-sm font-medium text-muted-foreground">
-                Task details
+                {card ? "Task details" : "Add task"}
               </DialogTitle>
               <Button
                 variant="ghost"
@@ -232,12 +238,13 @@ export function KanbanCardModal({
                   </span>
                   <select
                     aria-label="Move task to column"
-                    value={card.columnId}
+                    value={selectedColumn}
                     onChange={(e) => {
                       const destination = columns.find(
                         (col) => col._id === e.target.value,
                       );
-                      if (destination)
+                      if (destination && !card) setSelectedColumn(destination._id);
+                      if (destination && card)
                         void action(async () => {
                           await save();
                           await move({
@@ -294,7 +301,7 @@ export function KanbanCardModal({
               </div>
             </fieldset>
             <footer className="flex flex-wrap items-center justify-between gap-3 border-t pt-5">
-              <Button
+              {card ? <Button
                 type="button"
                 variant="ghost"
                 size="sm"
@@ -304,7 +311,7 @@ export function KanbanCardModal({
               >
                 <Trash2 size={14} />
                 Delete task
-              </Button>
+              </Button> : <span />}
               <div className="flex gap-2">
                 <Button
                   type="button"
@@ -317,7 +324,7 @@ export function KanbanCardModal({
                 </Button>
                 <Button size="sm" disabled={pending || !title.trim()}>
                   {pending && <Loader2 size={13} className="animate-spin" />}
-                  {pending ? "Saving..." : "Save changes"}
+                  {pending ? "Saving..." : card ? "Save changes" : "Add task"}
                 </Button>
               </div>
             </footer>
@@ -359,6 +366,7 @@ export function KanbanCardModal({
               onClick={(e) => {
                 e.preventDefault();
                 void action(async () => {
+                  if (!card) return;
                   await remove({ id: card._id });
                   success("Task moved to recently deleted");
                 });

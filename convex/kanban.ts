@@ -390,6 +390,9 @@ export const createCard = mutation({
     boardId: v.id("kanbanBoards"),
     columnId: v.id("kanbanColumns"),
     title: v.optional(v.string()),
+    description: v.optional(v.string()),
+    dueDate: v.optional(v.number()),
+    tagIds: v.optional(v.array(v.id("tags"))),
   },
   handler: async (ctx, args) => {
     const identity = await getActiveIdentity(ctx);
@@ -416,6 +419,9 @@ export const createCard = mutation({
       boardId: args.boardId,
       columnId: args.columnId,
       title: args.title || "New Card",
+      description: args.description,
+      dueDate: args.dueDate,
+      tagIds: args.tagIds,
       order: maxOrder + 1000,
       userId: identity.subject,
       createdAt: now,
