@@ -2,7 +2,7 @@
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { BoardFilter } from "@/components/kanban/BoardFilter";
+import { KanbanDropdown } from "@/components/kanban/KanbanDropdown";
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let root: Root;
@@ -10,7 +10,7 @@ let container: HTMLDivElement;
 
 function FilterExample() {
   const [value, setValue] = useState("all");
-  return <BoardFilter label="Filter tasks by due date" value={value} onChange={setValue} options={[
+  return <KanbanDropdown label="Filter tasks by due date" value={value} onChange={setValue} options={[
     { value: "all", label: "Any due date" },
     { value: "today", label: "Due today" },
   ]} />;
@@ -52,7 +52,7 @@ it("opens and changes the selected filter with the keyboard", async () => {
 
 it("can clear the tag filter by choosing All tags", async () => {
   const onChange = vi.fn();
-  await act(async () => root.render(<BoardFilter label="Filter tasks by tag" value="tag-1" onChange={onChange} options={[
+  await act(async () => root.render(<KanbanDropdown label="Filter tasks by tag" value="tag-1" onChange={onChange} options={[
     { value: "", label: "All tags" },
     { value: "tag-1", label: "Work" },
   ]} />));

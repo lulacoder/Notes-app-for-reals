@@ -30,9 +30,29 @@ function findButton(parent: ParentNode, label: string) {
   return button;
 }
 
-function choose(select: HTMLSelectElement, value: string) {
-  select.value = value;
-  select.dispatchEvent(new Event("change", { bubbles: true }));
+function pressKey(element: HTMLElement, key: string) {
+  element.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+}
+
+async function openMenu(trigger: HTMLButtonElement) {
+  await act(async () => {
+    trigger.focus();
+    pressKey(trigger, "Enter");
+  });
+  const menu = document.querySelector<HTMLElement>('[role="menu"]');
+  if (!menu) throw new Error("Missing dropdown menu");
+  return menu;
+}
+
+async function choose(trigger: HTMLButtonElement, label: string) {
+  const menu = await openMenu(trigger);
+  const item = [...menu.querySelectorAll<HTMLElement>('[role="menuitemradio"]')]
+    .find((option) => option.textContent?.trim() === label);
+  if (!item) throw new Error(`Missing dropdown option: ${label}`);
+  await act(async () => {
+    item.focus();
+    pressKey(item, "Enter");
+  });
 }
 
 it("creates a linked task from selected note text and stays in the note after saving", async () => {
@@ -95,6 +115,11 @@ it("creates a linked task from selected note text and stays in the note after sa
       getBoundingClientRect: () => new DOMRect(),
     }),
   );
+  vi.stubGlobal("ResizeObserver", class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  });
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -126,10 +151,20 @@ it("creates a linked task from selected note text and stays in the note after sa
     expect(dialog.textContent).toContain("Client meeting notes");
     expect(findButton(dialog, "Create task").disabled).toBe(true);
 
-    const [boardPicker, columnPicker] = dialog.querySelectorAll("select");
-    await act(async () => choose(boardPicker, boardId));
+    const boardPicker = dialog.querySelector<HTMLButtonElement>('button[aria-label="Board: Choose a board"]');
+    const columnPicker = dialog.querySelector<HTMLButtonElement>('button[aria-label="Column: Choose a board first"]');
+    if (!boardPicker || !columnPicker) throw new Error("Missing task destination pickers");
+    expect(columnPicker.disabled).toBe(true);
+
+    const menu = await openMenu(boardPicker);
+    await act(async () => pressKey(menu, "Escape"));
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')).toBe(dialog);
+
+    await choose(boardPicker, "Website redesign");
+    expect(boardPicker.getAttribute("aria-label")).toBe("Board: Website redesign");
     expect(findButton(dialog, "Create task").disabled).toBe(true);
-    await act(async () => choose(columnPicker, columns[1]._id));
+    await choose(columnPicker, columns[1].title);
     await act(async () => findButton(dialog, "Create task").click());
 
     const cards = await owner.query(api.kanban.listCards, { boardId });
@@ -148,6 +183,7 @@ it("creates a linked task from selected note text and stays in the note after sa
     clearAuth.mockRestore();
     watch.mockRestore();
     mutation.mockRestore();
+    vi.unstubAllGlobals();
     await client.close();
   }
 });

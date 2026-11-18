@@ -38,7 +38,7 @@ import { stripHtmlToText } from "@/lib/html-utils";
 import { KanbanColumn } from "./KanbanColumn";
 import { KanbanCardModal } from "./KanbanCardModal";
 import { MobileColumnPicker } from "./MobileColumnPicker";
-import { BoardFilter } from "./BoardFilter";
+import { KanbanDropdown } from "./KanbanDropdown";
 import styles from "./Kanban.module.css";
 
 interface KanbanBoardProps {
@@ -327,13 +327,13 @@ export function KanbanBoard({
               className="h-9 pl-8 text-xs"
             />
           </label>
-          <BoardFilter
+          <KanbanDropdown
             label="Filter tasks by tag"
             value={tag}
             onChange={setTag}
             options={[{ value: "", label: "All tags" }, ...tags.map((item) => ({ value: item._id, label: item.name }))]}
           />
-          <BoardFilter
+          <KanbanDropdown
             label="Filter tasks by due date"
             value={due}
             onChange={setDue}

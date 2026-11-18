@@ -37,6 +37,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast-notification";
+import { KanbanDropdown } from "./KanbanDropdown";
 import styles from "./Kanban.module.css";
 
 const MAX_TASK_TITLE_LENGTH = 300;
@@ -119,6 +120,15 @@ export function KanbanCardModal({
   const columns = boardColumns ?? noteTaskColumns ?? [];
   const destinationBoardId = boardId ?? selectedBoard?._id;
   const destinationColumnId = columns.find((column) => column._id === selectedColumn)?._id;
+  const boardPlaceholder = boards === undefined
+    ? "Loading boards..."
+    : boards.length === 0 ? "Create a board first" : "Choose a board";
+  let columnPlaceholder = "Choose a column";
+  if (sourceNote) {
+    if (!selectedBoard) columnPlaceholder = "Choose a board first";
+    else if (noteTaskColumns === undefined) columnPlaceholder = "Loading columns...";
+    else if (columns.length === 0) columnPlaceholder = "No columns on this board";
+  }
   const linkedNoteTitle = useQuery(
     api.notes.getActiveNoteTitle,
     open && card?.sourceNoteId && isAuthenticated ? { id: card.sourceNoteId } : "skip",
@@ -181,6 +191,20 @@ export function KanbanCardModal({
       setPending(false);
     }
   }
+
+  function chooseColumn(value: string) {
+    const destination = columns.find((column) => column._id === value);
+    if (!destination) return;
+    if (!card) {
+      setSelectedColumn(destination._id);
+      return;
+    }
+    void action(async () => {
+      await save();
+      await move({ id: card._id, columnId: destination._id });
+    });
+  }
+
   return (
     <>
       <Dialog
@@ -190,7 +214,11 @@ export function KanbanCardModal({
         }}
       >
         <DialogContent
-          className={cn("max-h-[calc(100dvh-32px)] max-w-xl gap-0 overflow-y-auto p-0", styles.surface)}
+          className={cn(
+            "max-h-[calc(100dvh-32px)] w-[calc(100%-2rem)] gap-0 overflow-y-auto p-0",
+            sourceNote && "sm:max-w-2xl",
+            styles.surface,
+          )}
           showCloseButton={false}
           onEscapeKeyDown={(e) => {
             e.preventDefault();
@@ -207,7 +235,7 @@ export function KanbanCardModal({
             }
           }}
         >
-          <header className="border-b p-5 sm:p-6">
+          <header className={cn("border-b p-5 sm:p-6", sourceNote && "sm:px-8")}>
             <div className="flex items-center justify-between">
               <DialogTitle className="text-sm font-medium text-muted-foreground">
                 {card ? "Task details" : sourceNote ? "Create task" : "Add task"}
@@ -230,7 +258,7 @@ export function KanbanCardModal({
             </DialogDescription>
           </header>
           <form
-            className="space-y-5 p-5 sm:p-6"
+            className={cn("space-y-5 p-5 sm:p-6", sourceNote && "space-y-6 sm:p-8")}
             onSubmit={(e) => {
               e.preventDefault();
               void action(save);
@@ -247,7 +275,7 @@ export function KanbanCardModal({
             )}
             <fieldset
               disabled={pending}
-              className={sourceNote ? "grid gap-4 sm:grid-cols-2" : "space-y-5"}
+              className={sourceNote ? "grid min-w-0 gap-5 sm:grid-cols-2 sm:gap-6" : "space-y-5"}
             >
               <label
                 className="block space-y-2 text-sm font-medium sm:col-span-2"
@@ -265,26 +293,21 @@ export function KanbanCardModal({
                 />
               </label>
               {sourceNote && (
-                <label className="block space-y-2 text-sm font-medium">
+                <div className="grid min-w-0 gap-2.5 text-sm font-medium">
                   <span>Board</span>
-                  <select
+                  <KanbanDropdown
+                    variant="field"
+                    label="Board"
                     value={selectedBoard?._id ?? ""}
-                    onChange={(event) => {
-                      const board = boards?.find((item) => item._id === event.target.value);
+                    options={boards?.map((board) => ({ value: board._id, label: board.title })) ?? []}
+                    placeholder={boardPlaceholder}
+                    onChange={(value) => {
+                      const board = boards?.find((item) => item._id === value);
                       setSelectedBoardId(board?._id);
                       setSelectedColumn(undefined);
                     }}
-                    disabled={!boards?.length}
-                    className="mt-2 h-10 w-full rounded-md border bg-background px-3 text-sm"
-                  >
-                    <option value="" disabled>
-                      {boards === undefined ? "Loading boards..." : boards.length === 0 ? "Create a board first" : "Choose a board"}
-                    </option>
-                    {boards?.map((board) => (
-                      <option key={board._id} value={board._id}>{board.title}</option>
-                    ))}
-                  </select>
-                </label>
+                  />
+                </div>
               )}
               {!sourceNote && (
                 <label className="block text-sm font-medium" htmlFor={`${id}-description`}>
@@ -298,7 +321,7 @@ export function KanbanCardModal({
                   />
                 </label>
               )}
-              <div className="flex flex-wrap items-end gap-3">
+              <div className={sourceNote ? "min-w-0" : "flex flex-wrap items-end gap-3"}>
                 {!sourceNote && (
                   <label className="space-y-2 text-sm">
                     <span className="flex items-center gap-2 font-medium">
@@ -310,7 +333,7 @@ export function KanbanCardModal({
                       aria-label="Task due date"
                       value={date}
                       onChange={(e) => setDate(e.target.value)}
-                      className="h-10 rounded-md border bg-background px-3 text-sm"
+                      className="h-12 rounded-lg border bg-background px-3 text-sm"
                     />
                   </label>
                 )}
@@ -324,46 +347,20 @@ export function KanbanCardModal({
                     Clear due date
                   </Button>
                 )}
-                <label className={cn("space-y-2 text-sm", sourceNote && "w-full")}>
+                <div className={cn("grid min-w-0 gap-2.5 text-sm", !sourceNote && "min-w-44 max-w-full")}>
                   <span className="flex items-center gap-2 font-medium">
                     {!sourceNote && <MoveRight size={14} />}
                     Column
                   </span>
-                  <select
-                    aria-label={sourceNote ? "Column" : "Move task to column"}
+                  <KanbanDropdown
+                    variant="field"
+                    label={sourceNote ? "Column" : "Move task to column"}
                     value={card?.columnId ?? destinationColumnId ?? ""}
-                    disabled={columns.length === 0}
-                    onChange={(e) => {
-                      const destination = columns.find(
-                        (col) => col._id === e.target.value,
-                      );
-                      if (!destination) return;
-                      if (!card) {
-                        setSelectedColumn(destination._id);
-                        return;
-                      }
-                      void action(async () => {
-                        await save();
-                        await move({
-                          id: card._id,
-                          columnId: destination._id,
-                        });
-                      });
-                    }}
-                    className={cn("h-10 rounded-md border bg-background px-3", sourceNote && "mt-2 w-full")}
-                  >
-                    {sourceNote && (
-                      <option value="" disabled>
-                        {!selectedBoard ? "Choose a board first" : noteTaskColumns === undefined ? "Loading columns..." : columns.length === 0 ? "No columns on this board" : "Choose a column"}
-                      </option>
-                    )}
-                    {columns.map((col) => (
-                      <option key={col._id} value={col._id}>
-                        {col.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    options={columns.map((column) => ({ value: column._id, label: column.title }))}
+                    placeholder={columnPlaceholder}
+                    onChange={chooseColumn}
+                  />
+                </div>
               </div>
               {(sourceNote || card?.sourceNoteId) && (
                 <div className="space-y-1 text-sm sm:col-span-2">
