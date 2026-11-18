@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TagAssigner } from "@/components/TagManager";
 import { RichTextEditor } from "@/components/editor";
+import type { RichTextEditorRef } from "@/components/editor/RichTextEditor";
 import { Pin, History, Sparkles, MoreHorizontal, ArrowLeft } from "lucide-react";
 import {
   DropdownMenu,
@@ -23,6 +24,7 @@ import { extractTitleFromHtml } from "@/lib/html-utils";
 import { useAutosave } from "@/lib/use-autosave";
 import { optionLabel, useKeyboardPlatform } from "@/lib/use-keyboard-platform";
 import { SaveStatus } from "@/components/SaveStatus";
+import { useToast } from "@/components/ui/toast-notification";
 
 type NoteDraft = Pick<Doc<"notes">, "title" | "content">;
 
@@ -35,10 +37,15 @@ const VersionHistory = dynamic(
   () => import("@/components/VersionHistory").then((mod) => mod.VersionHistory),
   { ssr: false }
 );
+const KanbanCardModal = dynamic(
+  () => import("@/components/kanban/KanbanCardModal").then((mod) => mod.KanbanCardModal),
+  { ssr: false }
+);
 
 export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
   const platform = useKeyboardPlatform();
   const router = useRouter();
+  const { toast } = useToast();
   const { isAuthenticated } = useConvexAuth();
   const liveNote = useQuery(api.notes.getNote, noteId && isAuthenticated ? { id: noteId } : "skip");
   const note = liveNote === undefined ? initialNote : liveNote;
@@ -52,6 +59,8 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
   const [content, setContent] = useState(initialNote?.content ?? "");
   const [title, setTitle] = useState(initialNote?.title ?? "");
   const [showVersions, setShowVersions] = useState(false);
+  const [taskSelection, setTaskSelection] = useState<string | null>(null);
+  const editorRef = useRef<RichTextEditorRef>(null);
   const versionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSubmittedRef = useRef<NoteDraft | null>(null);
   const lastVersionRef = useRef({ title: "", content: "" });
@@ -385,12 +394,34 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
         className="flex-1 overflow-hidden"
       >
         <RichTextEditor
+          ref={editorRef}
           content={content}
           onChange={handleContentChange}
           onImageUpload={handleImageUpload}
+          onCreateTask={isAuthenticated && noteId && !note.isDeleted ? setTaskSelection : undefined}
           placeholder="Start writing... Use '/' for commands"
         />
       </motion.div>
+
+      {noteId && taskSelection !== null && (
+        <KanbanCardModal
+          sourceNote={{ id: noteId, title, selection: taskSelection }}
+          tags={tags ?? []}
+          open
+          onClose={() => setTaskSelection(null)}
+          onCloseAutoFocus={() => editorRef.current?.focus()}
+          onCreated={(boardId, cardId) => {
+            toast({
+              type: "success",
+              title: "Task created",
+              action: {
+                label: "View task",
+                onClick: () => router.push(`/kanban?board=${boardId}&card=${cardId}`),
+              },
+            });
+          }}
+        />
+      )}
 
       {/* Version history modal */}
       <AnimatePresence>

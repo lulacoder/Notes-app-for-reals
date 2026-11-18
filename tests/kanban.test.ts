@@ -16,6 +16,56 @@ async function board() {
 }
 
 describe("board editing and recovery", () => {
+  it("keeps the original note link when editing a task and resolves the current note title", async () => {
+    const { owner, id: boardId, columns } = await board();
+    const noteId = await owner.mutation(api.notes.createNote, { title: "Client meeting notes" });
+    const cardId = await owner.mutation(api.kanban.createCard, {
+      boardId,
+      columnId: columns[1]._id,
+      title: "Send the client a revised mockup",
+      sourceNoteId: noteId,
+    });
+    await owner.mutation(api.kanban.updateCard, { id: cardId, title: "Send the mockup" });
+    await owner.mutation(api.notes.updateNote, { id: noteId, title: "Client project notes" });
+
+    expect(await owner.query(api.kanban.getCard, { id: cardId })).toMatchObject({
+      columnId: columns[1]._id,
+      sourceNoteId: noteId,
+      title: "Send the mockup",
+    });
+    expect(await owner.query(api.notes.getActiveNoteTitle, { id: noteId })).toBe("Client project notes");
+    await owner.mutation(api.notes.softDeleteNote, { id: noteId });
+    expect(await owner.query(api.notes.getActiveNoteTitle, { id: noteId })).toBeNull();
+    await owner.mutation(api.notes.restoreNote, { id: noteId });
+    expect(await owner.query(api.notes.getActiveNoteTitle, { id: noteId })).toBe("Client project notes");
+  });
+
+  it("rejects attaching inaccessible notes or adding a task to a deleted board", async () => {
+    const { t, owner, id: boardId, columns } = await board();
+    const other = (await account(t, "user")).client;
+    const otherNoteId = await other.mutation(api.notes.createNote, { title: "Private note" });
+    const ownNoteId = await owner.mutation(api.notes.createNote, { title: "Owner's note" });
+    const destination = { boardId, columnId: columns[0]._id, title: "Follow up" };
+
+    expect(await owner.query(api.notes.getActiveNoteTitle, { id: otherNoteId })).toBeNull();
+    expect(await t.query(api.notes.getActiveNoteTitle, { id: ownNoteId })).toBeNull();
+    await expect(owner.mutation(api.kanban.createCard, {
+      ...destination, sourceNoteId: otherNoteId,
+    })).rejects.toThrow("source note is no longer available");
+
+    await owner.mutation(api.notes.softDeleteNote, { id: ownNoteId });
+    await expect(owner.mutation(api.kanban.createCard, {
+      ...destination, sourceNoteId: ownNoteId,
+    })).rejects.toThrow("source note is no longer available");
+    expect(await owner.query(api.kanban.listCards, { boardId })).toHaveLength(1);
+
+    await owner.mutation(api.notes.restoreNote, { id: ownNoteId });
+    await owner.mutation(api.kanban.softDeleteBoard, { id: boardId });
+    await expect(owner.mutation(api.kanban.createCard, {
+      ...destination, sourceNoteId: ownNoteId,
+    })).rejects.toThrow("Board not found");
+  });
+
   it("reorders all columns and rejects incomplete or duplicate lists", async () => {
     const { owner, id, columns } = await board();
     const orderedIds = columns.map((column) => column._id).reverse();

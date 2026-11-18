@@ -1,6 +1,7 @@
 import { getActiveIdentity } from "./lib/activeIdentity";
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import { mutation, query, type QueryCtx } from "./_generated/server";
 import { extractFirstImageSrc, stripHtmlToText } from "../lib/html-utils";
 
 export const listNoteSummaries = query({
@@ -80,20 +81,24 @@ export const listTrash = query({
   },
 });
 
+async function getOwnedNote(ctx: QueryCtx, id: Id<"notes">) {
+  const identity = await getActiveIdentity(ctx);
+  if (!identity) return null;
+
+  const note = await ctx.db.get("notes", id);
+  return note?.userId === identity.subject ? note : null;
+}
+
 export const getNote = query({
   args: { id: v.id("notes") },
-  handler: async (ctx, args) => {
-    const identity = await getActiveIdentity(ctx);
-    if (!identity) {
-      return null;
-    }
+  handler: (ctx, { id }) => getOwnedNote(ctx, id),
+});
 
-    const note = await ctx.db.get("notes", args.id);
-    if (!note || note.userId !== identity.subject) {
-      return null;
-    }
-
-    return note;
+export const getActiveNoteTitle = query({
+  args: { id: v.id("notes") },
+  handler: async (ctx, { id }) => {
+    const note = await getOwnedNote(ctx, id);
+    return note && !note.isDeleted ? note.title : null;
   },
 });
 

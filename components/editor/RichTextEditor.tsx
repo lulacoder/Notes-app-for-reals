@@ -1,6 +1,8 @@
 "use client";
 
 import { useEditor, EditorContent } from "@tiptap/react";
+import { BubbleMenu } from "@tiptap/react/menus";
+import { TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Image from "@tiptap/extension-image";
@@ -13,11 +15,13 @@ import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
+import { ListPlus } from "lucide-react";
 import { useEffect, forwardRef, useImperativeHandle } from "react";
 import { EditorToolbar } from "./EditorToolbar";
 import { SlashCommandMenu } from "./SlashCommand";
 import { cn } from "@/lib/utils";
 import { stripHtmlToText } from "@/lib/html-utils";
+import { Button } from "@/components/ui/button";
 
 const lowlight = createLowlight(common);
 
@@ -25,6 +29,7 @@ interface RichTextEditorProps {
   content: string;
   onChange: (content: string) => void;
   onImageUpload?: (file: File) => Promise<string>;
+  onCreateTask?: (selection: string) => void;
   placeholder?: string;
   editable?: boolean;
   className?: string;
@@ -44,6 +49,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       content,
       onChange,
       onImageUpload,
+      onCreateTask,
       placeholder = "Start writing... Use '/' for commands",
       editable = true,
       className,
@@ -202,8 +208,38 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
         <SlashCommandMenu editor={editor} onImageUpload={onImageUpload} />
 
         {/* Editor Content */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="relative flex-1 overflow-y-auto">
           <EditorContent editor={editor} className="h-full" />
+          {editable && onCreateTask && (
+            <BubbleMenu
+              editor={editor}
+              className="z-10"
+              options={{ placement: "top" }}
+              shouldShow={({ element, view, state }) => {
+                const { selection, doc } = state;
+                return selection instanceof TextSelection
+                  && !selection.empty
+                  && (view.hasFocus() || element.contains(document.activeElement))
+                  && !!doc.textBetween(selection.from, selection.to, " ").trim();
+              }}
+            >
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="bg-popover shadow-md"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  const { selection, doc } = editor.state;
+                  const text = doc.textBetween(selection.from, selection.to, " ").trim();
+                  if (text) onCreateTask(text);
+                }}
+              >
+                <ListPlus aria-hidden="true" />
+                Create task
+              </Button>
+            </BubbleMenu>
+          )}
         </div>
       </div>
     );
