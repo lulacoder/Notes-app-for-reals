@@ -1,11 +1,13 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import Link from "next/link";
 
-import { useMutation } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import {
   Calendar,
   Check,
+  FileText,
   Loader2,
   MoveRight,
   Tag,
@@ -37,46 +39,92 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast-notification";
 import styles from "./Kanban.module.css";
 
-type KanbanCardModalProps = ({ card: Doc<"kanbanCards">; boardId?: never; columnId?: never } | { card?: never; boardId: Id<"kanbanBoards">; columnId: Id<"kanbanColumns"> }) & {
-  columns: Doc<"kanbanColumns">[];
+const MAX_TASK_TITLE_LENGTH = 300;
+
+type KanbanCardModalProps = (
+  | {
+      card: Doc<"kanbanCards">;
+      columns: Doc<"kanbanColumns">[];
+      boardId?: never;
+      columnId?: never;
+      sourceNote?: never;
+      onCreated?: never;
+    }
+  | {
+      card?: never;
+      columns: Doc<"kanbanColumns">[];
+      boardId: Id<"kanbanBoards">;
+      columnId: Id<"kanbanColumns">;
+      sourceNote?: never;
+      onCreated?: never;
+    }
+  | {
+      card?: never;
+      columns?: never;
+      boardId?: never;
+      columnId?: never;
+      sourceNote: { id: Id<"notes">; title: string; selection: string };
+      onCreated: (boardId: Id<"kanbanBoards">, cardId: Id<"kanbanCards">) => void;
+    }
+) & {
   tags: Doc<"tags">[];
   open: boolean;
   onClose: () => void;
-}
+  onCloseAutoFocus?: () => void;
+};
 
 export function KanbanCardModal({
   card,
   boardId,
   columnId,
-  columns,
+  columns: boardColumns,
+  sourceNote,
   tags,
   open,
   onClose,
+  onCloseAutoFocus,
+  onCreated,
 }: KanbanCardModalProps) {
   const id = useId();
-  const [title, setTitle] = useState(card?.title ?? "");
-  const [description, setDescription] = useState(card?.description ?? "");
-  const [date, setDate] = useState(
-    card?.dueDate === undefined ? "" : format(card.dueDate, "yyyy-MM-dd"),
-  );
-  const [tagIds, setTagIds] = useState(card?.tagIds ?? []);
-  const [selectedColumn, setSelectedColumn] = useState(card?.columnId ?? columnId);
+  const [initial, setInitial] = useState(() => ({
+    title: card?.title ?? sourceNote?.selection.replace(/\s+/g, " ").trim()
+      .slice(0, MAX_TASK_TITLE_LENGTH).trimEnd() ?? "",
+    description: card?.description ?? "",
+    date: card?.dueDate === undefined ? "" : format(card.dueDate, "yyyy-MM-dd"),
+    tagIds: card?.tagIds ?? [],
+  }));
+  const [title, setTitle] = useState(initial.title);
+  const [description, setDescription] = useState(initial.description);
+  const [date, setDate] = useState(initial.date);
+  const [tagIds, setTagIds] = useState(initial.tagIds);
+  const [selectedBoardId, setSelectedBoardId] = useState<Id<"kanbanBoards">>();
+  const [selectedColumn, setSelectedColumn] = useState(columnId);
   const [pending, setPending] = useState(false);
   const running = useRef(false);
   const [message, setMessage] = useState("");
-  const [discarding, setDiscarding] = useState(false);
+  const [discarding, setDiscarding] = useState<"close" | "source" | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [initial, setInitial] = useState(() =>
-    JSON.stringify({
-      title: card?.title ?? "",
-      description: card?.description ?? "",
-      date:
-        card?.dueDate === undefined ? "" : format(card.dueDate, "yyyy-MM-dd"),
-      tagIds: card?.tagIds ?? [],
-    }),
+  const draft = { title, description, date, tagIds };
+  const dirty = JSON.stringify(initial) !== JSON.stringify(draft);
+  const { isAuthenticated } = useConvexAuth();
+  const boards = useQuery(
+    api.kanban.listBoards,
+    open && sourceNote && isAuthenticated ? {} : "skip",
   );
-  const dirty =
-    initial !== JSON.stringify({ title, description, date, tagIds });
+  const selectedBoard = boards?.find((board) => board._id === selectedBoardId);
+  const noteTaskColumns = useQuery(
+    api.kanban.listColumns,
+    selectedBoard ? { boardId: selectedBoard._id } : "skip",
+  );
+  const columns = boardColumns ?? noteTaskColumns ?? [];
+  const destinationBoardId = boardId ?? selectedBoard?._id;
+  const destinationColumnId = columns.find((column) => column._id === selectedColumn)?._id;
+  const linkedNoteTitle = useQuery(
+    api.notes.getActiveNoteTitle,
+    open && card?.sourceNoteId && isAuthenticated ? { id: card.sourceNoteId } : "skip",
+  );
+  const linkedNoteHref = card?.sourceNoteId && linkedNoteTitle != null
+    ? `/notes/${card.sourceNoteId}` : null;
   const create = useMutation(api.kanban.createCard);
   const update = useMutation(api.kanban.updateCard);
   const move = useMutation(api.kanban.moveCardToColumnEnd);
@@ -84,13 +132,24 @@ export function KanbanCardModal({
   const { success } = useToast();
   function close() {
     if (running.current || deleting || discarding) return;
-    if (dirty) setDiscarding(true);
+    if (dirty) setDiscarding("close");
     else onClose();
   }
   async function save() {
     if (!card) {
-      if (!boardId || !selectedColumn) return;
-      await create({ boardId, columnId: selectedColumn, title: title.trim(), description, dueDate: date ? new Date(`${date}T00:00:00`).getTime() : undefined, tagIds });
+      if (!destinationBoardId || !destinationColumnId) {
+        throw new Error("Choose a board and column.");
+      }
+      const cardId = await create({
+        boardId: destinationBoardId,
+        columnId: destinationColumnId,
+        title: title.trim(),
+        description,
+        dueDate: date ? new Date(`${date}T00:00:00`).getTime() : undefined,
+        tagIds,
+        sourceNoteId: sourceNote?.id,
+      });
+      onCreated?.(destinationBoardId, cardId);
     } else if (dirty) {
       await update({
         id: card._id,
@@ -99,7 +158,7 @@ export function KanbanCardModal({
         dueDate: date ? new Date(`${date}T00:00:00`).getTime() : null,
         tagIds,
       });
-      setInitial(JSON.stringify({ title, description, date, tagIds }));
+      setInitial(draft);
     }
   }
   async function action(run: () => Promise<unknown>) {
@@ -141,11 +200,17 @@ export function KanbanCardModal({
             e.preventDefault();
             close();
           }}
+          onCloseAutoFocus={(event) => {
+            if (onCloseAutoFocus) {
+              event.preventDefault();
+              onCloseAutoFocus();
+            }
+          }}
         >
           <header className="border-b p-5 sm:p-6">
             <div className="flex items-center justify-between">
               <DialogTitle className="text-sm font-medium text-muted-foreground">
-                {card ? "Task details" : "Add task"}
+                {card ? "Task details" : sourceNote ? "Create task" : "Add task"}
               </DialogTitle>
               <Button
                 variant="ghost"
@@ -159,7 +224,9 @@ export function KanbanCardModal({
               </Button>
             </div>
             <DialogDescription className="mt-1 text-xs">
-              Keep the details here, then give the task its next step.
+              {sourceNote
+                ? "Choose where to add the task from this note."
+                : "Keep the details here, then give the task its next step."}
             </DialogDescription>
           </header>
           <form
@@ -178,9 +245,12 @@ export function KanbanCardModal({
                 {message} Your changes are still here. Try saving again.
               </p>
             )}
-            <fieldset disabled={pending} className="space-y-5">
+            <fieldset
+              disabled={pending}
+              className={sourceNote ? "grid gap-4 sm:grid-cols-2" : "space-y-5"}
+            >
               <label
-                className="block space-y-2 text-sm font-medium"
+                className="block space-y-2 text-sm font-medium sm:col-span-2"
                 htmlFor={`${id}-title`}
               >
                 Task title
@@ -189,39 +259,62 @@ export function KanbanCardModal({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   required
-                  maxLength={300}
+                  maxLength={MAX_TASK_TITLE_LENGTH}
                   autoFocus
                   className="mt-2 text-base font-semibold"
                 />
               </label>
-              <label
-                className="block text-sm font-medium"
-                htmlFor={`${id}-description`}
-              >
-                Description
-                <textarea
-                  id={`${id}-description`}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Add context, a useful link, or a few next steps..."
-                  className="mt-2 min-h-[160px] w-full resize-y rounded-lg border bg-muted/20 p-3 text-sm font-normal leading-relaxed outline-none focus:ring-2 focus:ring-ring"
-                />
-              </label>
-              <div className="flex flex-wrap items-end gap-3">
-                <label className="space-y-2 text-sm">
-                  <span className="flex items-center gap-2 font-medium">
-                    <Calendar size={14} />
-                    Due date
-                  </span>
-                  <input
-                    type="date"
-                    aria-label="Task due date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="h-10 rounded-md border bg-background px-3 text-sm"
+              {sourceNote && (
+                <label className="block space-y-2 text-sm font-medium">
+                  <span>Board</span>
+                  <select
+                    value={selectedBoard?._id ?? ""}
+                    onChange={(event) => {
+                      const board = boards?.find((item) => item._id === event.target.value);
+                      setSelectedBoardId(board?._id);
+                      setSelectedColumn(undefined);
+                    }}
+                    disabled={!boards?.length}
+                    className="mt-2 h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="" disabled>
+                      {boards === undefined ? "Loading boards..." : boards.length === 0 ? "Create a board first" : "Choose a board"}
+                    </option>
+                    {boards?.map((board) => (
+                      <option key={board._id} value={board._id}>{board.title}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {!sourceNote && (
+                <label className="block text-sm font-medium" htmlFor={`${id}-description`}>
+                  Description
+                  <textarea
+                    id={`${id}-description`}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Add context, a useful link, or a few next steps..."
+                    className="mt-2 min-h-[160px] w-full resize-y rounded-lg border bg-muted/20 p-3 text-sm font-normal leading-relaxed outline-none focus:ring-2 focus:ring-ring"
                   />
                 </label>
-                {date && (
+              )}
+              <div className="flex flex-wrap items-end gap-3">
+                {!sourceNote && (
+                  <label className="space-y-2 text-sm">
+                    <span className="flex items-center gap-2 font-medium">
+                      <Calendar size={14} />
+                      Due date
+                    </span>
+                    <input
+                      type="date"
+                      aria-label="Task due date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="h-10 rounded-md border bg-background px-3 text-sm"
+                    />
+                  </label>
+                )}
+                {!sourceNote && date && (
                   <Button
                     type="button"
                     variant="ghost"
@@ -231,30 +324,39 @@ export function KanbanCardModal({
                     Clear due date
                   </Button>
                 )}
-                <label className="space-y-2 text-sm">
+                <label className={cn("space-y-2 text-sm", sourceNote && "w-full")}>
                   <span className="flex items-center gap-2 font-medium">
-                    <MoveRight size={14} />
+                    {!sourceNote && <MoveRight size={14} />}
                     Column
                   </span>
                   <select
-                    aria-label="Move task to column"
-                    value={selectedColumn}
+                    aria-label={sourceNote ? "Column" : "Move task to column"}
+                    value={card?.columnId ?? destinationColumnId ?? ""}
+                    disabled={columns.length === 0}
                     onChange={(e) => {
                       const destination = columns.find(
                         (col) => col._id === e.target.value,
                       );
-                      if (destination && !card) setSelectedColumn(destination._id);
-                      if (destination && card)
-                        void action(async () => {
-                          await save();
-                          await move({
-                            id: card._id,
-                            columnId: destination._id,
-                          });
+                      if (!destination) return;
+                      if (!card) {
+                        setSelectedColumn(destination._id);
+                        return;
+                      }
+                      void action(async () => {
+                        await save();
+                        await move({
+                          id: card._id,
+                          columnId: destination._id,
                         });
+                      });
                     }}
-                    className="h-10 rounded-md border bg-background px-3"
+                    className={cn("h-10 rounded-md border bg-background px-3", sourceNote && "mt-2 w-full")}
                   >
+                    {sourceNote && (
+                      <option value="" disabled>
+                        {!selectedBoard ? "Choose a board first" : noteTaskColumns === undefined ? "Loading columns..." : columns.length === 0 ? "No columns on this board" : "Choose a column"}
+                      </option>
+                    )}
                     {columns.map((col) => (
                       <option key={col._id} value={col._id}>
                         {col.title}
@@ -263,7 +365,32 @@ export function KanbanCardModal({
                   </select>
                 </label>
               </div>
-              <div>
+              {(sourceNote || card?.sourceNoteId) && (
+                <div className="space-y-1 text-sm sm:col-span-2">
+                  <p className="flex items-center gap-2 font-medium"><FileText size={14} /> Source note</p>
+                  {sourceNote ? (
+                    <p className="break-words text-muted-foreground">{sourceNote.title || "Untitled note"}</p>
+                  ) : linkedNoteHref ? (
+                    <Link
+                      href={linkedNoteHref}
+                      className="break-words text-primary underline-offset-4 hover:underline"
+                      onNavigate={(event) => {
+                        if (running.current || dirty) {
+                          event.preventDefault();
+                          if (!running.current) setDiscarding("source");
+                        }
+                      }}
+                    >
+                      {linkedNoteTitle || "Untitled note"}
+                    </Link>
+                  ) : (
+                    <p className="text-muted-foreground">
+                      {linkedNoteTitle === undefined ? "Loading note..." : "This note is unavailable."}
+                    </p>
+                  )}
+                </div>
+              )}
+              {!sourceNote && <div>
                 <span className="mb-2 flex items-center gap-2 text-sm font-medium">
                   <Tag size={14} />
                   Tags
@@ -298,7 +425,7 @@ export function KanbanCardModal({
                     </p>
                   )}
                 </div>
-              </div>
+              </div>}
             </fieldset>
             <footer className="flex flex-wrap items-center justify-between gap-3 border-t pt-5">
               {card ? <Button
@@ -322,16 +449,16 @@ export function KanbanCardModal({
                 >
                   Cancel
                 </Button>
-                <Button size="sm" disabled={pending || !title.trim()}>
+                <Button size="sm" disabled={pending || !title.trim() || (!card && (!destinationBoardId || !destinationColumnId))}>
                   {pending && <Loader2 size={13} className="animate-spin" />}
-                  {pending ? "Saving..." : card ? "Save changes" : "Add task"}
+                  {pending ? "Saving..." : card ? "Save changes" : sourceNote ? "Create task" : "Add task"}
                 </Button>
               </div>
             </footer>
           </form>
         </DialogContent>
       </Dialog>
-      <AlertDialog open={discarding} onOpenChange={setDiscarding}>
+      <AlertDialog open={discarding !== null} onOpenChange={(open) => { if (!open) setDiscarding(null); }}>
         <AlertDialogContent>
           <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
           <AlertDialogDescription>
@@ -339,9 +466,15 @@ export function KanbanCardModal({
           </AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep editing</AlertDialogCancel>
-            <AlertDialogAction onClick={onClose}>
-              Discard changes
-            </AlertDialogAction>
+            {discarding === "source" ? (
+              linkedNoteHref && (
+                <AlertDialogAction asChild>
+                  <Link href={linkedNoteHref}>Discard and open note</Link>
+                </AlertDialogAction>
+              )
+            ) : (
+              <AlertDialogAction onClick={onClose}>Discard changes</AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

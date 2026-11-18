@@ -389,6 +389,7 @@ export const createCard = mutation({
   args: {
     boardId: v.id("kanbanBoards"),
     columnId: v.id("kanbanColumns"),
+    sourceNoteId: v.optional(v.id("notes")),
     title: v.optional(v.string()),
     description: v.optional(v.string()),
     dueDate: v.optional(v.number()),
@@ -399,8 +400,14 @@ export const createCard = mutation({
     if (!identity) throw new Error("Not authenticated");
 
     const board = await ctx.db.get("kanbanBoards", args.boardId);
-    if (!board || board.userId !== identity.subject)
+    if (!board || board.isDeleted || board.userId !== identity.subject)
       throw new Error("Board not found or unauthorized");
+
+    if (args.sourceNoteId !== undefined) {
+      const note = await ctx.db.get("notes", args.sourceNoteId);
+      if (!note || note.isDeleted || note.userId !== identity.subject)
+        throw new Error("The source note is no longer available.");
+    }
 
     // Place at the end of the column
     const column = await ctx.db.get("kanbanColumns", args.columnId);
@@ -418,6 +425,7 @@ export const createCard = mutation({
     const cardId = await ctx.db.insert("kanbanCards", {
       boardId: args.boardId,
       columnId: args.columnId,
+      sourceNoteId: args.sourceNoteId,
       title: args.title || "New Card",
       description: args.description,
       dueDate: args.dueDate,

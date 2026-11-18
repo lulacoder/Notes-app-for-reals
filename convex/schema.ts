@@ -138,6 +138,7 @@ export default defineSchema({
   kanbanCards: defineTable({
     boardId: v.id("kanbanBoards"),
     columnId: v.id("kanbanColumns"),
+    sourceNoteId: v.optional(v.id("notes")),
     title: v.string(),
     description: v.optional(v.string()), // Tiptap HTML
     order: v.number(), // float for drag reordering

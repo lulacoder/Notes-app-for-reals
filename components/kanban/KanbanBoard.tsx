@@ -36,6 +36,7 @@ import {
 import { stripHtmlToText } from "@/lib/html-utils";
 
 import { KanbanColumn } from "./KanbanColumn";
+import { KanbanCardModal } from "./KanbanCardModal";
 import { MobileColumnPicker } from "./MobileColumnPicker";
 import { BoardFilter } from "./BoardFilter";
 import styles from "./Kanban.module.css";
@@ -47,6 +48,7 @@ interface KanbanBoardProps {
   sidebarOpen: boolean;
   initialColumns?: Doc<"kanbanColumns">[];
   initialCards?: Doc<"kanbanCards">[];
+  linkedCard?: { id: string; dismiss: () => void };
 }
 
 export function KanbanBoard({
@@ -56,6 +58,7 @@ export function KanbanBoard({
   sidebarOpen,
   initialColumns,
   initialCards,
+  linkedCard,
 }: KanbanBoardProps) {
   const { isAuthenticated } = useConvexAuth();
   const columns =
@@ -116,6 +119,7 @@ export function KanbanBoard({
     null,
   );
   const movingCard = cards?.find((card) => card._id === movingCardId);
+  const linkedTask = linkedCard && cards?.find((card) => card._id === linkedCard.id);
   const [pending, setPending] = useState(0);
   const [failed, setFailed] = useState(false);
   const retryRef = useRef<(() => Promise<unknown>) | null>(null);
@@ -474,6 +478,16 @@ export function KanbanBoard({
           currentColumnId={movingCard.columnId}
           cardId={movingCard._id}
           boardId={board._id}
+        />
+      )}
+      {linkedTask && columns && (
+        <KanbanCardModal
+          key={linkedTask._id}
+          card={linkedTask}
+          columns={columns}
+          tags={tags}
+          open
+          onClose={linkedCard.dismiss}
         />
       )}
     </div>

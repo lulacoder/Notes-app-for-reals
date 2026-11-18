@@ -40,8 +40,10 @@ export function KanbanPageClient({
   const boards = usePreloadedAuthQuery(preloadedBoards) ?? [];
   const tags = usePreloadedAuthQuery(preloadedTags) ?? [];
   const params = useSearchParams();
+  const boardParam = params.get("board");
+  const cardParam = params.get("card");
   const selected =
-    boards.find((board) => board._id === params.get("board")) ?? boards[0];
+    boards.find((board) => board._id === boardParam) ?? boards[0];
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -96,6 +98,10 @@ export function KanbanPageClient({
             key={selected._id}
             board={selected}
             tags={tags}
+            linkedCard={cardParam && selected._id === boardParam ? {
+              id: cardParam,
+              dismiss: () => window.history.replaceState(null, "", `/kanban?board=${selected._id}`),
+            } : undefined}
             initialColumns={
               initialBoardData?.boardId === selected._id
                 ? initialBoardData.columns
