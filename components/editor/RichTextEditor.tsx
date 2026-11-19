@@ -177,7 +177,7 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
     // Update content when prop changes (e.g., switching notes)
     useEffect(() => {
       if (editor && content !== editor.getHTML()) {
-        editor.commands.setContent(content || "");
+        editor.commands.setContent(content || "", { emitUpdate: false });
       }
     }, [content, editor]);
 

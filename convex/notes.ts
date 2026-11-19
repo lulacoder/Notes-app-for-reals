@@ -135,6 +135,7 @@ export const updateNote = mutation({
     title: v.optional(v.string()),
     content: v.optional(v.string()),
     saveVersion: v.optional(v.boolean()),
+    expected: v.optional(v.object({ title: v.string(), content: v.string() })),
   },
   handler: async (ctx, args) => {
     const identity = await getActiveIdentity(ctx);
@@ -145,6 +146,10 @@ export const updateNote = mutation({
     const note = await ctx.db.get("notes", args.id);
     if (!note || note.userId !== identity.subject) {
       throw new Error("Note not found or unauthorized");
+    }
+
+    if (args.expected && (args.expected.title !== note.title || args.expected.content !== note.content)) {
+      throw new Error("NOTE_EDIT_CONFLICT");
     }
 
     const titleChanged = args.title !== undefined && args.title !== note.title;
