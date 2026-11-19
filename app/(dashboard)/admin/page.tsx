@@ -7,14 +7,6 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -40,15 +32,12 @@ import {
   ShieldCheck,
   ShieldAlert,
   Search,
-  MoreVertical,
   UserCheck,
   UserX,
   Trash2,
   Users,
   ArrowLeft,
   Loader2,
-  AlertCircle,
-  Clock,
   UserPlus,
   KeyRound,
   Database,
@@ -65,11 +54,9 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { getErrorMessage } from "@/lib/errors";
-import type { FunctionReturnType } from "convex/server";
-
-export type AdminUser = FunctionReturnType<typeof api.admin.listUsers>[number];
-
-const ROOT_ADMIN_EMAIL = "leul15370@gmail.com";
+import { AdminUserAvatar, AdminUserLabels, AdminUserRoleBadge, AdminUserStatusBadge } from "@/components/admin/AdminUserIdentity";
+import { AdminUserMenu } from "@/components/admin/AdminUserMenu";
+import type { AdminUser, AdminUserActionHandlers } from "@/lib/admin";
 
 const BAN_PRESET_REASONS = [
   "Terms of service violation",
@@ -385,6 +372,14 @@ export default function AdminPage() {
     } finally {
       setIsSeeding(false);
     }
+  };
+
+  const userActions: AdminUserActionHandlers = {
+    onChangeRole: handleInitiateToggleRole,
+    onResetPassword: handleInitiateResetPassword,
+    onSuspend: handleInitiateBan,
+    onReactivate: handleUnban,
+    onDelete: handleInitiateDelete,
   };
 
   return (
@@ -703,8 +698,6 @@ export default function AdminPage() {
                 <tbody className="divide-y divide-border/30">
                   {filteredUsers.map((user: AdminUser) => {
                     const isSelf = user.id === currentUserId || user._id === currentUserId;
-                    const isRootAdmin = user.email.toLowerCase() === ROOT_ADMIN_EMAIL;
-                    const initial = (user.name || user.email).charAt(0).toUpperCase();
 
                     return (
                       <tr
@@ -715,25 +708,11 @@ export default function AdminPage() {
                       >
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9 border border-border/60 shrink-0">
-                              {user.image && <AvatarImage src={user.image} alt={user.name} />}
-                              <AvatarFallback className="text-xs font-bold bg-muted text-muted-foreground">
-                                {initial}
-                              </AvatarFallback>
-                            </Avatar>
+                            <AdminUserAvatar user={user} />
                             <div className="min-w-0 max-w-[200px] sm:max-w-xs">
                               <div className="font-semibold text-foreground truncate flex items-center gap-1.5">
                                 <span>{user.name}</span>
-                                {isSelf && (
-                                  <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-                                    You
-                                  </span>
-                                )}
-                                {isRootAdmin && (
-                                  <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-200/50 dark:border-purple-800/50">
-                                    Primary Admin
-                                  </span>
-                                )}
+                                <AdminUserLabels user={user} currentUserId={currentUserId} />
                               </div>
                               <div className="text-xs text-muted-foreground truncate">
                                 {user.email}
@@ -743,49 +722,13 @@ export default function AdminPage() {
                         </td>
 
                         <td className="py-3.5 px-4">
-                          {user.role === "admin" ? (
-                            <Badge className="bg-purple-600/15 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800 gap-1 font-semibold text-xs py-0.5">
-                              <ShieldCheck className="h-3 w-3" />
-                              Admin
-                            </Badge>
-                          ) : (
-                            <Badge
-                              variant="secondary"
-                              className="font-normal text-muted-foreground text-xs py-0.5"
-                            >
-                              User
-                            </Badge>
-                          )}
+                          <AdminUserRoleBadge user={user} />
                         </td>
 
                         <td className="py-3.5 px-4">
-                          {user.banned ? (
-                            <div className="space-y-0.5">
-                              <Badge variant="destructive" className="gap-1 font-semibold text-xs py-0.5">
-                                <AlertCircle className="h-3 w-3" />
-                                Suspended
-                              </Badge>
-                              {user.banReason && (
-                                <p className="text-[11px] text-muted-foreground truncate max-w-[160px]">
-                                  {user.banReason}
-                                </p>
-                              )}
-                              {user.banExpires && (
-                                <p className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                                  <Clock className="h-2.5 w-2.5" />
-                                  Expires {format(new Date(user.banExpires), "MMM d")}
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 gap-1.5 font-medium text-xs py-0.5"
-                            >
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                              Active
-                            </Badge>
-                          )}
+                          <AdminUserStatusBadge user={user} />
+                          {user.banReason && <p className="text-xs text-muted-foreground mt-1 max-w-40 truncate">{user.banReason}</p>}
+                          {user.banExpires && <p className="text-xs text-muted-foreground">Expires {format(new Date(user.banExpires), "MMM d")}</p>}
                         </td>
 
                         <td className="py-3.5 px-4 text-xs text-muted-foreground hidden md:table-cell">
@@ -795,73 +738,7 @@ export default function AdminPage() {
                         </td>
 
                         <td className="py-3.5 px-4 text-right">
-                          {isSelf ? (
-                            <span className="text-xs text-muted-foreground italic pr-2 select-none">
-                              Self
-                            </span>
-                          ) : (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0 rounded-lg hover:bg-muted"
-                                >
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-52 rounded-xl shadow-xl">
-                                {isRootAdmin ? (
-                                  <div className="p-2 text-xs text-muted-foreground italic">
-                                    Primary administrator account is protected.
-                                  </div>
-                                ) : (
-                                  <>
-                                    <DropdownMenuItem onClick={() => handleInitiateToggleRole(user)}>
-                                      <Shield className="mr-2 h-4 w-4" />
-                                      {user.role === "admin"
-                                        ? "Demote to User"
-                                        : "Promote to Admin"}
-                                    </DropdownMenuItem>
-
-                                    <DropdownMenuItem
-                                      onClick={() => handleInitiateResetPassword(user)}
-                                    >
-                                      <KeyRound className="mr-2 h-4 w-4 text-blue-500" />
-                                      Reset Password
-                                    </DropdownMenuItem>
-
-                                    <DropdownMenuSeparator />
-
-                                    {user.banned ? (
-                                      <DropdownMenuItem onClick={() => handleUnban(user)}>
-                                        <UserCheck className="mr-2 h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                                        Reactivate Account
-                                      </DropdownMenuItem>
-                                    ) : (
-                                      <DropdownMenuItem
-                                        onClick={() => handleInitiateBan(user)}
-                                        className="text-amber-600 dark:text-amber-400"
-                                      >
-                                        <UserX className="mr-2 h-4 w-4" />
-                                        Suspend Account
-                                      </DropdownMenuItem>
-                                    )}
-
-                                    <DropdownMenuSeparator />
-
-                                    <DropdownMenuItem
-                                      onClick={() => handleInitiateDelete(user)}
-                                      className="text-destructive focus:text-destructive"
-                                    >
-                                      <Trash2 className="mr-2 h-4 w-4" />
-                                      Delete Account
-                                    </DropdownMenuItem>
-                                  </>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
+                          <AdminUserMenu user={user} currentUserId={currentUserId} actions={userActions} />
                         </td>
                       </tr>
                     );
