@@ -1,7 +1,7 @@
-import { getActiveIdentity } from "./lib/activeIdentity";
 import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
+import { getActiveIdentity } from "./lib/activeIdentity";
 import { extractFirstImageSrc, stripHtmlToText } from "../lib/html-utils";
 
 export const listNoteSummaries = query({
