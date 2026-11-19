@@ -3,6 +3,17 @@ import { api } from "../convex/_generated/api";
 import { account, setup } from "./convex";
 
 describe("document updates", () => {
+  it("rejects a stale note save without overwriting the newer version", async () => {
+    const t = setup();
+    const owner = (await account(t, "user")).client;
+    const id = await owner.mutation(api.notes.createNote, { title: "Title", content: "Original" });
+    const expected = { title: "Title", content: "Original" };
+    await owner.mutation(api.notes.updateNote, { id, content: "Device one", expected });
+    await expect(owner.mutation(api.notes.updateNote, { id, content: "Device two", expected }))
+      // convex-test exposes the serialized wire value in data.
+      .rejects.toMatchObject({ data: JSON.stringify("NOTE_EDIT_CONFLICT") });
+    expect(await owner.query(api.notes.getNote, { id })).toMatchObject({ content: "Device one" });
+  });
   it("skips identical or empty note updates, including unnecessary versions", async () => {
     const t = setup();
     const owner = (await account(t, "user")).client;
