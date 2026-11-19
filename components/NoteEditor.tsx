@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef, useMemo, ViewTransition } from "react";
 import { useQuery, useMutation, useConvexAuth } from "convex/react";
+import { ConvexError } from "convex/values";
 import { api } from "@/convex/_generated/api";
 import type { Id, Doc } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
@@ -140,7 +141,7 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
       } catch (error) {
         lastSubmittedRef.current = previous;
         previousSubmissionRef.current = null;
-        if (error instanceof Error && error.message.includes("NOTE_EDIT_CONFLICT")) {
+        if (error instanceof ConvexError && error.data === "NOTE_EDIT_CONFLICT") {
           setConflict(true);
         }
         throw error;
@@ -155,7 +156,7 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
   useEffect(() => {
     if (!liveNote || liveNote._id !== noteId || loadedNoteId !== noteId || conflict) return;
     const previous = lastSubmittedRef.current;
-    if (!previous || title !== previous.title || content !== previous.content) return;
+    if (!previous || draft.title !== previous.title || draft.content !== previous.content) return;
     const prior = previousSubmissionRef.current;
     if (prior && liveNote.title === prior.title && liveNote.content === prior.content) return;
     previousSubmissionRef.current = null;
@@ -168,7 +169,7 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
       setTitle(liveNote.title);
       setContent(liveNote.content);
     });
-  }, [liveNote, noteId, loadedNoteId, conflict, title, content, autosave.status]);
+  }, [liveNote, noteId, loadedNoteId, conflict, draft, autosave.status]);
 
   const resolveConflict = async (keepLocal: boolean) => {
     if (!liveNote) return;

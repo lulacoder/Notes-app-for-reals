@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import type { Editor } from "@tiptap/react";
 import { ConvexProviderWithAuth, ConvexReactClient } from "convex/react";
 import { getFunctionName, makeFunctionReference } from "convex/server";
+import { ConvexError } from "convex/values";
 import { expect, it, vi } from "vitest";
 
 import { NoteEditor } from "@/components/NoteEditor";
@@ -83,19 +84,41 @@ it("creates a linked task from selected note text and stays in the note after sa
     [JSON.stringify(["kanban:listColumns", { boardId }]), columns],
     [JSON.stringify(["tags:listTags", {}]), tags],
   ]);
+  const listeners = new Map<string, Set<() => void>>();
+  const noteKey = JSON.stringify(["notes:getNote", { id: noteId }]);
+  async function publishNote() {
+    reads.set(noteKey, await owner.query(api.notes.getNote, { id: noteId }));
+    listeners.get(noteKey)?.forEach((notify) => notify());
+  }
   const watch = vi.spyOn(client, "watchQuery").mockImplementation((query, ...[args]) => {
     const key = JSON.stringify([getFunctionName(query), args ?? {}]);
     if (!reads.has(key)) throw new Error(`Unexpected query: ${key}`);
     return {
-      onUpdate: () => () => {},
+      onUpdate: (notify) => {
+        const callbacks = listeners.get(key) ?? new Set();
+        callbacks.add(notify);
+        listeners.set(key, callbacks);
+        return () => { callbacks.delete(notify); };
+      },
       localQueryResult: () => reads.get(key),
       localQueryLogs: () => undefined,
       journal: () => undefined,
     };
   });
   const mutation = vi.spyOn(client, "mutation").mockImplementation(
-    async (reference, ...[args]) =>
-      owner.mutation(makeFunctionReference<"mutation">(getFunctionName(reference)), args ?? {}),
+    async (reference, ...[args]) => {
+      try {
+        const result = await owner.mutation(makeFunctionReference<"mutation">(getFunctionName(reference)), args ?? {});
+        if (getFunctionName(reference) === "notes:updateNote") await publishNote();
+        return result;
+      } catch (error) {
+        // The real Convex client decodes error data received over the wire.
+        if (error instanceof ConvexError && typeof error.data === "string") {
+          throw new ConvexError(JSON.parse(error.data));
+        }
+        throw error;
+      }
+    },
   );
   const router: AppRouterInstance = {
     back() {},
@@ -175,6 +198,35 @@ it("creates a linked task from selected note text and stays in the note after sa
     expect(container.textContent).toContain("Task created");
     await act(async () => findButton(container, "View task").click());
     expect(router.push).toHaveBeenCalledWith(`/kanban?board=${boardId}&card=${cards[0]._id}`);
+
+    const title = container.querySelector<HTMLInputElement>('input[placeholder="Untitled"]');
+    if (!title) throw new Error("Missing title input");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(title, "");
+      title.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      await vi.waitFor(async () => {
+        expect((await owner.query(api.notes.getNote, { id: noteId }))?.title).toBe("Untitled");
+      }, { timeout: 4000 });
+    });
+    await owner.mutation(api.notes.updateNote, { id: noteId, content: "<p>Changed on another device</p>" });
+    await act(async () => publishNote());
+    await act(async () => {
+      await vi.waitFor(() => expect(editor.textContent).toContain("Changed on another device"));
+    });
+    await act(async () => {
+      editor.editor?.commands.setContent("<p>Local edits</p>");
+    });
+    await owner.mutation(api.notes.updateNote, { id: noteId, content: "<p>Other edits</p>" });
+    await act(async () => publishNote());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 2200));
+    });
+    expect(container.textContent).toContain("Choose which version to keep");
+    expect(editor.textContent).toContain("Local edits");
+    await act(async () => findButton(container, "Use other version").click());
+    expect(editor.textContent).toContain("Other edits");
   } finally {
     await act(async () => root.unmount());
     container.remove();
@@ -186,4 +238,4 @@ it("creates a linked task from selected note text and stays in the note after sa
     vi.unstubAllGlobals();
     await client.close();
   }
-});
+}, 12000);

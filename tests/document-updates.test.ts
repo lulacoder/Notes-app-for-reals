@@ -10,7 +10,8 @@ describe("document updates", () => {
     const expected = { title: "Title", content: "Original" };
     await owner.mutation(api.notes.updateNote, { id, content: "Device one", expected });
     await expect(owner.mutation(api.notes.updateNote, { id, content: "Device two", expected }))
-      .rejects.toThrow("NOTE_EDIT_CONFLICT");
+      // convex-test exposes the serialized wire value in data.
+      .rejects.toMatchObject({ data: JSON.stringify("NOTE_EDIT_CONFLICT") });
     expect(await owner.query(api.notes.getNote, { id })).toMatchObject({ content: "Device one" });
   });
   it("skips identical or empty note updates, including unnecessary versions", async () => {

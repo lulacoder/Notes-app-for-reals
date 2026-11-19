@@ -1,5 +1,5 @@
 import { getActiveIdentity } from "./lib/activeIdentity";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { extractFirstImageSrc, stripHtmlToText } from "../lib/html-utils";
@@ -149,7 +149,7 @@ export const updateNote = mutation({
     }
 
     if (args.expected && (args.expected.title !== note.title || args.expected.content !== note.content)) {
-      throw new Error("NOTE_EDIT_CONFLICT");
+      throw new ConvexError("NOTE_EDIT_CONFLICT");
     }
 
     const titleChanged = args.title !== undefined && args.title !== note.title;
