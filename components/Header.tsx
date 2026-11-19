@@ -114,14 +114,14 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
     <header className={cn("sticky top-0 z-10 border-b", isAdminPage ? "border-border bg-card" : "border-border/40 bg-background/80 backdrop-blur-md")}>
       <div className={cn("flex items-center justify-between gap-2 px-3 sm:px-4", isAdminPage ? "h-16 sm:px-6 lg:px-8" : "h-14")}>
         <div className="flex items-center gap-5">
-        <Link
-          href="/notes"
-          aria-label="Noteworthy, back to notes"
-          className="shrink-0 [&>span>span]:hidden sm:[&>span>span]:inline"
-        >
-          <Brand />
-        </Link>
-        {isAdminPage && <span className="hidden border-l pl-5 text-sm text-muted-foreground sm:inline">Admin</span>}
+          <Link
+            href="/notes"
+            aria-label="Noteworthy, back to notes"
+            className="shrink-0 [&>span>span]:hidden sm:[&>span>span]:inline"
+          >
+            <Brand />
+          </Link>
+          {isAdminPage && <span className="hidden border-l pl-5 text-sm text-muted-foreground sm:inline">Admin</span>}
         </div>
         <nav
           aria-label={isAdminPage ? "Administration" : "Workspace"}
@@ -191,13 +191,13 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
             {/* User menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className={cn("gap-2", styles.accountTrigger)}>
+                <Button variant="ghost" size="sm" aria-label={`Account menu for ${userName || userEmail}`} className={cn("gap-2", styles.accountTrigger)}>
                   <Avatar className="h-7 w-7">
                     <AvatarFallback className="bg-primary/10 text-primary text-xs">
                       {userInitial}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="hidden sm:inline text-sm max-w-[150px] truncate">
+                  <span className={cn("hidden max-w-[150px] truncate text-sm", isAdminPage ? "lg:inline" : "sm:inline")}>
                     {userName || userEmail}
                   </span>
                 </Button>

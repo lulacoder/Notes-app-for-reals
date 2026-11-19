@@ -40,7 +40,7 @@ export function AdminUserFilters({ search, role, sort, onSearchChange, onRoleCha
           </Button>
         )}
       </div>
-      <div className="relative">
+      <div className="relative xl:order-last">
         <ArrowDownWideNarrow className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
         <select
           aria-label="Sort users"
@@ -57,7 +57,7 @@ export function AdminUserFilters({ search, role, sort, onSearchChange, onRoleCha
           <option value="email">Email (A–Z)</option>
         </select>
       </div>
-      <div className="flex w-full gap-1" role="group" aria-label="Filter users">
+      <div className="order-last flex w-full gap-1 xl:order-none xl:w-auto" role="group" aria-label="Filter users">
         {FILTERS.map((filter) => (
           <Button
             key={filter.value}
