@@ -1,62 +1,22 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useMemo, useState, type FormEvent } from "react";
+import Link from "next/link";
+import { useMutation, useQuery } from "convex/react";
+import { ArrowLeft, Check, Copy, KeyRound, Loader2, Shield, ShieldAlert, Sparkles, Trash2, UserPlus, UserX } from "lucide-react";
 import { api } from "@/convex/_generated/api";
-import { useRouter } from "next/navigation";
+import { AdminAccountStats, AdminDeploymentSummary } from "@/components/admin/AdminOverview";
+import { AdminUserDetails } from "@/components/admin/AdminUserDetails";
+import { AdminUserFilters } from "@/components/admin/AdminUserFilters";
+import { AdminUsersTable } from "@/components/admin/AdminUsersTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/toast-notification";
-import {
-  Shield,
-  ShieldCheck,
-  ShieldAlert,
-  Search,
-  UserCheck,
-  UserX,
-  Trash2,
-  Users,
-  ArrowLeft,
-  Loader2,
-  UserPlus,
-  KeyRound,
-  Database,
-  ChevronDown,
-  ChevronUp,
-  X,
-  Sparkles,
-  Copy,
-  Check,
-  FileText,
-  Layers,
-  LayoutDashboard,
-  Tag,
-} from "lucide-react";
-import { format } from "date-fns";
+import type { AdminRoleFilter, AdminUser, AdminUserActionHandlers, AdminUserSort } from "@/lib/admin";
 import { getErrorMessage } from "@/lib/errors";
-import { AdminUserAvatar, AdminUserLabels, AdminUserRoleBadge, AdminUserStatusBadge } from "@/components/admin/AdminUserIdentity";
-import { AdminUserMenu } from "@/components/admin/AdminUserMenu";
-import type { AdminUser, AdminUserActionHandlers } from "@/lib/admin";
 
 const BAN_PRESET_REASONS = [
   "Terms of service violation",
@@ -67,7 +27,6 @@ const BAN_PRESET_REASONS = [
 ];
 
 export default function AdminPage() {
-  const router = useRouter();
   const { success, error: toastError, info } = useToast();
 
   const currentUser = useQuery(api.auth.getCurrentUser);
@@ -84,9 +43,9 @@ export default function AdminPage() {
 
   // Search, filter, and sort state
   const [searchQuery, setSearchQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user" | "banned">("all");
-  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "name" | "email">("newest");
-  const [showStatsOverview, setShowStatsOverview] = useState(false);
+  const [roleFilter, setRoleFilter] = useState<AdminRoleFilter>("all");
+  const [sortBy, setSortBy] = useState<AdminUserSort>("newest");
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   // Role Confirmation Dialog state
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
@@ -126,10 +85,8 @@ export default function AdminPage() {
   // Filtered and sorted users
   const filteredUsers = useMemo(() => {
     if (!users) return [];
-    const typedUsers = users.slice();
-
-    const filtered = typedUsers.filter((user: AdminUser) => {
-      const q = searchQuery.toLowerCase().trim();
+    const q = searchQuery.toLowerCase().trim();
+    const filtered = users.filter((user) => {
       const matchesSearch =
         !q ||
         user.name.toLowerCase().includes(q) ||
@@ -138,7 +95,7 @@ export default function AdminPage() {
       if (!matchesSearch) return false;
 
       if (roleFilter === "admin") return user.role === "admin";
-      if (roleFilter === "user") return user.role === "user" && !user.banned;
+      if (roleFilter === "active") return !user.banned;
       if (roleFilter === "banned") return user.banned;
 
       return true;
@@ -178,9 +135,8 @@ export default function AdminPage() {
             Administrative privileges are required to access this portal. If you believe this is
             an error, contact your system administrator.
           </p>
-          <Button onClick={() => router.push("/notes")} className="mt-4 gap-2">
-            <ArrowLeft className="h-4 w-4" />
-            Return to Dashboard
+          <Button asChild className="mt-4 gap-2">
+            <Link href="/notes"><ArrowLeft className="h-4 w-4" />Back to Notes</Link>
           </Button>
         </div>
       </div>
@@ -188,11 +144,10 @@ export default function AdminPage() {
   }
 
   const currentUserId = currentUser._id;
-  const typedAllUsers = (users || []) as AdminUser[];
-  const totalCount = typedAllUsers.length;
-  const adminCount = typedAllUsers.filter((u: AdminUser) => u.role === "admin").length;
-  const bannedCount = typedAllUsers.filter((u: AdminUser) => u.banned).length;
-  const activeCount = totalCount - bannedCount;
+  // Store only the ID so the pane follows live updates and never keeps a deleted account.
+  const selectedUser = users === undefined
+    ? undefined
+    : filteredUsers.find((user) => user.id === selectedUserId) ?? filteredUsers[0] ?? null;
 
   // Handlers
   const handleInitiateToggleRole = (targetUser: AdminUser) => {
@@ -292,7 +247,7 @@ export default function AdminPage() {
     }
   };
 
-  const handleCreateUser = async (e: React.FormEvent) => {
+  const handleCreateUser = async (e: FormEvent) => {
     e.preventDefault();
     if (!newEmail || !newPassword) return;
     setIsCreating(true);
@@ -339,7 +294,7 @@ export default function AdminPage() {
     setTimeout(() => setCopiedPassword(false), 3000);
   };
 
-  const handleConfirmResetPassword = async (e: React.FormEvent) => {
+  const handleConfirmResetPassword = async (e: FormEvent) => {
     e.preventDefault();
     if (!selectedUserForPassword || !newPasswordValue) return;
     setIsResettingPassword(true);
@@ -383,371 +338,56 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-y-auto bg-background p-4 sm:p-6 lg:p-8">
-      <div className="max-w-6xl w-full mx-auto space-y-6">
-        {/* Top Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40 pb-5">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2.5 text-muted-foreground hover:text-foreground -ml-2"
-                onClick={() => router.push("/notes")}
-              >
-                <ArrowLeft className="h-4 w-4 mr-1.5" />
-                Notes
-              </Button>
-              <Badge variant="outline" className="gap-1.5 border-primary/30 text-primary bg-primary/5">
-                <ShieldCheck className="h-3.5 w-3.5" />
-                Admin Portal
-              </Badge>
+    <div className="min-w-0 flex-1 overflow-y-auto bg-muted/30">
+      <div className="mx-auto w-full max-w-[1440px] space-y-6 p-4 sm:p-6 lg:p-8">
+        <div id="admin-users" className="scroll-mt-6 space-y-5">
+          <Link href="/notes" className="inline-flex items-center gap-2 rounded-sm text-xs font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+            <ArrowLeft className="size-4" />
+            Back to Notes
+          </Link>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">User management</h1>
+              <p className="mt-1.5 text-sm text-muted-foreground">Manage accounts, roles, and access.</p>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">User Management</h1>
-            <p className="text-sm text-muted-foreground">
-              Monitor active accounts, govern security privileges, and inspect deployment status.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 gap-1.5 text-xs"
-              onClick={() => setShowStatsOverview((prev) => !prev)}
-            >
-              <Database className="h-4 w-4 text-primary" />
-              <span>Deployment Stats</span>
-              {showStatsOverview ? (
-                <ChevronUp className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
-              )}
-            </Button>
-            <Button
-              size="sm"
-              className="h-9 gap-2 text-xs shadow-xs"
-              onClick={() => setCreateDialogOpen(true)}
-            >
-              <UserPlus className="h-4 w-4" />
-              Provision User
+            <Button onClick={() => setCreateDialogOpen(true)}>
+              <UserPlus className="size-4" />
+              Create user
             </Button>
           </div>
         </div>
 
-        {/* Collapsible Deployment Stats Overview */}
-        {showStatsOverview && (
-          <div className="p-5 rounded-2xl border bg-card/60 shadow-xs space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Convex Cloud Health
-                </span>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs gap-1.5 border-dashed"
-                onClick={handleSeedDemoData}
-                disabled={isSeeding}
-              >
-                {isSeeding ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Sparkles className="h-3 w-3 text-amber-500" />
-                )}
-                Seed Demo Data
-              </Button>
-            </div>
+        <AdminAccountStats users={users} />
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-              <div className="p-3 rounded-xl border bg-background/50 flex items-center gap-3">
-                <FileText className="h-5 w-5 text-blue-500 shrink-0" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Active Notes</p>
-                  <p className="text-lg font-bold">{stats?.notesCount ?? "—"}</p>
-                </div>
-              </div>
-              <div className="p-3 rounded-xl border bg-background/50 flex items-center gap-3">
-                <Layers className="h-5 w-5 text-purple-500 shrink-0" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Canvases</p>
-                  <p className="text-lg font-bold">{stats?.canvasesCount ?? "—"}</p>
-                </div>
-              </div>
-              <div className="p-3 rounded-xl border bg-background/50 flex items-center gap-3">
-                <LayoutDashboard className="h-5 w-5 text-emerald-500 shrink-0" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Kanban Boards</p>
-                  <p className="text-lg font-bold">{stats?.boardsCount ?? "—"}</p>
-                </div>
-              </div>
-              <div className="p-3 rounded-xl border bg-background/50 flex items-center gap-3">
-                <Tag className="h-5 w-5 text-rose-500 shrink-0" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Tags Defined</p>
-                  <p className="text-lg font-bold">{stats?.tagsCount ?? "—"}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Metric Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-          <div className="p-4 rounded-xl border bg-card/70 shadow-xs">
-            <div className="flex items-center justify-between text-muted-foreground mb-2">
-              <span className="text-xs font-semibold uppercase tracking-wider">Total Accounts</span>
-              <Users className="h-4 w-4 text-blue-500" />
-            </div>
-            <div className="text-2xl font-bold tracking-tight">
-              {users === undefined ? (
-                <div className="h-7 w-12 bg-muted animate-pulse rounded-md" />
-              ) : (
-                totalCount
-              )}
-            </div>
-          </div>
-          <div className="p-4 rounded-xl border bg-card/70 shadow-xs">
-            <div className="flex items-center justify-between text-muted-foreground mb-2">
-              <span className="text-xs font-semibold uppercase tracking-wider">Administrators</span>
-              <Shield className="h-4 w-4 text-purple-500" />
-            </div>
-            <div className="text-2xl font-bold tracking-tight">
-              {users === undefined ? (
-                <div className="h-7 w-12 bg-muted animate-pulse rounded-md" />
-              ) : (
-                adminCount
-              )}
-            </div>
-          </div>
-          <div className="p-4 rounded-xl border bg-card/70 shadow-xs">
-            <div className="flex items-center justify-between text-muted-foreground mb-2">
-              <span className="text-xs font-semibold uppercase tracking-wider">Active Users</span>
-              <UserCheck className="h-4 w-4 text-emerald-500" />
-            </div>
-            <div className="text-2xl font-bold tracking-tight">
-              {users === undefined ? (
-                <div className="h-7 w-12 bg-muted animate-pulse rounded-md" />
-              ) : (
-                activeCount
-              )}
-            </div>
-          </div>
-          <div className="p-4 rounded-xl border bg-card/70 shadow-xs">
-            <div className="flex items-center justify-between text-muted-foreground mb-2">
-              <span className="text-xs font-semibold uppercase tracking-wider">Suspended</span>
-              <UserX className="h-4 w-4 text-rose-500" />
-            </div>
-            <div className="text-2xl font-bold tracking-tight">
-              {users === undefined ? (
-                <div className="h-7 w-12 bg-muted animate-pulse rounded-md" />
-              ) : (
-                bannedCount
-              )}
-            </div>
-          </div>
+        <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <section aria-label="User accounts" className="min-w-0 overflow-hidden rounded-xl border bg-card">
+            <AdminUserFilters
+              search={searchQuery}
+              role={roleFilter}
+              sort={sortBy}
+              onSearchChange={setSearchQuery}
+              onRoleChange={setRoleFilter}
+              onSortChange={setSortBy}
+            />
+            <AdminUsersTable
+              users={users === undefined ? undefined : filteredUsers}
+              totalCount={users?.length ?? 0}
+              selectedUserId={selectedUser?.id ?? null}
+              currentUserId={currentUserId}
+              onSelect={setSelectedUserId}
+              onResetFilters={() => { setSearchQuery(""); setRoleFilter("all"); }}
+              actions={userActions}
+            />
+            {users !== undefined && (
+              <p className="border-t px-4 py-3 text-xs text-muted-foreground" role="status">
+                Showing {filteredUsers.length} of {users.length} accounts
+              </p>
+            )}
+          </section>
+          <AdminUserDetails user={selectedUser} currentUserId={currentUserId} actions={userActions} />
         </div>
 
-        {/* Filters, Search and Sorting */}
-        <div className="space-y-3 pt-2">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by name or email address..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 pr-8 h-9 text-sm"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label="Clear search"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label htmlFor="sort-select" className="text-xs text-muted-foreground hidden sm:inline">
-                Sort:
-              </label>
-              <select
-                id="sort-select"
-                value={sortBy}
-                onChange={(e) => { const value = e.target.value; if (value === "newest" || value === "oldest" || value === "name" || value === "email") setSortBy(value); }}
-                className="h-9 px-2.5 text-xs rounded-lg border bg-card/60 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                <option value="newest">Newest first</option>
-                <option value="oldest">Oldest first</option>
-                <option value="name">Name (A-Z)</option>
-                <option value="email">Email (A-Z)</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-              <Button
-                variant={roleFilter === "all" ? "default" : "outline"}
-                size="sm"
-                className="h-8 text-xs rounded-full px-3"
-                onClick={() => setRoleFilter("all")}
-              >
-                All ({totalCount})
-              </Button>
-              <Button
-                variant={roleFilter === "admin" ? "default" : "outline"}
-                size="sm"
-                className="h-8 text-xs rounded-full px-3"
-                onClick={() => setRoleFilter("admin")}
-              >
-                Admins ({adminCount})
-              </Button>
-              <Button
-                variant={roleFilter === "user" ? "default" : "outline"}
-                size="sm"
-                className="h-8 text-xs rounded-full px-3"
-                onClick={() => setRoleFilter("user")}
-              >
-                Active ({activeCount})
-              </Button>
-              <Button
-                variant={roleFilter === "banned" ? "default" : "outline"}
-                size="sm"
-                className="h-8 text-xs rounded-full px-3"
-                onClick={() => setRoleFilter("banned")}
-              >
-                Suspended ({bannedCount})
-              </Button>
-            </div>
-
-            <span className="text-xs text-muted-foreground">
-              Showing <span className="font-semibold text-foreground">{filteredUsers.length}</span>{" "}
-              of {totalCount} accounts
-            </span>
-          </div>
-        </div>
-
-        {/* User Table and Card List */}
-        <div className="rounded-2xl border bg-card/50 shadow-xs overflow-hidden">
-          {users === undefined ? (
-            /* Skeleton Loading State */
-            <div className="p-6 space-y-4">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="flex items-center justify-between py-2 border-b border-border/40 last:border-0">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-muted animate-pulse" />
-                    <div className="space-y-1.5">
-                      <div className="h-4 w-32 bg-muted animate-pulse rounded" />
-                      <div className="h-3 w-48 bg-muted animate-pulse rounded" />
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <div className="h-6 w-16 bg-muted animate-pulse rounded-full hidden sm:block" />
-                    <div className="h-6 w-16 bg-muted animate-pulse rounded-full hidden sm:block" />
-                    <div className="h-8 w-8 bg-muted animate-pulse rounded" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : filteredUsers.length === 0 ? (
-            /* Empty Filtered State */
-            <div className="p-12 text-center space-y-3">
-              <div className="inline-flex p-3 rounded-full bg-muted/60 text-muted-foreground">
-                <Users className="h-7 w-7" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-base font-semibold">No accounts match your criteria</p>
-                <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                  We couldn&apos;t find any accounts matching &quot;{searchQuery}&quot; or the active
-                  filter.
-                </p>
-              </div>
-              {(searchQuery || roleFilter !== "all") && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setSearchQuery("");
-                    setRoleFilter("all");
-                  }}
-                  className="mt-2 text-xs"
-                >
-                  Reset Filters
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="border-b bg-muted/40 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    <th className="py-3 px-4">Account</th>
-                    <th className="py-3 px-4">Role</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4 hidden md:table-cell">Registered</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/30">
-                  {filteredUsers.map((user: AdminUser) => {
-                    const isSelf = user.id === currentUserId || user._id === currentUserId;
-
-                    return (
-                      <tr
-                        key={user.id}
-                        className={`hover:bg-muted/30 transition-colors ${
-                          isSelf ? "bg-primary/[0.02]" : ""
-                        }`}
-                      >
-                        <td className="py-3.5 px-4">
-                          <div className="flex items-center gap-3">
-                            <AdminUserAvatar user={user} />
-                            <div className="min-w-0 max-w-[200px] sm:max-w-xs">
-                              <div className="font-semibold text-foreground truncate flex items-center gap-1.5">
-                                <span>{user.name}</span>
-                                <AdminUserLabels user={user} currentUserId={currentUserId} />
-                              </div>
-                              <div className="text-xs text-muted-foreground truncate">
-                                {user.email}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <AdminUserRoleBadge user={user} />
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <AdminUserStatusBadge user={user} />
-                          {user.banReason && <p className="text-xs text-muted-foreground mt-1 max-w-40 truncate">{user.banReason}</p>}
-                          {user.banExpires && <p className="text-xs text-muted-foreground">Expires {format(new Date(user.banExpires), "MMM d")}</p>}
-                        </td>
-
-                        <td className="py-3.5 px-4 text-xs text-muted-foreground hidden md:table-cell">
-                          {user.createdAt
-                            ? format(new Date(user.createdAt), "MMM d, yyyy")
-                            : "—"}
-                        </td>
-
-                        <td className="py-3.5 px-4 text-right">
-                          <AdminUserMenu user={user} currentUserId={currentUserId} actions={userActions} />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        <AdminDeploymentSummary stats={stats} isSeeding={isSeeding} onSeed={handleSeedDemoData} />
       </div>
 
       {/* Role Change Confirmation Dialog */}
@@ -920,10 +560,10 @@ export default function AdminPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <UserPlus className="h-5 w-5 text-primary" />
-                Provision New Account
+                Create user
               </DialogTitle>
               <DialogDescription className="text-left pt-1">
-                Create a registered account with direct credentials and assign an authorization role.
+                Create an account and choose its access level.
               </DialogDescription>
             </DialogHeader>
 
@@ -997,7 +637,7 @@ export default function AdminPage() {
               </Button>
               <Button type="submit" disabled={isCreating} className="gap-2">
                 {isCreating && <Loader2 className="h-4 w-4 animate-spin" />}
-                Provision Account
+                Create account
               </Button>
             </DialogFooter>
           </form>
@@ -1010,8 +650,8 @@ export default function AdminPage() {
           <form onSubmit={handleConfirmResetPassword}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <KeyRound className="h-5 w-5 text-blue-500" />
-                Reset User Password
+                <KeyRound className="h-5 w-5 text-primary" />
+                Reset password
               </DialogTitle>
               <DialogDescription className="text-left pt-1">
                 Assign a new password for{" "}

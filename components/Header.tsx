@@ -52,6 +52,7 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
   const currentUser = usePreloadedAuthQuery(preloadedCurrentUser);
   const router = useRouter();
   const pathname = usePathname();
+  const isAdminPage = pathname === "/admin";
   const { openSearch } = useWorkspaceNavigation();
   const search = onOpenSearch ?? openSearch;
   const { isLoading, isAuthenticated } = useConvexAuth();
@@ -110,8 +111,9 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
   const userInitial = (userName || userEmail).charAt(0).toUpperCase() || "U";
 
   return (
-    <header className="border-b border-border/40 bg-background/80 backdrop-blur-md sticky top-0 z-10">
-      <div className="flex h-14 items-center justify-between gap-2 px-3 sm:px-4">
+    <header className={cn("sticky top-0 z-10 border-b", isAdminPage ? "border-border bg-card" : "border-border/40 bg-background/80 backdrop-blur-md")}>
+      <div className={cn("flex items-center justify-between gap-2 px-3 sm:px-4", isAdminPage ? "h-16 sm:px-6 lg:px-8" : "h-14")}>
+        <div className="flex items-center gap-5">
         <Link
           href="/notes"
           aria-label="Noteworthy, back to notes"
@@ -119,11 +121,18 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
         >
           <Brand />
         </Link>
+        {isAdminPage && <span className="hidden border-l pl-5 text-sm text-muted-foreground sm:inline">Admin</span>}
+        </div>
         <nav
-          aria-label="Workspace"
-          className="flex items-center gap-1 rounded-lg bg-muted/50 p-1 text-xs sm:text-sm"
+          aria-label={isAdminPage ? "Administration" : "Workspace"}
+          className={cn("flex items-center gap-1 text-xs sm:text-sm", isAdminPage ? "h-full" : "rounded-lg bg-muted/50 p-1")}
         >
-          {[
+          {isAdminPage ? (
+            <>
+              <a href="#admin-users" className="flex h-full items-center border-b-2 border-primary px-3 font-medium text-foreground sm:px-5">Users</a>
+              <a href="#admin-deployment" className="flex h-full items-center border-b-2 border-transparent px-3 text-muted-foreground hover:text-foreground sm:px-5">Deployment</a>
+            </>
+          ) : [
             { href: "/notes", label: "Notes" },
             { href: "/canvas", label: "Canvas" },
             { href: "/kanban", label: "Boards" },
@@ -147,7 +156,7 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
         {currentUser && (
           <div className="flex items-center gap-2">
             {/* Quick search button */}
-            {search && (
+            {search && !isAdminPage && (
               <Button
                 variant="outline"
                 size="sm"
@@ -160,7 +169,7 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
             )}
 
             {/* Keyboard shortcuts */}
-            {search && <Popover>
+            {search && !isAdminPage && <Popover>
               <PopoverTrigger asChild>
                 <Button
                   variant="ghost"
