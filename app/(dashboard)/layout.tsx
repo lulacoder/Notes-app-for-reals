@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { Header } from "@/components/Header";
+import { DashboardShell } from "@/components/DashboardShell";
 import { requireAppSession } from "@/lib/auth-session";
 import { ConvexClientProvider } from "@/providers/convex-provider";
 import { ToastProvider } from "@/components/ui/toast-notification";
@@ -29,12 +29,9 @@ async function AuthenticatedDashboard({
     <ConvexClientProvider initialToken={token}>
       <ToastProvider>
         <WorkspaceNavigationProvider>
-          <div className="h-dvh flex flex-col overflow-hidden">
-            <Header preloadedCurrentUser={preloadedCurrentUser} />
-            <main className="flex-1 flex min-h-0 overflow-hidden">
-              {children}
-            </main>
-          </div>
+          <DashboardShell preloadedCurrentUser={preloadedCurrentUser}>
+            {children}
+          </DashboardShell>
         </WorkspaceNavigationProvider>
       </ToastProvider>
     </ConvexClientProvider>

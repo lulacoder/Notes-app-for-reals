@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -45,9 +45,11 @@ import {
 interface HeaderProps {
   onOpenSearch?: () => void;
   preloadedCurrentUser: Preloaded<typeof api.auth.getCurrentUser>;
+  signingOut: boolean;
+  setSigningOut: (signingOut: boolean) => void;
 }
 
-export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
+export function Header({ onOpenSearch, preloadedCurrentUser, signingOut, setSigningOut }: HeaderProps) {
   const platform = useKeyboardPlatform();
   const currentUser = usePreloadedAuthQuery(preloadedCurrentUser);
   const router = useRouter();
@@ -58,7 +60,6 @@ export function Header({ onOpenSearch, preloadedCurrentUser }: HeaderProps) {
   const { isLoading, isAuthenticated } = useConvexAuth();
   const { error: showError } = useToast();
   const navigating = useRef(false);
-  const [signingOut, setSigningOut] = useState(false);
   const { isInstallable, install } = usePWAInstall();
 
   useEffect(() => {
