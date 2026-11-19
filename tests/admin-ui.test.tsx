@@ -64,12 +64,24 @@ async function fill(selector: string, value: string) {
   });
 }
 
-async function choose(selector: string, value: string) {
-  const select = document.querySelector<HTMLSelectElement>(selector);
-  if (!select) throw new Error(`Missing select: ${selector}`);
+function dropdown(label: string) {
+  const trigger = document.querySelector<HTMLButtonElement>(`button[aria-label^="${label}: "]`);
+  if (!trigger) throw new Error(`Missing dropdown: ${label}`);
+  return trigger;
+}
+
+async function choose(label: string, optionLabel: string) {
+  const trigger = dropdown(label);
   await act(async () => {
-    select.value = value;
-    select.dispatchEvent(new Event("change", { bubbles: true }));
+    trigger.focus();
+    trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+  const choice = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')]
+    .find((item) => item.textContent === optionLabel);
+  if (!choice) throw new Error(`Missing dropdown option: ${optionLabel}`);
+  await act(async () => {
+    choice.focus();
+    choice.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   });
 }
 
@@ -98,11 +110,13 @@ beforeEach(() => {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
 });
 
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -110,10 +124,10 @@ it("selects accounts and follows live changes and deletions without keeping a st
   await render();
   expect(details().textContent).toContain("Maya Chen");
   await selectAccount("Hana Ali");
-  expect(details().querySelector("select")?.value).toBe("admin");
+  expect(dropdown("Account role").textContent).toBe("Admin");
   users = users?.map((user) => user.id === "hana" ? { ...user, role: "user", banned: true, banReason: "Review required" } : user);
   await render();
-  expect(details().querySelector("select")?.value).toBe("user");
+  expect(dropdown("Account role").textContent).toBe("User");
   expect(details().textContent).toContain("Review required");
   users = users?.filter((user) => user.id !== "hana");
   await render();
@@ -132,7 +146,7 @@ it("searches, filters active admins consistently, and clears the pane when nothi
   expect(details().textContent).toContain("Hana Ali");
   await fill('input[aria-label="Search users by name or email"]', "nobody");
   expect(container.textContent).toContain("No matching accounts");
-  expect(details().querySelector("select")).toBeNull();
+  expect(details().querySelector('[aria-label^="Account role:"]')).toBeNull();
   await act(async () => button("Reset filters").click());
   expect(container.querySelectorAll("tbody tr")).toHaveLength(5);
   await act(async () => button("Suspended").click());
@@ -144,21 +158,21 @@ it("searches, filters active admins consistently, and clears the pane when nothi
 it("sorts the list without losing a selected account", async () => {
   await render();
   await selectAccount("Hana Ali");
-  await choose('select[aria-label="Sort users"]', "oldest");
+  await choose("Sort users", "Oldest first");
   expect(container.querySelector("tbody tr")?.textContent).toContain("Current Admin");
   expect(details().textContent).toContain("Hana Ali");
-  await choose('select[aria-label="Sort users"]', "name");
+  await choose("Sort users", "Name (A–Z)");
   expect(container.querySelector("tbody tr")?.textContent).toContain("Alex Morgan");
 });
 
 it("confirms a role change before sending the mutation and leaves a cancelled role unchanged", async () => {
   await render();
-  await choose("#admin-user-role", "admin");
+  await choose("Account role", "Admin");
   expect(mocks.mutate).not.toHaveBeenCalled();
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Maya Chen");
   await act(async () => button("Cancel").click());
-  expect(details().querySelector("select")?.value).toBe("user");
-  await choose("#admin-user-role", "admin");
+  expect(dropdown("Account role").textContent).toBe("User");
+  await choose("Account role", "Admin");
   await act(async () => button("Confirm Role Change").click());
   expect(mocks.mutate).toHaveBeenCalledWith("admin:setRole", { userId: "maya", role: "admin" });
 });
@@ -167,7 +181,9 @@ it("keeps self and primary administrator controls protected in the pane and list
   await render();
   for (const name of ["Current Admin", "Primary Admin"]) {
     await selectAccount(name);
-    expect(details().querySelector("select")?.disabled).toBe(true);
+    expect(dropdown("Account role").disabled).toBe(true);
+    await act(async () => dropdown("Account role").click());
+    expect(document.querySelector('[role="menu"]')).toBeNull();
     expect(button("Reset password", details()).disabled).toBe(true);
     expect(details().textContent).not.toContain("Delete account");
     expect(details().textContent).not.toContain("Suspend account");
@@ -176,12 +192,27 @@ it("keeps self and primary administrator controls protected in the pane and list
   expect(mocks.mutate).not.toHaveBeenCalled();
 });
 
+it("chooses a new account's role inside the dialog without submitting the form early", async () => {
+  await render();
+  await act(async () => button("Create user").click());
+  await fill("#create-name", "New admin");
+  await fill("#create-email", "new@example.com");
+  await fill("#create-password", "secure-test-password");
+  await choose("New user role", "Admin (Full Management Privileges)");
+  expect(mocks.mutate).not.toHaveBeenCalled();
+  expect(dropdown("New user role").textContent).toBe("Admin (Full Management Privileges)");
+  await act(async () => button("Create account").click());
+  expect(mocks.mutate).toHaveBeenCalledWith("admin:createUser", {
+    name: "New admin", email: "new@example.com", password: "secure-test-password", role: "admin",
+  });
+});
+
 it("suspends the selected account with a reason and duration after confirmation", async () => {
   await render();
   await act(async () => button("Suspend account", details()).click());
   expect(mocks.mutate).not.toHaveBeenCalled();
   await fill("#custom-ban-reason", "Spam");
-  await choose("#ban-duration-select", "7d");
+  await choose("Suspension duration", "Temporary — 7 Days");
   const now = Date.UTC(2026, 10, 19);
   vi.spyOn(Date, "now").mockReturnValue(now);
   await act(async () => button("Confirm Suspension").click());
@@ -229,7 +260,7 @@ it("distinguishes loading accounts from an empty deployment", async () => {
   users = [];
   await render();
   expect(container.textContent).toContain("No accounts yet");
-  expect(details().querySelector("select")).toBeNull();
+  expect(details().querySelector('[aria-label^="Account role:"]')).toBeNull();
 });
 
 it.each([null, { _id: "self", role: "user", banned: false }, { _id: "self", role: "admin", banned: true }])("blocks access for an unauthorized account: %j", async (identity) => {

@@ -2,6 +2,7 @@
 
 import { format } from "date-fns";
 import { KeyRound, ShieldCheck, Trash2, UserCheck, UserRound, UserX } from "lucide-react";
+import { KanbanDropdown } from "@/components/kanban/KanbanDropdown";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { getAdminUserProtection, type AdminUser, type AdminUserActionHandlers } from "@/lib/admin";
@@ -35,18 +36,20 @@ export function AdminUserDetails({ user, currentUserId, actions }: AdminUserDeta
           <div className="mt-7 space-y-5">
             <div className="space-y-2">
               <Label htmlFor="admin-user-role" className="text-xs">Role</Label>
-              <select
+              <KanbanDropdown
                 id="admin-user-role"
+                label="Account role"
+                variant="field"
                 value={user.role === "admin" ? "admin" : "user"}
                 disabled={Boolean(protection)}
-                onChange={(event) => {
-                  if (event.target.value !== user.role) actions.onChangeRole(user);
+                onChange={(value) => {
+                  if (value !== user.role) actions.onChangeRole(user);
                 }}
-                className="h-9 w-full rounded-md border bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-              </select>
+                options={[
+                  { value: "user", label: "User" },
+                  { value: "admin", label: "Admin" },
+                ]}
+              />
             </div>
             <dl className="text-sm">
               <dt className="text-xs text-muted-foreground">Joined</dt>

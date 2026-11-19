@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,29 +14,35 @@ import { cn } from "@/lib/utils";
 import styles from "./Kanban.module.css";
 
 interface KanbanDropdownProps {
+  id?: string;
   label: string;
   value: string;
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
   placeholder?: string;
   variant?: "filter" | "field";
+  disabled?: boolean;
 }
 
 export function KanbanDropdown({
+  id,
   label,
   value,
   options,
   onChange,
   placeholder = "Unavailable filter",
   variant = "filter",
+  disabled = false,
 }: KanbanDropdownProps) {
+  const generatedId = useId();
+  const triggerId = id ?? generatedId;
   const selected = options.find((option) => option.value === value);
   const selectedLabel = selected?.label ?? placeholder;
   const isField = variant === "field";
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild disabled={options.length === 0}>
+      <DropdownMenuTrigger asChild id={triggerId} disabled={disabled || options.length === 0}>
         <Button
           type="button"
           variant="outline"
@@ -56,6 +63,7 @@ export function KanbanDropdown({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
+        aria-labelledby={triggerId}
         align="start"
         sideOffset={isField ? 8 : 6}
         className={cn(

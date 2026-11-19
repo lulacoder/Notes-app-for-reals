@@ -40,6 +40,7 @@ it("opens and changes the selected filter with the keyboard", async () => {
     trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   });
   const choices = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
+  expect(document.querySelector('[role="menu"]')?.getAttribute("aria-labelledby")).toBe(trigger.id);
   expect(choices.map((choice) => choice.textContent)).toEqual(["Any due date", "Due today"]);
   expect(choices[0].getAttribute("aria-checked")).toBe("true");
   await act(async () => {

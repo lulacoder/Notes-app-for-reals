@@ -9,6 +9,7 @@ import { AdminAccountStats, AdminDeploymentSummary } from "@/components/admin/Ad
 import { AdminUserDetails } from "@/components/admin/AdminUserDetails";
 import { AdminUserFilters } from "@/components/admin/AdminUserFilters";
 import { AdminUsersTable } from "@/components/admin/AdminUsersTable";
+import { KanbanDropdown } from "@/components/kanban/KanbanDropdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -486,17 +487,21 @@ export default function AdminPage() {
               <Label htmlFor="ban-duration-select" className="text-xs font-semibold">
                 Suspension Duration
               </Label>
-              <select
+              <KanbanDropdown
                 id="ban-duration-select"
+                label="Suspension duration"
+                variant="field"
                 value={banDuration}
-                onChange={(e) => { const value = e.target.value; if (value === "permanent" || value === "1d" || value === "7d" || value === "30d") setBanDuration(value); }}
-                className="w-full h-9 px-3 text-xs rounded-lg border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                <option value="permanent">Permanent suspension</option>
-                <option value="1d">Temporary — 24 Hours</option>
-                <option value="7d">Temporary — 7 Days</option>
-                <option value="30d">Temporary — 30 Days</option>
-              </select>
+                onChange={(value) => {
+                  if (value === "permanent" || value === "1d" || value === "7d" || value === "30d") setBanDuration(value);
+                }}
+                options={[
+                  { value: "permanent", label: "Permanent suspension" },
+                  { value: "1d", label: "Temporary — 24 Hours" },
+                  { value: "7d", label: "Temporary — 7 Days" },
+                  { value: "30d", label: "Temporary — 30 Days" },
+                ]}
+              />
             </div>
           </div>
 
@@ -614,15 +619,19 @@ export default function AdminPage() {
                 <Label htmlFor="create-role" className="text-xs font-semibold">
                   Role Privilege
                 </Label>
-                <select
+                <KanbanDropdown
                   id="create-role"
+                  label="New user role"
+                  variant="field"
                   value={newRole}
-                  onChange={(e) => { const value = e.target.value; if (value === "user" || value === "admin") setNewRole(value); }}
-                  className="w-full h-9 px-3 text-xs rounded-lg border bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="user">User (Standard Access)</option>
-                  <option value="admin">Admin (Full Management Privileges)</option>
-                </select>
+                  onChange={(value) => {
+                    if (value === "user" || value === "admin") setNewRole(value);
+                  }}
+                  options={[
+                    { value: "user", label: "User (Standard Access)" },
+                    { value: "admin", label: "Admin (Full Management Privileges)" },
+                  ]}
+                />
               </div>
             </div>
 

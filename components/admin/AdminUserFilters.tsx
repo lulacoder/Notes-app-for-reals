@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowDownWideNarrow, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
+import { KanbanDropdown } from "@/components/kanban/KanbanDropdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AdminRoleFilter, AdminUserSort } from "@/lib/admin";
@@ -40,22 +41,20 @@ export function AdminUserFilters({ search, role, sort, onSearchChange, onRoleCha
           </Button>
         )}
       </div>
-      <div className="relative xl:order-last">
-        <ArrowDownWideNarrow className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-        <select
-          aria-label="Sort users"
+      <div className="xl:order-last">
+        <KanbanDropdown
+          label="Sort users"
           value={sort}
-          onChange={(event) => {
-            const value = event.target.value;
+          onChange={(value) => {
             if (value === "newest" || value === "oldest" || value === "name" || value === "email") onSortChange(value);
           }}
-          className="h-9 rounded-md border bg-background pl-8 pr-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-          <option value="name">Name (A–Z)</option>
-          <option value="email">Email (A–Z)</option>
-        </select>
+          options={[
+            { value: "newest", label: "Newest first" },
+            { value: "oldest", label: "Oldest first" },
+            { value: "name", label: "Name (A–Z)" },
+            { value: "email", label: "Email (A–Z)" },
+          ]}
+        />
       </div>
       <div className="order-last flex w-full gap-1 xl:order-none xl:w-auto" role="group" aria-label="Filter users">
         {FILTERS.map((filter) => (
