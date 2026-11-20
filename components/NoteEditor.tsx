@@ -64,7 +64,6 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
   const editorRef = useRef<RichTextEditorRef>(null);
   const versionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSubmittedRef = useRef<NoteDraft | null>(null);
-  const previousSubmissionRef = useRef<NoteDraft | null>(null);
   const lastVersionRef = useRef({ title: "", content: "" });
   const [loadedNoteId, setLoadedNoteId] = useState(initialNote?._id ?? null);
   const [conflict, setConflict] = useState(false);
@@ -83,7 +82,6 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
         setConflict(false);
       });
       lastSubmittedRef.current = { title: note.title, content: noteContent };
-      previousSubmissionRef.current = null;
       lastVersionRef.current = { title: note.title, content: noteContent };
       prevNoteIdRef.current = noteId;
     } else if (!note && noteId === null) {
@@ -135,12 +133,10 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
       if (updates.title === undefined && updates.content === undefined) return;
 
       lastSubmittedRef.current = draft;
-      previousSubmissionRef.current = previous;
       try {
         await updateNote({ id: noteId, ...updates, expected: previous ?? undefined });
       } catch (error) {
         lastSubmittedRef.current = previous;
-        previousSubmissionRef.current = null;
         if (error instanceof ConvexError && error.data === "NOTE_EDIT_CONFLICT") {
           setConflict(true);
         }
@@ -157,14 +153,11 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
     if (!liveNote || liveNote._id !== noteId || loadedNoteId !== noteId || conflict) return;
     const previous = lastSubmittedRef.current;
     if (!previous || draft.title !== previous.title || draft.content !== previous.content) return;
-    const prior = previousSubmissionRef.current;
-    if (prior && liveNote.title === prior.title && liveNote.content === prior.content) return;
-    previousSubmissionRef.current = null;
     if (liveNote.title === previous.title && liveNote.content === previous.content) return;
-    // A submitted save may still be in flight; wait until its subscription catches up.
+    // Convex completes saves after subscriptions reflect their writes, so a saved
+    // draft can accept the latest snapshot even if another device reverted it.
     if (autosave.status !== "saved") return;
     lastSubmittedRef.current = { title: liveNote.title, content: liveNote.content };
-    previousSubmissionRef.current = null;
     queueMicrotask(() => {
       setTitle(liveNote.title);
       setContent(liveNote.content);
