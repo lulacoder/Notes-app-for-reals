@@ -6,6 +6,7 @@ import { useState, useMemo } from "react";
 import type { Preloaded } from "convex/react";
 import { useMutation, useConvex } from "convex/react";
 import { DocumentLink } from "@/components/DocumentLink";
+import { CreateWorkspaceDialog } from "@/components/CreateWorkspaceDialog";
 import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -133,10 +134,11 @@ export function Sidebar({
     onSelectNote(noteId);
   };
 
-  const handleCreateCanvas = async () => {
-    const canvasId = await createCanvas({ title: "Untitled Canvas" });
+  async function handleCreateCanvas(title: string) {
+    const canvasId = await createCanvas({ title });
+    onNavigate();
     router.push(`/canvas/${canvasId}`);
-  };
+  }
 
   const handleSendToCanvas = async (
     note: (typeof notes)[0],
@@ -517,10 +519,12 @@ export function Sidebar({
             <Plus className="h-3.5 w-3.5 mr-1.5" />
             Note
           </Button>
-          <Button onClick={handleCreateCanvas} variant="outline" className="flex-1 h-8 text-xs">
-            <Layers className="h-3.5 w-3.5 mr-1.5" />
-            Canvas
-          </Button>
+          <CreateWorkspaceDialog kind="canvas" onCreate={handleCreateCanvas}>
+            <Button variant="outline" className="flex-1 h-8 text-xs">
+              <Layers className="h-3.5 w-3.5 mr-1.5" />
+              Canvas
+            </Button>
+          </CreateWorkspaceDialog>
         </div>
         <Button
           variant="outline"

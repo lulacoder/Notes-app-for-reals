@@ -12,6 +12,7 @@ import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { KanbanBoard } from "@/components/kanban/KanbanBoard";
 import { BoardSidebar } from "@/components/kanban/BoardSidebar";
+import { CreateWorkspaceDialog } from "@/components/CreateWorkspaceDialog";
 import { Button } from "@/components/ui/button";
 import { WorkspaceEmptyState } from "@/components/WorkspaceEmptyState";
 import {
@@ -20,7 +21,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { useToast } from "@/components/ui/toast-notification";
 
 interface KanbanPageClientProps {
   preloadedBoards: Preloaded<typeof api.kanban.listBoards>;
@@ -46,36 +46,21 @@ export function KanbanPageClient({
     boards.find((board) => board._id === boardParam) ?? boards[0];
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const { error } = useToast();
   const createBoard = useMutation(api.kanban.createBoard);
   function select(id: Id<"kanbanBoards">) {
     window.history.pushState(null, "", `/kanban?board=${id}`);
     setDrawerOpen(false);
   }
-  async function create() {
-    if (creating) return;
-    setCreating(true);
-    try {
-      const id = await createBoard({ title: "New board" });
-      select(id);
-    } catch (cause) {
-      console.error("Failed KanbanPageClient action:", cause);
-      error(
-        "Could not create board",
-        cause instanceof Error ? cause.message : "Try again.",
-      );
-    } finally {
-      setCreating(false);
-    }
+  async function create(title: string) {
+    const id = await createBoard({ title });
+    select(id);
   }
   const sidebar = (
     <BoardSidebar
       boards={boards}
       selectedBoardId={selected?._id ?? null}
       onSelectBoard={select}
-      onCreateBoard={() => void create()}
-      creating={creating}
+      onCreateBoard={create}
     />
   );
   return (
@@ -145,10 +130,12 @@ export function KanbanPageClient({
               title="Make room for a plan."
               description="Give your tasks a home. Start a board, add a few next steps, and move them forward."
             >
-              <Button disabled={creating} onClick={() => void create()}>
-                <Plus size={16} />
-                {creating ? "Creating..." : "Create your first board"}
-              </Button>
+              <CreateWorkspaceDialog kind="board" onCreate={create}>
+                <Button>
+                  <Plus size={16} />
+                  Create your first board
+                </Button>
+              </CreateWorkspaceDialog>
             </WorkspaceEmptyState>
           </>
         )}
