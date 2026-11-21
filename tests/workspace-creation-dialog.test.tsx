@@ -113,6 +113,8 @@ beforeEach(() => {
 
 afterEach(async () => {
   await act(async () => root.unmount());
+  // Radix restores focus on the next tick; finish before jsdom is torn down.
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
   container.remove();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
