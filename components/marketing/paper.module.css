@@ -4,6 +4,7 @@
   --muted: #62676c;
   --line: #e3e5e7;
   --rose: #e11d48;
+  --ring: var(--rose);
   --rose-soft: #fce7ed;
   color-scheme: light;
   min-height: 100svh;
@@ -13,10 +14,6 @@
 }
 .paper a {
   text-decoration: none;
-}
-.paper :is(a, button):focus-visible {
-  outline: 2px solid var(--rose);
-  outline-offset: 5px;
 }
 .brand {
   display: inline-flex;

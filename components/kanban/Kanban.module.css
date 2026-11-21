@@ -1,16 +1,7 @@
-.surface :is(input, textarea, select):focus-visible {
-  border-color: color-mix(in oklab, var(--ring) 45%, var(--border));
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ring) 25%, transparent);
-}
-
-.surface textarea:focus {
-  border-color: color-mix(in oklab, var(--ring) 45%, var(--border));
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ring) 25%, transparent);
-}
-
+.surface :is(input, textarea, select):focus-visible,
+.surface textarea:focus,
 .filterTrigger.filterTrigger:focus-visible {
-  border-color: color-mix(in oklab, var(--ring) 40%, var(--border));
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ring) 25%, transparent);
+  border-color: var(--ring);
 }
 
 .menu {
@@ -34,6 +25,6 @@
   .filterTrigger.filterTrigger:focus-visible,
   .menu :is(:global([data-slot="dropdown-menu-item"]), :global([data-slot="dropdown-menu-radio-item"])):focus-visible {
     outline: 2px solid Highlight;
-    outline-offset: 2px;
+    outline-offset: 0;
   }
 }

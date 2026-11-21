@@ -7,6 +7,7 @@
 }
 .authContent {
   --rose: #e11d48;
+  --ring: var(--rose);
   --ink: #191c1d;
   --muted: #686d72;
   --line: #e4e5e7;
@@ -32,10 +33,6 @@
 .authContent *::before,
 .authContent *::after {
   box-sizing: border-box;
-}
-.authContent :is(a, button):focus-visible {
-  outline: 2px solid var(--rose);
-  outline-offset: 4px;
 }
 .visualPanel {
   display: flex;
@@ -211,7 +208,6 @@
 }
 .authField input:focus {
   border-color: var(--rose);
-  box-shadow: 0 0 0 3px #e11d4812;
 }
 .passwordInput {
   position: relative;

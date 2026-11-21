@@ -369,9 +369,20 @@
   @apply bg-muted-foreground/30;
 }
 
-/* Focus visible styles */
+/* Keep one continuous focus indicator against the control's border. */
 :focus-visible:not([data-slot="dropdown-menu-content"]) {
-  @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  @apply outline-none ring-2 ring-ring ring-offset-0;
+}
+
+:is(input, textarea, select):focus-visible:not([aria-invalid="true"]) {
+  @apply border-ring;
+}
+
+@media (forced-colors: active) {
+  :focus-visible:not([data-slot="dropdown-menu-content"]) {
+    outline: 2px solid Highlight;
+    outline-offset: 0;
+  }
 }
 
 /* Selection styles */

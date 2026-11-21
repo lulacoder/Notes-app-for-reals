@@ -1,4 +1,5 @@
 .page {
+  --ring: #e11d48;
   min-height: 100vh;
   background: #fafafa;
   color: #191c1d;
@@ -7,7 +8,6 @@
   -webkit-font-smoothing: antialiased;
 }
 
-.page a:focus-visible { outline: 3px solid #e11d48; outline-offset: 5px; }
 .darkSection, .footer { background: #191c1d; color: #f8f9fa; }
 .header, .intro, .main, .footerInner { width: min(1280px, calc(100% - 112px)); margin-inline: auto; }
 .header { min-height: 96px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
