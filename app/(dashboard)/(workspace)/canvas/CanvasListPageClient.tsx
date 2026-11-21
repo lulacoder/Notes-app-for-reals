@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -21,8 +21,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CanvasCard } from "@/components/CanvasCard";
+import { CreateWorkspaceDialog } from "@/components/CreateWorkspaceDialog";
 import { WorkspaceEmptyState } from "@/components/WorkspaceEmptyState";
-import { useToast } from "@/components/ui/toast-notification";
 
 interface CanvasListPageClientProps {
   preloadedCanvases: Preloaded<typeof api.canvases.listCanvases>;
@@ -33,31 +33,14 @@ export function CanvasListPageClient({
 }: CanvasListPageClientProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
-  const [creating, setCreating] = useState(false);
-  const creatingRef = useRef(false);
-  const { error } = useToast();
 
   const canvases = usePreloadedAuthQuery(preloadedCanvases) ?? [];
   const createCanvas = useMutation(api.canvases.createCanvas);
 
-  const handleCreateCanvas = async () => {
-    if (creatingRef.current) return;
-    creatingRef.current = true;
-    setCreating(true);
-    try {
-      const canvasId = await createCanvas({ title: "Untitled Canvas" });
-      router.push(`/canvas/${canvasId}`);
-    } catch (cause) {
-      console.error("Failed CanvasListPageClient action:", cause);
-      error(
-        "Could not create canvas",
-        cause instanceof Error ? cause.message : "Try again.",
-      );
-    } finally {
-      creatingRef.current = false;
-      setCreating(false);
-    }
-  };
+  async function handleCreateCanvas(title: string) {
+    const canvasId = await createCanvas({ title });
+    router.push(`/canvas/${canvasId}`);
+  }
 
   const filteredCanvases = canvases.filter((canvas) =>
     canvas.title.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -84,10 +67,12 @@ export function CanvasListPageClient({
               <h1 className="text-xl font-semibold">Canvases</h1>
             </div>
           </div>
-          <Button onClick={handleCreateCanvas} disabled={creating}>
-            <Plus className="h-4 w-4 mr-2" />
-            {creating ? "Creating..." : "New Canvas"}
-          </Button>
+          <CreateWorkspaceDialog kind="canvas" onCreate={handleCreateCanvas}>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              New Canvas
+            </Button>
+          </CreateWorkspaceDialog>
         </div>
         <Link
           href="/trash"
@@ -113,7 +98,6 @@ export function CanvasListPageClient({
           <EmptyState
             hasCanvases={canvases.length > 0}
             onCreateCanvas={handleCreateCanvas}
-            creating={creating}
           />
         ) : (
           <div className="space-y-6">
@@ -162,11 +146,9 @@ export function CanvasListPageClient({
 function EmptyState({
   hasCanvases,
   onCreateCanvas,
-  creating,
 }: {
   hasCanvases: boolean;
-  onCreateCanvas: () => void;
-  creating: boolean;
+  onCreateCanvas: (title: string) => Promise<void>;
 }) {
   return (
     <WorkspaceEmptyState
@@ -177,10 +159,12 @@ function EmptyState({
         : "Create a canvas to draw, organize notes, and visualize ideas."}
     >
       {!hasCanvases && (
-        <Button onClick={onCreateCanvas} disabled={creating}>
-          <Plus className="h-4 w-4 mr-2" />
-          {creating ? "Creating..." : "Create Canvas"}
-        </Button>
+        <CreateWorkspaceDialog kind="canvas" onCreate={onCreateCanvas}>
+          <Button>
+            <Plus className="h-4 w-4 mr-2" />
+            Create Canvas
+          </Button>
+        </CreateWorkspaceDialog>
       )}
     </WorkspaceEmptyState>
   );

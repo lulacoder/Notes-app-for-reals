@@ -7,7 +7,6 @@ import { useMutation } from "convex/react";
 import {
   ArrowLeft,
   LayoutDashboard,
-  Loader2,
   MoreHorizontal,
   Pin,
   Plus,
@@ -18,6 +17,7 @@ import {
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
+import { CreateWorkspaceDialog } from "@/components/CreateWorkspaceDialog";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -33,8 +33,7 @@ interface BoardSidebarProps {
   boards: Doc<"kanbanBoards">[];
   selectedBoardId: Id<"kanbanBoards"> | null;
   onSelectBoard: (id: Id<"kanbanBoards">) => void;
-  onCreateBoard: () => void;
-  creating: boolean;
+  onCreateBoard: (title: string) => Promise<void>;
 }
 
 export function BoardSidebar({
@@ -42,7 +41,6 @@ export function BoardSidebar({
   selectedBoardId,
   onSelectBoard,
   onCreateBoard,
-  creating,
 }: BoardSidebarProps) {
   const [query, setQuery] = useState("");
   const pin = useMutation(api.kanban.togglePinBoard);
@@ -154,14 +152,12 @@ export function BoardSidebar({
         )}
       </div>
       <div className="space-y-2 border-t p-3">
-        <Button className="w-full" onClick={onCreateBoard} disabled={creating}>
-          {creating ? (
-            <Loader2 size={15} className="animate-spin" />
-          ) : (
+        <CreateWorkspaceDialog kind="board" onCreate={onCreateBoard}>
+          <Button className="w-full">
             <Plus size={15} />
-          )}
-          New board
-        </Button>
+            New board
+          </Button>
+        </CreateWorkspaceDialog>
         <Link
           href="/trash"
           className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground hover:text-foreground"
