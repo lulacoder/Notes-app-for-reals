@@ -65,7 +65,7 @@ export const createBoard = mutation({
 
     const now = Date.now();
     const boardId = await ctx.db.insert("kanbanBoards", {
-      title: args.title || "Untitled Board",
+      title: args.title?.trim() || "Untitled Board",
       userId: identity.subject,
       createdAt: now,
       updatedAt: now,

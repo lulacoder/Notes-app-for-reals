@@ -99,7 +99,7 @@ export const createCanvas = mutation({
 
     const now = Date.now();
     const canvasId = await ctx.db.insert("canvases", {
-      title: args.title || "Untitled Canvas",
+      title: args.title?.trim() || "Untitled Canvas",
       content: '{"shapes":[]}', // Empty canvas with shapes array
       userId: identity.subject,
       createdAt: now,
