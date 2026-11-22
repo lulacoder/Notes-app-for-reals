@@ -13,12 +13,13 @@ const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
   error: vi.fn(),
   notifyDeleted: vi.fn(),
+  queryResults: {} as Record<string, unknown[]>,
 }));
 
 vi.mock("convex/react", () => ({
   useMutation: (reference: Parameters<typeof getFunctionName>[0]) =>
     (args: unknown) => mocks.mutate(getFunctionName(reference), args),
-  useQuery: () => [],
+  useQuery: (reference: Parameters<typeof getFunctionName>[0]) => mocks.queryResults[getFunctionName(reference)] ?? [],
   useConvexAuth: () => ({ isAuthenticated: true }),
 }));
 vi.mock("@/components/ui/toast-notification", () => ({
@@ -49,6 +50,7 @@ let container: HTMLDivElement;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.queryResults = {};
   mocks.mutate.mockResolvedValue(undefined);
   container = document.createElement("div");
   document.body.append(container);
@@ -76,6 +78,36 @@ describe("workspace consistency", () => {
     }
     await act(async () => button("Notes").click());
     expect(container.textContent).toContain("No deleted notes");
+  });
+
+  it("requires confirmation before restoring or permanently deleting a note", async () => {
+    const id = "note-1" as Id<"notes">;
+    mocks.queryResults["notes:listTrash"] = [{ _id: id, title: "Ideas", deletedAt: Date.now() }];
+    await act(async () => root.render(<WorkspaceTrash />));
+    const restore = container.querySelector<HTMLButtonElement>('[aria-label="Restore Ideas"]');
+    if (!restore) throw new Error("Restore button is missing");
+    await act(async () => restore.click());
+    expect(document.body.textContent).toContain("Restore this note?");
+    expect(mocks.mutate).not.toHaveBeenCalled();
+    const cancel = [...document.body.querySelectorAll("button")].find((item) => item.textContent === "Cancel");
+    if (!cancel) throw new Error("Cancel button is missing");
+    await act(async () => cancel.click());
+    expect(mocks.mutate).not.toHaveBeenCalled();
+    await act(async () => restore.click());
+    const confirmRestore = [...document.body.querySelectorAll("button")].find((item) => item.textContent === "Restore note");
+    if (!confirmRestore) throw new Error("Restore confirmation is missing");
+    await act(async () => confirmRestore.click());
+    expect(mocks.mutate).toHaveBeenCalledWith("notes:restoreNote", { id });
+    mocks.mutate.mockClear();
+    const deleteButton = container.querySelector<HTMLButtonElement>('[aria-label="Delete Ideas permanently"]');
+    if (!deleteButton) throw new Error("Delete button is missing");
+    await act(async () => deleteButton.click());
+    expect(document.body.textContent).toContain("Delete permanently?");
+    expect(mocks.mutate).not.toHaveBeenCalled();
+    const confirm = [...document.body.querySelectorAll("button")].find((item) => item.textContent === "Delete Forever");
+    if (!confirm) throw new Error("Delete confirmation is missing");
+    await act(async () => confirm.click());
+    expect(mocks.mutate).toHaveBeenCalledWith("notes:deleteNote", { id });
   });
 
   it("uses canvas actions with undo and reports failed pinning", async () => {
