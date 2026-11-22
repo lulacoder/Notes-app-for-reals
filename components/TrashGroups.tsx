@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Search, Trash2 } from "lucide-react";
+import { KanbanDropdown } from "@/components/kanban/KanbanDropdown";
 
 interface TrashItem {
   _id: string;
@@ -40,10 +41,15 @@ export function TrashGroups<T extends TrashItem>({ items, kind, renderItem }: Tr
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input aria-label={`Search deleted ${kind}`} value={search} onChange={(event) => setSearch(event.target.value)} placeholder={`Search ${kind}...`} className="h-9 w-48 rounded-md border bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
           </div>
-          <select aria-label="Sort by deletion date" value={order} onChange={(event) => setOrder(event.target.value)} className="h-9 rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-          </select>
+          <KanbanDropdown
+            label="Sort by deletion date"
+            value={order}
+            onChange={setOrder}
+            options={[
+              { value: "newest", label: "Newest first" },
+              { value: "oldest", label: "Oldest first" },
+            ]}
+          />
         </div>}
       </div>
       {items.length === 0 ? (
