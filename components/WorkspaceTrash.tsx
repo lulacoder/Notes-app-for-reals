@@ -8,6 +8,7 @@ import { ArrowLeft, RotateCcw, Trash2 } from "lucide-react";
 
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/toast-notification";
 import { TrashView } from "@/components/TrashView";
 
@@ -89,11 +90,22 @@ export function WorkspaceTrash() {
                   <span className="min-w-0 truncate text-sm font-medium">
                     {record.title || "Untitled"}
                   </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={restoring !== null}
-                    onClick={async () => {
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" size="sm" disabled={restoring !== null}>
+                        <RotateCcw size={14} /> {restoring === record._id ? "Restoring..." : "Restore"}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Restore this {kind.slice(0, -1)}?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          &quot;{record.title || "Untitled"}&quot; will be restored to your workspace.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={async () => {
                       setRestoring(record._id);
                       try {
                         if (kind === "canvases" && "content" in record)
@@ -116,11 +128,10 @@ export function WorkspaceTrash() {
                       } finally {
                         setRestoring(null);
                       }
-                    }}
-                  >
-                    <RotateCcw size={14} />{" "}
-                    {restoring === record._id ? "Restoring..." : "Restore"}
-                  </Button>
+                    }}>Restore</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </li>
               ))}
             </ul>
