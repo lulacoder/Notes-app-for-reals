@@ -5,7 +5,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { TrashGroups } from "@/components/TrashGroups";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,7 +24,7 @@ import { useToast } from "@/components/ui/toast-notification";
 
 export function TrashView() {
   const [now, setNow] = useState(() => Date.now());
-  const trash = useQuery(api.notes.listTrash) || [];
+  const trash = useQuery(api.notes.listTrash);
   const restoreNote = useMutation(api.notes.restoreNote);
   const deleteNote = useMutation(api.notes.deleteNote);
   const emptyTrash = useMutation(api.notes.emptyTrash);
@@ -67,15 +67,9 @@ export function TrashView() {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Trash2 className="h-5 w-5 text-muted-foreground" />
-          <h2 className="font-semibold">Deleted notes</h2>
-          <span className="text-sm text-muted-foreground">({trash.length})</span>
-        </div>
-        <div className="flex items-center gap-2">
-          {trash.length > 0 && (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {trash && trash.length > 0 && (
+        <div className="flex justify-end border-b px-4 py-3">
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" size="sm">
@@ -101,26 +95,15 @@ export function TrashView() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-          )}
         </div>
-      </div>
+      )}
 
-      <ScrollArea className="flex-1">
-        {trash.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground">
-            <Trash2 className="h-12 w-12 mx-auto mb-3 opacity-50" />
-            <p>No deleted notes</p>
-            <p className="text-sm mt-1">Deleted notes will appear here</p>
-          </div>
-        ) : (
-          <div className="p-2 space-y-1">
-            {trash.map((note) => {
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+        {trash === undefined ? <p role="status" className="text-sm text-muted-foreground">Loading deleted notes...</p> : <TrashGroups items={trash} kind="notes"
+          renderItem={(note) => {
               const daysLeft = getDaysLeft(note.deletedAt || 0);
               return (
-                <div
-                  key={note._id}
-                  className="group p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
-                >
+                <li key={note._id} className="rounded-lg border bg-card p-3 transition-colors hover:bg-accent/50">
                   <div className="flex items-start gap-3">
                     <FileText className="h-5 w-5 mt-0.5 text-muted-foreground" />
                     <div className="flex-1 min-w-0">
@@ -133,7 +116,7 @@ export function TrashView() {
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1">
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button variant="ghost" size="sm" title="Restore" aria-label={`Restore ${note.title || "Untitled"}`}>
@@ -155,7 +138,7 @@ export function TrashView() {
                       </AlertDialog>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm" title="Delete permanently">
+                          <Button variant="ghost" size="sm" title="Delete permanently" aria-label={`Delete ${note.title || "Untitled"} permanently`}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </AlertDialogTrigger>
@@ -180,12 +163,10 @@ export function TrashView() {
                       </AlertDialog>
                     </div>
                   </div>
-                </div>
+                </li>
               );
-            })}
-          </div>
-        )}
-      </ScrollArea>
+            }} />}
+      </div>
 
       <div className="p-3 border-t text-xs text-muted-foreground text-center">
         Notes in trash are automatically deleted after 30 days

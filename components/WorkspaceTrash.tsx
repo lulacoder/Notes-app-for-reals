@@ -7,10 +7,13 @@ import { useMutation, useQuery, useConvexAuth } from "convex/react";
 import { ArrowLeft, RotateCcw, Trash2 } from "lucide-react";
 
 import { api } from "@/convex/_generated/api";
+import type { Doc } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/toast-notification";
 import { TrashView } from "@/components/TrashView";
+import { TrashGroups } from "@/components/TrashGroups";
+import { getRelativeTime } from "@/lib/relative-time";
 
 type Kind = "notes" | "canvases" | "boards" | "cards";
 
@@ -76,20 +79,17 @@ export function WorkspaceTrash() {
           </p>
           {records === undefined ? (
             <p role="status">Loading deleted items...</p>
-          ) : records.length === 0 ? (
-            <p className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-              No deleted {kind}.
-            </p>
           ) : (
-            <ul className="max-w-3xl divide-y rounded-xl border">
-              {records.map((record) => (
+            <TrashGroups<Doc<"canvases"> | Doc<"kanbanBoards"> | Doc<"kanbanCards">> items={records} kind={kind}
+              renderItem={(record) => (
                 <li
-                  className="flex items-center justify-between gap-4 p-4"
+                  className="flex min-w-0 items-center justify-between gap-3 rounded-lg border bg-card p-4"
                   key={record._id}
                 >
-                  <span className="min-w-0 truncate text-sm font-medium">
-                    {record.title || "Untitled"}
-                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{record.title || "Untitled"}</p>
+                    {record.deletedAt && <p className="mt-1 text-xs text-muted-foreground">Deleted {getRelativeTime(record.deletedAt)}</p>}
+                  </div>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="outline" size="sm" disabled={restoring !== null}>
@@ -133,8 +133,7 @@ export function WorkspaceTrash() {
                     </AlertDialogContent>
                   </AlertDialog>
                 </li>
-              ))}
-            </ul>
+              )} />
           )}
         </div>
       )}
