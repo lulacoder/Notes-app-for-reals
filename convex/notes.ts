@@ -2,6 +2,8 @@ import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { getActiveIdentity } from "./lib/activeIdentity";
+import { cleanupDocumentUploads } from "./lib/uploadCleanup";
+import { trimNoteVersions } from "./lib/versionRetention";
 import { extractFirstImageSrc, stripHtmlToText } from "../lib/html-utils";
 
 export const listNoteSummaries = query({
@@ -165,6 +167,7 @@ export const updateNote = mutation({
         userId: identity.subject,
         createdAt: Date.now(),
       });
+      await trimNoteVersions(ctx, args.id);
     }
 
     const updates: { title?: string; content?: string; updatedAt: number } = {
@@ -255,6 +258,7 @@ export const deleteNote = mutation({
     }
 
     await ctx.db.delete("notes", args.id);
+    await cleanupDocumentUploads(ctx, identity.subject, { noteIds: [args.id] });
     return args.id;
   },
 });
@@ -293,6 +297,8 @@ export const emptyTrash = mutation({
 
       await ctx.db.delete("notes", note._id);
     }
+
+    await cleanupDocumentUploads(ctx, identity.subject, { noteIds: toDelete.map((note) => note._id) });
 
     return toDelete.length;
   },

@@ -49,6 +49,7 @@ export default defineSchema({
     // Preserve creation-time ordering for queries using this prefix index.
     // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_note", ["noteId"])
+    .index("by_user", ["userId"])
     .index("by_note_created", ["noteId", "createdAt"]),
 
   // File uploads for notes and canvases
@@ -64,6 +65,7 @@ export default defineSchema({
   })
     .index("by_note", ["noteId"])
     .index("by_canvas", ["canvasId"])
+    .index("by_storage", ["storageId"])
     .index("by_user_storage", ["userId", "storageId"])
     // Preserve creation-time ordering for queries using this prefix index.
     // eslint-disable-next-line @convex-dev/no-duplicate-indexes
@@ -101,6 +103,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_canvas", ["canvasId"])
+    .index("by_storage", ["storageId"])
     .index("by_user_storage", ["userId", "storageId"])
     .index("by_asset_id", ["assetId"]),
 
