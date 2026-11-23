@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -25,10 +25,12 @@ import remarkGfm from "remark-gfm";
 interface VersionHistoryProps {
   noteId: Id<"notes">;
   onClose: () => void;
-  onRestore: (title: string, content: string) => void;
+  onRestore: (versionId: Id<"noteVersions">) => Promise<void>;
+  restoring?: boolean;
+  restoreDisabled?: boolean;
 }
 
-export function VersionHistory({ noteId, onClose, onRestore }: VersionHistoryProps) {
+export function VersionHistory({ noteId, onClose, onRestore, restoring = false, restoreDisabled = false }: VersionHistoryProps) {
   const [previewVersionId, setPreviewVersionId] = useState<Id<"noteVersions"> | null>(null);
 
   const versions = useQuery(api.versions.listVersions, { noteId }) || [];
@@ -39,8 +41,8 @@ export function VersionHistory({ noteId, onClose, onRestore }: VersionHistoryPro
   // Note: createVersion is handled in NoteEditor
 
   const handleRestore = async () => {
-    if (!previewVersion) return;
-    onRestore(previewVersion.title, previewVersion.content);
+    if (!previewVersion || restoring || restoreDisabled) return;
+    await onRestore(previewVersion._id);
   };
 
   return (
@@ -52,7 +54,7 @@ export function VersionHistory({ noteId, onClose, onRestore }: VersionHistoryPro
             <History className="h-5 w-5" />
             <h2 className="font-semibold">Version History</h2>
           </div>
-          <Button variant="ghost" size="sm" onClick={onClose}>
+          <Button variant="ghost" size="sm" onClick={onClose} disabled={restoring} aria-label="Close version history">
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -70,9 +72,13 @@ export function VersionHistory({ noteId, onClose, onRestore }: VersionHistoryPro
               ) : (
                 <div className="p-2 space-y-1">
                   {versions.map((version) => (
-                    <div
+                    <button
                       key={version._id}
-                      className={`p-2 rounded-lg cursor-pointer transition-colors ${
+                      type="button"
+                      aria-label={`Preview ${version.title || "Untitled"} version`}
+                      aria-pressed={previewVersionId === version._id}
+                      disabled={restoring}
+                      className={`w-full p-2 text-left rounded-lg cursor-pointer transition-colors ${
                         previewVersionId === version._id
                           ? "bg-primary text-primary-foreground"
                           : "hover:bg-accent"
@@ -88,7 +94,7 @@ export function VersionHistory({ noteId, onClose, onRestore }: VersionHistoryPro
                       <div className="text-xs opacity-50">
                         {formatDistanceToNow(new Date(version.createdAt), { addSuffix: true })}
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -108,22 +114,21 @@ export function VersionHistory({ noteId, onClose, onRestore }: VersionHistoryPro
                   </div>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button size="sm">
+                      <Button size="sm" disabled={restoring || restoreDisabled}>
                         <RotateCcw className="h-4 w-4 mr-1" />
-                        Restore
+                        {restoring ? "Restoring..." : "Restore"}
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
                         <AlertDialogTitle>Restore this version?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          The current note content will be replaced with this version.
-                          A new version will be saved automatically when you edit.
+                          Your current draft will be saved in version history before this version replaces it.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleRestore}>
+                        <AlertDialogAction onClick={handleRestore} disabled={restoring || restoreDisabled}>
                           Restore Version
                         </AlertDialogAction>
                       </AlertDialogFooter>
@@ -151,7 +156,7 @@ export function VersionHistory({ noteId, onClose, onRestore }: VersionHistoryPro
 
         {/* Footer */}
         <div className="p-4 border-t flex justify-end">
-          <Button variant="outline" onClick={onClose}>Close</Button>
+          <Button variant="outline" onClick={onClose} disabled={restoring}>Close</Button>
         </div>
       </div>
     </div>

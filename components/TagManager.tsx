@@ -3,10 +3,11 @@
 import { useState } from "react";
 
 import { useQuery, useMutation } from "convex/react";
-import { Plus, Tag, X, MoreHorizontal, Trash2 } from "lucide-react";
+import { Plus, Tag, X, MoreHorizontal, Trash2, Pencil } from "lucide-react";
 
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { EditTagDialog } from "@/components/EditTagDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -294,6 +295,7 @@ export function TagAssigner({
   disabled = false,
 }: TagAssignerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [editingTag, setEditingTag] = useState<Doc<"tags"> | null>(null);
   const [newTagName, setNewTagName] = useState("");
   const [selectedColor, setSelectedColor] = useState(TAG_COLORS[10].value);
 
@@ -336,6 +338,7 @@ export function TagAssigner({
   };
 
   return (
+    <>
     <Popover open={isOpen && !disabled} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
         <Button
@@ -354,17 +357,29 @@ export function TagAssigner({
           {tags.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
               {tags.map((tag) => (
-                <Badge
-                  key={tag._id}
-                  variant={
-                    selectedTagIds.includes(tag._id) ? "default" : "outline"
-                  }
-                  className="cursor-pointer gap-1"
-                  onClick={() => handleToggleTag(tag._id)}
-                >
-                  <span className={`w-2 h-2 rounded-full ${tag.color}`} />
-                  {tag.name}
-                </Badge>
+                <div key={tag._id} className="flex items-center gap-0.5">
+                  <Button
+                    variant={selectedTagIds.includes(tag._id) ? "secondary" : "outline"}
+                    size="sm"
+                    className="h-7 gap-1 rounded-full text-xs"
+                    aria-pressed={selectedTagIds.includes(tag._id)}
+                    disabled={disabled}
+                    onClick={() => handleToggleTag(tag._id)}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${tag.color}`} />
+                    {tag.name}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7"
+                    aria-label={`Edit ${tag.name}`}
+                    disabled={disabled}
+                    onClick={() => { setIsOpen(false); setEditingTag(tag); }}
+                  >
+                    <Pencil className="size-3" />
+                  </Button>
+                </div>
               ))}
             </div>
           ) : (
@@ -407,5 +422,7 @@ export function TagAssigner({
         </div>
       </PopoverContent>
     </Popover>
+    {editingTag && <EditTagDialog key={editingTag._id} tag={editingTag} colors={TAG_COLORS} onClose={() => setEditingTag(null)} />}
+    </>
   );
 }
