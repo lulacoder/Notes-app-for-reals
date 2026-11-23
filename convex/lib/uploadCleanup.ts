@@ -18,6 +18,7 @@ export async function cleanupDocumentUploads(
   ]);
   const uploads = new Map(uploadGroups.flat().map((upload) => [upload._id, upload]));
   const storageIds = new Set<Id<"_storage">>();
+  const legacyAssets = new Map<Id<"_storage">, { assetId: string; mimeType: string }>();
 
   for (const upload of uploads.values()) {
     if (upload.userId !== userId) continue;
@@ -38,6 +39,7 @@ export async function cleanupDocumentUploads(
       if (asset.userId !== userId) continue;
       await ctx.db.delete("canvasAssets", asset._id);
       storageIds.add(asset.storageId);
+      legacyAssets.set(asset.storageId, asset);
     }
   }
   if (storageIds.size === 0) return;
@@ -49,19 +51,36 @@ export async function cleanupDocumentUploads(
     ctx.db.query("canvases").withIndex("by_user", (q) => q.eq("userId", userId)).collect(),
     ctx.db.query("noteVersions").withIndex("by_user", (q) => q.eq("userId", userId)).collect(),
   ]);
-  const contents = [
-    ...notes.flatMap((note) => [note.content, note.thumbnail ?? ""]),
-    ...canvases.map((canvas) => canvas.content),
-    ...versions.map((version) => version.content),
-  ];
-
   for (const storageId of storageIds) {
     const [upload, asset, url] = await Promise.all([
       ctx.db.query("uploads").withIndex("by_storage", (q) => q.eq("storageId", storageId)).first(),
       ctx.db.query("canvasAssets").withIndex("by_storage", (q) => q.eq("storageId", storageId)).first(),
       ctx.storage.getUrl(storageId),
     ]);
-    if (upload || asset || contents.some((content) => content.includes(storageId) || (url !== null && content.includes(url)))) continue;
+    if (upload || asset) continue;
+    const referencesFile = (content: string) => content.includes(storageId) || (url !== null && content.includes(url));
+    const note = notes.find((item) => referencesFile(item.content) || referencesFile(item.thumbnail ?? ""));
+    const version = note ? undefined : versions.find((item) => referencesFile(item.content));
+    const canvas = canvases.find((item) => referencesFile(item.content));
+    if (note || version || canvas) {
+      // Transfer tracking to a surviving reference so deleting it later can also
+      // reclaim the file. Merely keeping the blob would leave it untracked.
+      const source = [...uploads.values()].find((item) => item.storageId === storageId && item.userId === userId);
+      const legacy = legacyAssets.get(storageId);
+      const metadata = await ctx.db.system.get("_storage", storageId);
+      if (metadata && (source || legacy)) {
+        await ctx.db.insert("uploads", {
+          storageId, userId,
+          noteId: note?._id ?? version?.noteId,
+          canvasId: canvas?._id,
+          filename: source?.filename ?? legacy?.assetId ?? "canvas-asset",
+          mimeType: source?.mimeType ?? legacy?.mimeType ?? "application/octet-stream",
+          size: metadata.size,
+          createdAt: source?.createdAt ?? Date.now(),
+        });
+      }
+      continue;
+    }
     await ctx.storage.delete(storageId);
   }
 }

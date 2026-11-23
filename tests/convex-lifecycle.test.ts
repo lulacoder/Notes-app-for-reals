@@ -110,6 +110,36 @@ describe("permanent deletion", () => {
     expect(await t.run((ctx) => ctx.db.system.get("_storage", storageId))).toBeNull();
   });
 
+  it("transfers upload tracking to a copied-image note and cleans the file when its final reference is deleted", async () => {
+    const t = setup();
+    const owner = (await account(t, "user")).client;
+    const originalId = await owner.mutation(api.notes.createNote, {});
+    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["copied"])));
+    const { url } = await owner.mutation(api.uploads.saveUpload, { noteId: originalId, storageId, filename: "image.png", mimeType: "image/png", size: 6 });
+    const copyId = await owner.mutation(api.notes.createNote, { content: `<img src="${url}">` });
+    await owner.mutation(api.notes.softDeleteNote, { id: originalId });
+    await owner.mutation(api.notes.deleteNote, { id: originalId });
+    expect(await owner.query(api.uploads.listNoteUploads, { noteId: copyId })).toHaveLength(1);
+    await owner.mutation(api.notes.softDeleteNote, { id: copyId });
+    await owner.mutation(api.notes.deleteNote, { id: copyId });
+    expect(await t.run((ctx) => ctx.db.system.get("_storage", storageId))).toBeNull();
+  });
+
+  it("keeps an upload linked to a surviving canvas until both parent documents are deleted", async () => {
+    const t = setup();
+    const owner = (await account(t, "user")).client;
+    const noteId = await owner.mutation(api.notes.createNote, {});
+    const canvasId = await owner.mutation(api.canvases.createCanvas, {});
+    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["shared"])));
+    await owner.mutation(api.uploads.saveUpload, { noteId, canvasId, storageId, filename: "image.png", mimeType: "image/png", size: 6 });
+    await owner.mutation(api.notes.softDeleteNote, { id: noteId });
+    await owner.mutation(api.notes.deleteNote, { id: noteId });
+    expect(await t.run((ctx) => ctx.db.system.get("_storage", storageId))).not.toBeNull();
+    await owner.mutation(api.canvases.softDeleteCanvas, { id: canvasId });
+    await owner.mutation(api.canvases.deleteCanvas, { id: canvasId });
+    expect(await t.run((ctx) => ctx.db.system.get("_storage", storageId))).toBeNull();
+  });
+
   it("deletes canvas uploads and legacy assets only after the canvas is trashed", async () => {
     const t = setup();
     const { client: owner, user } = await account(t, "user");

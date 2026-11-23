@@ -15,6 +15,8 @@ import type * as http from "../http.js";
 import type * as kanban from "../kanban.js";
 import type * as lib_activeIdentity from "../lib/activeIdentity.js";
 import type * as lib_authRecords from "../lib/authRecords.js";
+import type * as lib_uploadCleanup from "../lib/uploadCleanup.js";
+import type * as lib_versionRetention from "../lib/versionRetention.js";
 import type * as notes from "../notes.js";
 import type * as tags from "../tags.js";
 import type * as uploads from "../uploads.js";
@@ -34,6 +36,8 @@ declare const fullApi: ApiFromModules<{
   kanban: typeof kanban;
   "lib/activeIdentity": typeof lib_activeIdentity;
   "lib/authRecords": typeof lib_authRecords;
+  "lib/uploadCleanup": typeof lib_uploadCleanup;
+  "lib/versionRetention": typeof lib_versionRetention;
   notes: typeof notes;
   tags: typeof tags;
   uploads: typeof uploads;

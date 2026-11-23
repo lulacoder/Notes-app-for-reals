@@ -30,22 +30,27 @@ async function settleAutosave() {
   });
 }
 
-async function openEditors() {
+async function openEditors(withVersion = false) {
   const owner = (await account(setup(), "user")).client;
   const id = await owner.mutation(api.notes.createNote, { title: "Title", content: ORIGINAL_CONTENT });
   const note = await owner.query(api.notes.getNote, { id });
   if (!note) throw new Error("Missing test note");
   const tags = await owner.query(api.tags.listTags, {});
+  const versionId = withVersion ? await owner.mutation(api.versions.createVersion, { noteId: id, title: "Earlier title", content: "<p>Earlier version</p>" }) : null;
+  const versions = await owner.query(api.versions.listVersions, { noteId: id });
   const noteKey = JSON.stringify(["notes:getNote", { id }]);
   const stores = [0, 1].map(() => ({
     reads: new Map<string, unknown>([
       [noteKey, note],
       [JSON.stringify(["tags:listTags", {}]), tags],
+      [JSON.stringify(["versions:listVersions", { noteId: id }]), versions],
+      ...(versionId ? [[JSON.stringify(["versions:getVersion", { id: versionId }]), versions[0]] as [string, unknown]] : []),
     ]),
     listeners: new Map<string, Set<() => void>>(),
   }));
   const heldResponses = new Map<number, Promise<void>>();
   const releases: Array<() => void> = [];
+  let editBeforeRestore: string | null = null;
 
   async function publishNote(indices = [0, 1]) {
     const current = await owner.query(api.notes.getNote, { id });
@@ -80,8 +85,13 @@ async function openEditors() {
       const response = heldResponses.get(index);
       heldResponses.delete(index);
       try {
+        if (getFunctionName(reference) === "versions:restoreVersion" && editBeforeRestore !== null) {
+          await owner.mutation(api.notes.updateNote, { id, content: editBeforeRestore });
+          editBeforeRestore = null;
+          await publishNote([1 - index]);
+        }
         const result = await owner.mutation(makeFunctionReference<"mutation">(getFunctionName(reference)), args ?? {});
-        if (getFunctionName(reference) === "notes:updateNote") {
+        if (["notes:updateNote", "versions:restoreVersion"].includes(getFunctionName(reference))) {
           if (response) {
             await publishNote([1 - index]);
             await response;
@@ -137,6 +147,23 @@ async function openEditors() {
     containers,
     editors,
     readNote: () => owner.query(api.notes.getNote, { id }),
+    readVersions: () => owner.query(api.versions.listVersions, { noteId: id }),
+    changeBeforeRestore(content: string) { editBeforeRestore = content; },
+    async restoreEarlierVersion(index: number) {
+      await act(async () => {
+        await import("@/components/VersionHistory");
+        containers[index].querySelector<HTMLButtonElement>('[title="Version history"]')?.click();
+      });
+      const preview = containers[index].querySelector<HTMLButtonElement>('[aria-label="Preview Earlier title version"]');
+      if (!preview) throw new Error("Missing earlier version");
+      await act(async () => preview.click());
+      const restore = [...containers[index].querySelectorAll("button")].find((item) => item.textContent?.trim() === "Restore");
+      if (!restore) throw new Error("Missing restore button");
+      await act(async () => restore.click());
+      const confirm = document.querySelector('[role="alertdialog"] button:last-child');
+      if (!(confirm instanceof HTMLButtonElement)) throw new Error("Missing restore confirmation");
+      await act(async () => confirm.click());
+    },
     holdNextSave(index: number) {
       let release = () => {};
       heldResponses.set(index, new Promise<void>((resolve) => { release = resolve; }));
@@ -234,6 +261,46 @@ it("preserves a conflicting draft until the user chooses to keep it", async () =
     await settleAutosave();
     expect((await session.readNote())?.content).toBe("<p>B edit</p>");
     expect(session.editors.map((editor) => editor.getHTML())).toEqual(["<p>B edit</p>", "<p>B edit</p>"]);
+  } finally {
+    error.mockRestore();
+    await session.close();
+  }
+});
+
+it("restores after an in-flight save and snapshots the unsaved draft without a later autosave overwriting it", async () => {
+  const session = await openEditors(true);
+  try {
+    const release = session.holdNextSave(0);
+    await session.edit(0, "<p>Submitted edit</p>");
+    await settleAutosave();
+    await session.edit(0, "<p>Unsaved draft</p>");
+    await session.restoreEarlierVersion(0);
+    expect((await session.readNote())?.content).toBe("<p>Submitted edit</p>");
+    expect(session.containers[0].textContent).toContain("Restoring...");
+    expect(session.editors[0].isEditable).toBe(false);
+    await act(async () => release());
+    expect((await session.readNote())?.content).toBe("<p>Earlier version</p>");
+    expect(await session.readVersions()).toContainEqual(expect.objectContaining({ content: "<p>Unsaved draft</p>" }));
+    expect(session.editors[0].getHTML()).toBe("<p>Earlier version</p>");
+    await settleAutosave();
+    expect((await session.readNote())?.content).toBe("<p>Earlier version</p>");
+    expect(session.editors.map((editor) => editor.getHTML())).toEqual(["<p>Earlier version</p>", "<p>Earlier version</p>"]);
+  } finally {
+    await session.close();
+  }
+});
+
+it("keeps the local draft and reports a conflict when another device changes the note during restoration", async () => {
+  const session = await openEditors(true);
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    await session.edit(0, "<p>Local draft</p>");
+    session.changeBeforeRestore("<p>Remote change</p>");
+    await session.restoreEarlierVersion(0);
+    expect((await session.readNote())?.content).toBe("<p>Remote change</p>");
+    expect(session.editors[0].getHTML()).toBe("<p>Local draft</p>");
+    expect(session.containers[0].textContent).toContain("Choose which version to keep");
+    expect(session.containers[0].textContent).toContain("Could not restore version");
   } finally {
     error.mockRestore();
     await session.close();
