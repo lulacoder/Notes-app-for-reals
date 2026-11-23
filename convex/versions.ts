@@ -2,6 +2,7 @@ import { getActiveIdentity } from "./lib/activeIdentity";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { trimNoteVersions } from "./lib/versionRetention";
+import { syncFileReferences } from "./lib/fileReferences";
 
 export const listVersions = query({
   args: { noteId: v.id("notes") },
@@ -67,6 +68,7 @@ export const createVersion = mutation({
       createdAt: Date.now(),
     });
 
+    await syncFileReferences(ctx, { documentId: versionId, noteId: args.noteId, userId: identity.subject }, args.content);
     await trimNoteVersions(ctx, args.noteId);
 
     return versionId;
@@ -104,13 +106,14 @@ export const restoreVersion = mutation({
     }
 
     // Save current state as a version before restoring
-    await ctx.db.insert("noteVersions", {
+    const snapshotId = await ctx.db.insert("noteVersions", {
       noteId: version.noteId,
       title: note.title,
       content: note.content,
       userId: identity.subject,
       createdAt: Date.now(),
     });
+    await syncFileReferences(ctx, { documentId: snapshotId, noteId: version.noteId, userId: identity.subject }, note.content);
 
     // Restore the version
     await ctx.db.patch("notes", version.noteId, {
@@ -118,6 +121,7 @@ export const restoreVersion = mutation({
       content: version.content,
       updatedAt: Date.now(),
     });
+    await syncFileReferences(ctx, { documentId: version.noteId, noteId: version.noteId, userId: identity.subject }, `${version.content}\n${note.thumbnail ?? ""}`);
 
     await trimNoteVersions(ctx, version.noteId);
     return { title: version.title, content: version.content };

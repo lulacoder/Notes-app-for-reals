@@ -1,5 +1,6 @@
 import { getActiveIdentity } from "./lib/activeIdentity";
 import { cleanupDocumentUploads } from "./lib/uploadCleanup";
+import { removeFileReferences, syncFileReferences } from "./lib/fileReferences";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
@@ -147,6 +148,7 @@ export const updateCanvas = mutation({
     }
 
     await ctx.db.patch("canvases", args.id, updates);
+    if (contentChanged) await syncFileReferences(ctx, { documentId: args.id, canvasId: args.id, userId: identity.subject }, args.content ?? canvas.content);
     return args.id;
   },
 });
@@ -214,6 +216,7 @@ export const deleteCanvas = mutation({
 
     if (!canvas.isDeleted) throw new Error("Move the canvas to recently deleted first");
 
+    await removeFileReferences(ctx, args.id);
     await ctx.db.delete("canvases", args.id);
     await cleanupDocumentUploads(ctx, identity.subject, { canvasIds: [args.id] });
     return args.id;

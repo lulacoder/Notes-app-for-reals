@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import { account, setup } from "./convex";
 
@@ -60,6 +60,8 @@ describe("version restoration", () => {
 });
 
 describe("permanent deletion", () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
   it("keeps uploads during soft deletion and removes note uploads and history on permanent deletion", async () => {
     const t = setup();
     const owner = (await account(t, "user")).client;
@@ -72,6 +74,7 @@ describe("permanent deletion", () => {
     await owner.mutation(api.notes.softDeleteNote, { id: noteId });
     expect(await t.run((ctx) => ctx.db.system.get("_storage", storageId))).not.toBeNull();
     await owner.mutation(api.notes.deleteNote, { id: noteId });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
     expect(await owner.query(api.notes.getNote, { id: noteId })).toBeNull();
     expect(await t.run((ctx) => ctx.db.get("uploads", uploadId))).toBeNull();
     expect(await t.run((ctx) => ctx.db.system.get("_storage", storageId))).toBeNull();
@@ -96,6 +99,7 @@ describe("permanent deletion", () => {
     if (reference === "upload") await owner.mutation(api.uploads.saveUpload, { ...metadata, noteId });
     await owner.mutation(api.notes.softDeleteNote, { id: deletedId });
     await owner.mutation(api.notes.deleteNote, { id: deletedId });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
     expect(await t.run((ctx) => ctx.db.system.get("_storage", storageId))).not.toBeNull();
   });
 
@@ -107,6 +111,7 @@ describe("permanent deletion", () => {
     await owner.mutation(api.uploads.saveUpload, { noteId, storageId, filename: "image.png", mimeType: "image/png", size: 5 });
     await owner.mutation(api.notes.softDeleteNote, { id: noteId });
     await owner.mutation(api.notes.emptyTrash, { all: true });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
     expect(await t.run((ctx) => ctx.db.system.get("_storage", storageId))).toBeNull();
   });
 
@@ -119,9 +124,11 @@ describe("permanent deletion", () => {
     const copyId = await owner.mutation(api.notes.createNote, { content: `<img src="${url}">` });
     await owner.mutation(api.notes.softDeleteNote, { id: originalId });
     await owner.mutation(api.notes.deleteNote, { id: originalId });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
     expect(await owner.query(api.uploads.listNoteUploads, { noteId: copyId })).toHaveLength(1);
     await owner.mutation(api.notes.softDeleteNote, { id: copyId });
     await owner.mutation(api.notes.deleteNote, { id: copyId });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
     expect(await t.run((ctx) => ctx.db.system.get("_storage", storageId))).toBeNull();
   });
 
@@ -134,9 +141,11 @@ describe("permanent deletion", () => {
     await owner.mutation(api.uploads.saveUpload, { noteId, canvasId, storageId, filename: "image.png", mimeType: "image/png", size: 6 });
     await owner.mutation(api.notes.softDeleteNote, { id: noteId });
     await owner.mutation(api.notes.deleteNote, { id: noteId });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
     expect(await t.run((ctx) => ctx.db.system.get("_storage", storageId))).not.toBeNull();
     await owner.mutation(api.canvases.softDeleteCanvas, { id: canvasId });
     await owner.mutation(api.canvases.deleteCanvas, { id: canvasId });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
     expect(await t.run((ctx) => ctx.db.system.get("_storage", storageId))).toBeNull();
   });
 
@@ -154,6 +163,7 @@ describe("permanent deletion", () => {
     await expect(other.mutation(api.canvases.deleteCanvas, { id })).rejects.toThrow("unauthorized");
     await owner.mutation(api.canvases.softDeleteCanvas, { id });
     await owner.mutation(api.canvases.deleteCanvas, { id });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
     expect(await owner.query(api.canvases.getCanvas, { id })).toBeNull();
     expect(await t.run((ctx) => ctx.db.query("canvasAssets").collect())).toEqual([]);
     expect(await t.run((ctx) => ctx.db.system.get("_storage", storageId))).toBeNull();

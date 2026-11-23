@@ -1,5 +1,6 @@
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
+import { removeFileReferences } from "./fileReferences";
 
 const MAX_NOTE_VERSIONS = 50;
 
@@ -11,6 +12,7 @@ export async function trimNoteVersions(ctx: MutationCtx, noteId: Id<"notes">) {
     .collect();
 
   for (const version of versions.slice(MAX_NOTE_VERSIONS)) {
+    await removeFileReferences(ctx, version._id);
     await ctx.db.delete("noteVersions", version._id);
   }
 }
