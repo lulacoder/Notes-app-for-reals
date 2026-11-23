@@ -149,6 +149,7 @@ export const permanentDeleteBoard = mutation({
     const board = await ctx.db.get("kanbanBoards", args.id);
     if (!board || board.userId !== identity.subject)
       throw new Error("Board not found or unauthorized");
+    if (!board.isDeleted) throw new Error("Move the board to recently deleted first");
 
     // Delete all cards for this board
     const cards = await ctx.db
@@ -545,42 +546,6 @@ export const moveCardToColumnEnd = mutation({
     });
     await ctx.db.patch("kanbanBoards", card.boardId, { updatedAt: now });
     return args.id;
-  },
-});
-
-export const reorderCards = mutation({
-  args: {
-    columnId: v.id("kanbanColumns"),
-    orderedIds: v.array(v.id("kanbanCards")),
-  },
-  handler: async (ctx, args) => {
-    const identity = await getActiveIdentity(ctx);
-    if (!identity) throw new Error("Not authenticated");
-
-    const column = await ctx.db.get("kanbanColumns", args.columnId);
-    if (!column || column.userId !== identity.subject)
-      throw new Error("Column not found or unauthorized");
-    const activeCards = (
-      await ctx.db
-        .query("kanbanCards")
-        .withIndex("by_column", (q) => q.eq("columnId", args.columnId))
-        .collect()
-    ).filter((card) => !card.isDeleted);
-    if (
-      new Set(args.orderedIds).size !== activeCards.length ||
-      args.orderedIds.length !== activeCards.length ||
-      activeCards.some((card) => !args.orderedIds.includes(card._id))
-    )
-      throw new Error(
-        "Reorder must include every active card in the column exactly once",
-      );
-    for (let i = 0; i < args.orderedIds.length; i++) {
-      const card = await ctx.db.get("kanbanCards", args.orderedIds[i]);
-      if (card && card.userId === identity.subject) {
-        await ctx.db.patch("kanbanCards", args.orderedIds[i], { order: (i + 1) * 1000 });
-      }
-    }
-    await ctx.db.patch("kanbanBoards", column.boardId, { updatedAt: Date.now() });
   },
 });
 

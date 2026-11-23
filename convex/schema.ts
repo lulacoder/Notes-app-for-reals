@@ -49,6 +49,7 @@ export default defineSchema({
     // Preserve creation-time ordering for queries using this prefix index.
     // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_note", ["noteId"])
+    .index("by_user", ["userId"])
     .index("by_note_created", ["noteId", "createdAt"]),
 
   // File uploads for notes and canvases
@@ -64,10 +65,33 @@ export default defineSchema({
   })
     .index("by_note", ["noteId"])
     .index("by_canvas", ["canvasId"])
+    .index("by_storage", ["storageId"])
     .index("by_user_storage", ["userId", "storageId"])
     // Preserve creation-time ordering for queries using this prefix index.
     // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_user", ["userId"]),
+
+  // Saved file references and one-time legacy migration progress.
+  fileReferences: defineTable({
+    documentId: v.union(v.id("notes"), v.id("canvases"), v.id("noteVersions")),
+    fileKey: v.string(),
+    userId: v.string(),
+    noteId: v.optional(v.id("notes")),
+    canvasId: v.optional(v.id("canvases")),
+  })
+    .index("by_document", ["documentId"])
+    .index("by_file", ["fileKey"]),
+
+  uploadReferenceBackfills: defineTable({
+    userId: v.string(),
+    phase: v.union(v.literal("notes"), v.literal("canvases"), v.literal("noteVersions"), v.literal("done")),
+    cursor: v.union(v.string(), v.null()),
+  }).index("by_user", ["userId"]),
+
+  pendingUploadCleanup: defineTable({
+    userId: v.string(),
+    uploadId: v.id("uploads"),
+  }).index("by_user", ["userId"]),
 
   // Infinite Canvas tables
   canvases: defineTable({
@@ -101,6 +125,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_canvas", ["canvasId"])
+    .index("by_storage", ["storageId"])
     .index("by_user_storage", ["userId", "storageId"])
     .index("by_asset_id", ["assetId"]),
 

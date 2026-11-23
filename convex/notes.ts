@@ -2,6 +2,9 @@ import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { getActiveIdentity } from "./lib/activeIdentity";
+import { cleanupDocumentUploads } from "./lib/uploadCleanup";
+import { trimNoteVersions } from "./lib/versionRetention";
+import { removeFileReferences, syncFileReferences } from "./lib/fileReferences";
 import { extractFirstImageSrc, stripHtmlToText } from "../lib/html-utils";
 
 export const listNoteSummaries = query({
@@ -125,6 +128,7 @@ export const createNote = mutation({
       tagIds: [],
     });
 
+    await syncFileReferences(ctx, { documentId: noteId, noteId, userId: identity.subject }, args.content || "");
     return noteId;
   },
 });
@@ -158,13 +162,15 @@ export const updateNote = mutation({
 
     // Save version if requested and supplied fields changed.
     if (args.saveVersion) {
-      await ctx.db.insert("noteVersions", {
+      const versionId = await ctx.db.insert("noteVersions", {
         noteId: args.id,
         title: note.title,
         content: note.content,
         userId: identity.subject,
         createdAt: Date.now(),
       });
+      await syncFileReferences(ctx, { documentId: versionId, noteId: args.id, userId: identity.subject }, note.content);
+      await trimNoteVersions(ctx, args.id);
     }
 
     const updates: { title?: string; content?: string; updatedAt: number } = {
@@ -179,6 +185,7 @@ export const updateNote = mutation({
     }
 
     await ctx.db.patch("notes", args.id, updates);
+    if (contentChanged) await syncFileReferences(ctx, { documentId: args.id, noteId: args.id, userId: identity.subject }, `${updates.content}\n${note.thumbnail ?? ""}`);
     return args.id;
   },
 });
@@ -251,10 +258,13 @@ export const deleteNote = mutation({
       .collect();
 
     for (const version of versions) {
+      await removeFileReferences(ctx, version._id);
       await ctx.db.delete("noteVersions", version._id);
     }
 
+    await removeFileReferences(ctx, args.id);
     await ctx.db.delete("notes", args.id);
+    await cleanupDocumentUploads(ctx, identity.subject, { noteIds: [args.id] });
     return args.id;
   },
 });
@@ -288,11 +298,15 @@ export const emptyTrash = mutation({
         .collect();
 
       for (const version of versions) {
+        await removeFileReferences(ctx, version._id);
         await ctx.db.delete("noteVersions", version._id);
       }
 
+      await removeFileReferences(ctx, note._id);
       await ctx.db.delete("notes", note._id);
     }
+
+    await cleanupDocumentUploads(ctx, identity.subject, { noteIds: toDelete.map((note) => note._id) });
 
     return toDelete.length;
   },

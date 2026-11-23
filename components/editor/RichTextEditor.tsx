@@ -174,6 +174,10 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
       },
     });
 
+    useEffect(() => {
+      if (editor && editor.isEditable !== editable) editor.setEditable(editable, false);
+    }, [editor, editable]);
+
     // Update content when prop changes (e.g., switching notes)
     useEffect(() => {
       if (editor && content !== editor.getHTML()) {
@@ -202,10 +206,10 @@ export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>
     return (
       <div className="relative flex flex-col h-full">
         {/* Fixed Toolbar */}
-        <EditorToolbar editor={editor} onImageUpload={onImageUpload} />
+        {editable && <EditorToolbar editor={editor} onImageUpload={onImageUpload} />}
 
         {/* Slash Command Menu */}
-        <SlashCommandMenu editor={editor} onImageUpload={onImageUpload} />
+        {editable && <SlashCommandMenu editor={editor} onImageUpload={onImageUpload} />}
 
         {/* Editor Content */}
         <div className="relative flex-1 overflow-y-auto">

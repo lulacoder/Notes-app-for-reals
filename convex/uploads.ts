@@ -97,25 +97,3 @@ export const listNoteUploads = query({
     return uploadsWithUrls.filter((upload) => upload.userId === identity.subject);
   },
 });
-
-// Delete an upload
-export const deleteUpload = mutation({
-  args: { uploadId: v.id("uploads") },
-  handler: async (ctx, args) => {
-    const identity = await getActiveIdentity(ctx);
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
-
-    const upload = await ctx.db.get("uploads", args.uploadId);
-    if (!upload || upload.userId !== identity.subject) {
-      throw new Error("Upload not found");
-    }
-
-    // Delete from storage
-    await ctx.storage.delete(upload.storageId);
-    
-    // Delete metadata
-    await ctx.db.delete("uploads", args.uploadId);
-  },
-});

@@ -56,10 +56,13 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
   const togglePin = useMutation(api.notes.togglePin);
   const updateNoteTags = useMutation(api.notes.updateNoteTags);
   const createVersion = useMutation(api.versions.createVersion);
+  const restoreVersion = useMutation(api.versions.restoreVersion);
 
   const [content, setContent] = useState(initialNote?.content ?? "");
   const [title, setTitle] = useState(initialNote?.title ?? "");
   const [showVersions, setShowVersions] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const restoringRef = useRef(false);
   const [taskSelection, setTaskSelection] = useState<string | null>(null);
   const editorRef = useRef<RichTextEditorRef>(null);
   const versionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -80,6 +83,8 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
         setContent(noteContent);
         setLoadedNoteId(noteId);
         setConflict(false);
+        setShowVersions(false);
+        setRestoring(false);
       });
       lastSubmittedRef.current = { title: note.title, content: noteContent };
       lastVersionRef.current = { title: note.title, content: noteContent };
@@ -147,10 +152,10 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
   );
 
   const draft = useMemo(() => ({ title: title || "Untitled", content }), [title, content]);
-  const autosave = useAutosave(draft, saveNote, isNoteReady && noteId !== null && loadedNoteId === noteId && !conflict);
+  const autosave = useAutosave(draft, saveNote, isNoteReady && noteId !== null && loadedNoteId === noteId && !conflict && !restoring);
 
   useEffect(() => {
-    if (!liveNote || liveNote._id !== noteId || loadedNoteId !== noteId || conflict) return;
+    if (!liveNote || liveNote._id !== noteId || loadedNoteId !== noteId || conflict || restoring) return;
     const previous = lastSubmittedRef.current;
     if (!previous || draft.title !== previous.title || draft.content !== previous.content) return;
     if (liveNote.title === previous.title && liveNote.content === previous.content) return;
@@ -162,7 +167,7 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
       setTitle(liveNote.title);
       setContent(liveNote.content);
     });
-  }, [liveNote, noteId, loadedNoteId, conflict, draft, autosave.status]);
+  }, [liveNote, noteId, loadedNoteId, conflict, restoring, draft, autosave.status]);
 
   const resolveConflict = async (keepLocal: boolean) => {
     if (!liveNote) return;
@@ -181,6 +186,8 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
       clearTimeout(versionTimeoutRef.current);
     }
 
+    if (restoring || conflict || !noteId || !isNoteReady) return;
+
     versionTimeoutRef.current = setTimeout(() => {
       saveVersion(title, content);
     }, 5 * 60 * 1000);
@@ -190,7 +197,7 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
         clearTimeout(versionTimeoutRef.current);
       }
     };
-  }, [title, content, saveVersion]);
+  }, [title, content, saveVersion, restoring, conflict, noteId, isNoteReady]);
 
   const handleContentChange = (newContent: string) => {
     setContent(newContent);
@@ -213,11 +220,36 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
     await updateNoteTags({ id: noteId, tagIds });
   };
 
-  const handleRestoreVersion = (versionTitle: string, versionContent: string) => {
-    setTitle(versionTitle);
-    setContent(versionContent);
-    setShowVersions(false);
-  };
+  async function handleRestoreVersion(versionId: Id<"noteVersions">) {
+    if (!noteId || conflict || restoringRef.current) return;
+    restoringRef.current = true;
+    setRestoring(true);
+    const restoringNoteId = noteId;
+    try {
+      // Drain submitted writes, discard queued drafts, then save the exact draft
+      // being replaced so the restore mutation can snapshot it atomically.
+      await autosave.discardPending();
+      if (prevNoteIdRef.current !== restoringNoteId) return;
+      await saveNote(draft);
+      if (prevNoteIdRef.current !== restoringNoteId) return;
+      const restored = await restoreVersion({ noteId: restoringNoteId, versionId, expected: draft });
+      if (prevNoteIdRef.current !== restoringNoteId) return;
+      lastSubmittedRef.current = restored;
+      lastVersionRef.current = restored;
+      setTitle(restored.title);
+      setContent(restored.content);
+      setShowVersions(false);
+      toast({ type: "success", title: "Version restored" });
+    } catch (cause) {
+      console.error("Failed to restore version:", cause);
+      if (prevNoteIdRef.current !== restoringNoteId) return;
+      if (cause instanceof ConvexError && cause.data === "NOTE_EDIT_CONFLICT") setConflict(true);
+      toast({ type: "error", title: "Could not restore version", description: "Your draft has been kept. Please try again or resolve the conflicting changes." });
+    } finally {
+      restoringRef.current = false;
+      if (prevNoteIdRef.current === restoringNoteId) setRestoring(false);
+    }
+  }
 
   // Image upload handler using Convex storage
   const { uploadImage } = useImageUpload({ noteId: noteId ?? undefined });
@@ -326,6 +358,7 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
           <input
             type="text"
             value={title}
+            disabled={restoring}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Untitled"
             className="flex-1 min-w-0 text-xl sm:text-2xl font-bold outline-none border-none bg-transparent placeholder:text-muted-foreground/50 tracking-tight w-full"
@@ -360,6 +393,7 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
             {/* Tag assigner */}
             <SaveStatus status={autosave.status} retry={autosave.retry} quiet />
             <TagAssigner
+              disabled={restoring}
               selectedTagIds={note.tagIds || []}
               onUpdateTags={handleUpdateTags}
             />
@@ -435,6 +469,7 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
         <RichTextEditor
           ref={editorRef}
           content={content}
+          editable={!restoring}
           onChange={handleContentChange}
           onImageUpload={handleImageUpload}
           onCreateTask={isAuthenticated && noteId && !note.isDeleted ? setTaskSelection : undefined}
@@ -469,6 +504,8 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
             noteId={noteId}
             onClose={() => setShowVersions(false)}
             onRestore={handleRestoreVersion}
+            restoring={restoring}
+            restoreDisabled={conflict || !!note.isDeleted}
           />
         )}
       </AnimatePresence>

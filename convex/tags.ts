@@ -67,7 +67,15 @@ export const updateTag = mutation({
     }
 
     const updates: { name?: string; color?: string } = {};
-    if (args.name !== undefined) updates.name = args.name;
+    if (args.name !== undefined) {
+      const name = args.name.trim();
+      if (!name) throw new Error("Tag name cannot be empty");
+      const existing = await ctx.db.query("tags")
+        .withIndex("by_user_name", (q) => q.eq("userId", identity.subject).eq("name", name))
+        .first();
+      if (existing && existing._id !== args.id) throw new Error("Tag with this name already exists");
+      updates.name = name;
+    }
     if (args.color !== undefined) updates.color = args.color;
 
     await ctx.db.patch("tags", args.id, updates);

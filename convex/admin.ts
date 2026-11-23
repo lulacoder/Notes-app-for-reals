@@ -5,6 +5,7 @@ import type { Id } from "./_generated/dataModel";
 import { authComponent } from "./auth";
 import { hashPassword } from "better-auth/crypto";
 import { authUserSchema, authUsersPageSchema, authAccountSchema, paginationSchema } from "./lib/authRecords";
+import { removeFileReferences } from "./lib/fileReferences";
 
 export const ROOT_ADMIN_EMAIL = "leul15370@gmail.com";
 
@@ -436,8 +437,10 @@ export const deleteUser = mutation({
         .withIndex("by_note", (q) => q.eq("noteId", note._id))
         .collect();
       for (const ver of versions) {
+        await removeFileReferences(ctx, ver._id);
         await ctx.db.delete("noteVersions", ver._id);
       }
+      await removeFileReferences(ctx, note._id);
       await ctx.db.delete("notes", note._id);
     }
 
@@ -465,6 +468,7 @@ export const deleteUser = mutation({
         storageIds.add(a.storageId);
         await ctx.db.delete("canvasAssets", a._id);
       }
+      await removeFileReferences(ctx, canvas._id);
       await ctx.db.delete("canvases", canvas._id);
     }
 
@@ -501,6 +505,11 @@ export const deleteUser = mutation({
       await ctx.db.delete("uploads", upload._id);
     }
     for (const storageId of storageIds) await ctx.storage.delete(storageId);
+
+    const backfill = await ctx.db.query("uploadReferenceBackfills").withIndex("by_user", (q) => q.eq("userId", targetUserId)).unique();
+    if (backfill) await ctx.db.delete("uploadReferenceBackfills", backfill._id);
+    const pendingUploads = await ctx.db.query("pendingUploadCleanup").withIndex("by_user", (q) => q.eq("userId", targetUserId)).collect();
+    for (const pending of pendingUploads) await ctx.db.delete("pendingUploadCleanup", pending._id);
 
     // 6. Delete Better Auth sessions
     await deleteAuthRecords(ctx, "session", targetUserId);

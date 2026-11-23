@@ -1,6 +1,8 @@
 import { getActiveIdentity } from "./lib/activeIdentity";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { trimNoteVersions } from "./lib/versionRetention";
+import { syncFileReferences } from "./lib/fileReferences";
 
 export const listVersions = query({
   args: { noteId: v.id("notes") },
@@ -66,24 +68,19 @@ export const createVersion = mutation({
       createdAt: Date.now(),
     });
 
-    // Auto-cleanup: keep only last 50 versions
-    const versions = await ctx.db
-      .query("noteVersions")
-      .withIndex("by_note_created", (q) => q.eq("noteId", args.noteId))
-      .order("desc")
-      .collect();
-
-    const toDelete = versions.slice(50);
-    for (const version of toDelete) {
-      await ctx.db.delete("noteVersions", version._id);
-    }
+    await syncFileReferences(ctx, { documentId: versionId, noteId: args.noteId, userId: identity.subject }, args.content);
+    await trimNoteVersions(ctx, args.noteId);
 
     return versionId;
   },
 });
 
 export const restoreVersion = mutation({
-  args: { versionId: v.id("noteVersions") },
+  args: {
+    noteId: v.id("notes"),
+    versionId: v.id("noteVersions"),
+    expected: v.object({ title: v.string(), content: v.string() }),
+  },
   handler: async (ctx, args) => {
     const identity = await getActiveIdentity(ctx);
     if (!identity) {
@@ -91,7 +88,7 @@ export const restoreVersion = mutation({
     }
 
     const version = await ctx.db.get("noteVersions", args.versionId);
-    if (!version || version.userId !== identity.subject) {
+    if (!version || version.userId !== identity.subject || version.noteId !== args.noteId) {
       throw new Error("Version not found or unauthorized");
     }
 
@@ -100,14 +97,23 @@ export const restoreVersion = mutation({
       throw new Error("Note not found or unauthorized");
     }
 
+    if (note.isDeleted) throw new Error("Restore the note from trash first");
+    if (args.expected.title !== note.title || args.expected.content !== note.content) {
+      throw new ConvexError("NOTE_EDIT_CONFLICT");
+    }
+    if (note.title === version.title && note.content === version.content) {
+      return { title: version.title, content: version.content };
+    }
+
     // Save current state as a version before restoring
-    await ctx.db.insert("noteVersions", {
+    const snapshotId = await ctx.db.insert("noteVersions", {
       noteId: version.noteId,
       title: note.title,
       content: note.content,
       userId: identity.subject,
       createdAt: Date.now(),
     });
+    await syncFileReferences(ctx, { documentId: snapshotId, noteId: version.noteId, userId: identity.subject }, note.content);
 
     // Restore the version
     await ctx.db.patch("notes", version.noteId, {
@@ -115,55 +121,9 @@ export const restoreVersion = mutation({
       content: version.content,
       updatedAt: Date.now(),
     });
+    await syncFileReferences(ctx, { documentId: version.noteId, noteId: version.noteId, userId: identity.subject }, `${version.content}\n${note.thumbnail ?? ""}`);
 
-    return version.noteId;
-  },
-});
-
-export const deleteVersion = mutation({
-  args: { id: v.id("noteVersions") },
-  handler: async (ctx, args) => {
-    const identity = await getActiveIdentity(ctx);
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
-
-    const version = await ctx.db.get("noteVersions", args.id);
-    if (!version || version.userId !== identity.subject) {
-      throw new Error("Version not found or unauthorized");
-    }
-
-    await ctx.db.delete("noteVersions", args.id);
-    return args.id;
-  },
-});
-
-// Clean up old versions (keep last 50 per note)
-export const cleanupVersions = mutation({
-  args: { noteId: v.id("notes") },
-  handler: async (ctx, args) => {
-    const identity = await getActiveIdentity(ctx);
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
-
-    const note = await ctx.db.get("notes", args.noteId);
-    if (!note || note.userId !== identity.subject) {
-      throw new Error("Note not found or unauthorized");
-    }
-
-    const versions = await ctx.db
-      .query("noteVersions")
-      .withIndex("by_note_created", (q) => q.eq("noteId", args.noteId))
-      .order("desc")
-      .collect();
-
-    // Keep only last 50 versions
-    const toDelete = versions.slice(50);
-    for (const version of toDelete) {
-      await ctx.db.delete("noteVersions", version._id);
-    }
-
-    return toDelete.length;
+    await trimNoteVersions(ctx, version.noteId);
+    return { title: version.title, content: version.content };
   },
 });

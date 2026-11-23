@@ -1,4 +1,6 @@
 import { getActiveIdentity } from "./lib/activeIdentity";
+import { cleanupDocumentUploads } from "./lib/uploadCleanup";
+import { removeFileReferences, syncFileReferences } from "./lib/fileReferences";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
@@ -146,6 +148,7 @@ export const updateCanvas = mutation({
     }
 
     await ctx.db.patch("canvases", args.id, updates);
+    if (contentChanged) await syncFileReferences(ctx, { documentId: args.id, canvasId: args.id, userId: identity.subject }, args.content ?? canvas.content);
     return args.id;
   },
 });
@@ -211,18 +214,11 @@ export const deleteCanvas = mutation({
       throw new Error("Canvas not found or unauthorized");
     }
 
-    // Delete all associated assets
-    const assets = await ctx.db
-      .query("canvasAssets")
-      .withIndex("by_canvas", (q) => q.eq("canvasId", args.id))
-      .collect();
+    if (!canvas.isDeleted) throw new Error("Move the canvas to recently deleted first");
 
-    for (const asset of assets) {
-      await ctx.storage.delete(asset.storageId);
-      await ctx.db.delete("canvasAssets", asset._id);
-    }
-
+    await removeFileReferences(ctx, args.id);
     await ctx.db.delete("canvases", args.id);
+    await cleanupDocumentUploads(ctx, identity.subject, { canvasIds: [args.id] });
     return args.id;
   },
 });
@@ -272,103 +268,5 @@ export const updateCanvasTags = mutation({
     });
 
     return args.id;
-  },
-});
-
-// Generate upload URL for images
-export const generateUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await getActiveIdentity(ctx);
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
-
-    return await ctx.storage.generateUploadUrl();
-  },
-});
-
-// Save asset reference after upload
-export const saveAsset = mutation({
-  args: {
-    canvasId: v.id("canvases"),
-    assetId: v.string(),
-    storageId: v.id("_storage"),
-    mimeType: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const identity = await getActiveIdentity(ctx);
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
-
-    const canvas = await ctx.db.get("canvases", args.canvasId);
-    if (!canvas || canvas.userId !== identity.subject) {
-      throw new Error("Canvas not found or unauthorized");
-    }
-
-    const assetDocId = await ctx.db.insert("canvasAssets", {
-      canvasId: args.canvasId,
-      assetId: args.assetId,
-      storageId: args.storageId,
-      userId: identity.subject,
-      mimeType: args.mimeType,
-      createdAt: Date.now(),
-    });
-
-    return assetDocId;
-  },
-});
-
-// Get asset URL by tldraw asset ID
-export const getAssetUrl = query({
-  args: { assetId: v.string() },
-  handler: async (ctx, args) => {
-    const identity = await getActiveIdentity(ctx);
-    if (!identity) {
-      return null;
-    }
-
-    const asset = await ctx.db
-      .query("canvasAssets")
-      .withIndex("by_asset_id", (q) => q.eq("assetId", args.assetId))
-      .first();
-
-    if (!asset || asset.userId !== identity.subject) {
-      return null;
-    }
-
-    return await ctx.storage.getUrl(asset.storageId);
-  },
-});
-
-// Get all assets for a canvas
-export const getCanvasAssets = query({
-  args: { canvasId: v.id("canvases") },
-  handler: async (ctx, args) => {
-    const identity = await getActiveIdentity(ctx);
-    if (!identity) {
-      return [];
-    }
-
-    const canvas = await ctx.db.get("canvases", args.canvasId);
-    if (!canvas || canvas.userId !== identity.subject) {
-      return [];
-    }
-
-    const assets = await ctx.db
-      .query("canvasAssets")
-      .withIndex("by_canvas", (q) => q.eq("canvasId", args.canvasId))
-      .collect();
-
-    // Get URLs for all assets
-    const assetsWithUrls = await Promise.all(
-      assets.map(async (asset) => ({
-        ...asset,
-        url: await ctx.storage.getUrl(asset.storageId),
-      }))
-    );
-
-    return assetsWithUrls;
   },
 });
