@@ -120,3 +120,20 @@ it("keeps the tag form open and preserves input when saving fails", async () => 
   expect(input.value).toBe("Work");
   expect(button("Save changes").disabled).toBe(false);
 });
+
+it("confirms deleting a tag from the picker and allows retry after failure", async () => {
+  mocks.queries["tags:listTags"] = [{ _id: "tag-1", name: "Ideas", color: "bg-blue-500" }];
+  await act(async () => root.render(<TagAssigner selectedTagIds={[]} onUpdateTags={async () => {}} />));
+  await act(async () => button("Delete Ideas").click());
+  expect(mocks.mutate).not.toHaveBeenCalled();
+  await act(async () => button("Cancel").click());
+  expect(mocks.mutate).not.toHaveBeenCalled();
+  await act(async () => button("Delete Ideas").click());
+  mocks.mutate.mockRejectedValueOnce(new Error("offline"));
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  await act(async () => button("Delete tag").click());
+  expect(mocks.error).toHaveBeenCalledWith("Could not delete tag", "offline");
+  await act(async () => button("Delete tag").click());
+  expect(mocks.mutate).toHaveBeenLastCalledWith("tags:deleteTag", { id: "tag-1" });
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+});

@@ -8,6 +8,7 @@ import { Plus, Tag, X, MoreHorizontal, Trash2, Pencil } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { EditTagDialog } from "@/components/EditTagDialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -296,12 +297,29 @@ export function TagAssigner({
 }: TagAssignerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [editingTag, setEditingTag] = useState<Doc<"tags"> | null>(null);
+  const [deletingTag, setDeletingTag] = useState<Doc<"tags"> | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [selectedColor, setSelectedColor] = useState(TAG_COLORS[10].value);
 
   const tags = useQuery(api.tags.listTags) || [];
   const createTag = useMutation(api.tags.createTag);
+  const deleteTag = useMutation(api.tags.deleteTag);
   const { error: showError } = useToast();
+
+  async function handleDeleteTag() {
+    if (!deletingTag || deleting) return;
+    setDeleting(true);
+    try {
+      await deleteTag({ id: deletingTag._id });
+      setDeletingTag(null);
+    } catch (cause) {
+      console.error("Failed to delete tag:", cause);
+      showError("Could not delete tag", cause instanceof Error ? cause.message : "Please try again.");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   const handleToggleTag = async (tagId: Id<"tags">) => {
     if (disabled) return;
@@ -379,6 +397,16 @@ export function TagAssigner({
                   >
                     <Pencil className="size-3" />
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 text-destructive"
+                    aria-label={`Delete ${tag.name}`}
+                    disabled={disabled}
+                    onClick={() => { setIsOpen(false); setDeletingTag(tag); }}
+                  >
+                    <Trash2 className="size-3" />
+                  </Button>
                 </div>
               ))}
             </div>
@@ -423,6 +451,22 @@ export function TagAssigner({
       </PopoverContent>
     </Popover>
     {editingTag && <EditTagDialog key={editingTag._id} tag={editingTag} colors={TAG_COLORS} onClose={() => setEditingTag(null)} />}
+    <AlertDialog open={deletingTag !== null} onOpenChange={(open) => { if (!open && !deleting) setDeletingTag(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete tag?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Delete &quot;{deletingTag?.name}&quot;? It will be removed from all notes, canvases, and cards.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+          <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" disabled={deleting} onClick={(event) => { event.preventDefault(); void handleDeleteTag(); }}>
+            {deleting ? "Deleting..." : "Delete tag"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }

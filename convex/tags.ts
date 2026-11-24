@@ -96,17 +96,28 @@ export const deleteTag = mutation({
       throw new Error("Tag not found or unauthorized");
     }
 
-    // Remove tag from all notes
-    const notes = await ctx.db
-      .query("notes")
-      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
-      .collect();
+    const [notes, canvases, cards] = await Promise.all([
+      ctx.db.query("notes").withIndex("by_user", (q) => q.eq("userId", identity.subject)).collect(),
+      ctx.db.query("canvases").withIndex("by_user", (q) => q.eq("userId", identity.subject)).collect(),
+      ctx.db.query("kanbanCards").withIndex("by_user_deleted", (q) => q.eq("userId", identity.subject)).collect(),
+    ]);
 
     for (const note of notes) {
       if (note.tagIds?.includes(args.id)) {
         await ctx.db.patch("notes", note._id, {
           tagIds: note.tagIds.filter((id) => id !== args.id),
         });
+      }
+    }
+
+    for (const canvas of canvases) {
+      if (canvas.tagIds?.includes(args.id)) {
+        await ctx.db.patch("canvases", canvas._id, { tagIds: canvas.tagIds.filter((id) => id !== args.id) });
+      }
+    }
+    for (const card of cards) {
+      if (card.tagIds?.includes(args.id)) {
+        await ctx.db.patch("kanbanCards", card._id, { tagIds: card.tagIds.filter((id) => id !== args.id) });
       }
     }
 

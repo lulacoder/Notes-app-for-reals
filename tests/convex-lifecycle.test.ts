@@ -16,6 +16,31 @@ describe("tag editing", () => {
     await expect(other.mutation(api.tags.updateTag, { id, name: "Stolen" })).rejects.toThrow("unauthorized");
     await expect(t.mutation(api.tags.updateTag, { id, name: "Stolen" })).rejects.toThrow("Not authenticated");
   });
+
+  it("deletes owned tags and clears references from notes, canvases and cards, including trash", async () => {
+    const t = setup();
+    const { client: owner, user } = await account(t, "user");
+    const other = (await account(t, "user")).client;
+    const id = await owner.mutation(api.tags.createTag, { name: "Ideas", color: "blue" });
+    const keep = await owner.mutation(api.tags.createTag, { name: "Keep", color: "red" });
+    const records = await t.run(async (ctx) => {
+      const common = { userId: user._id, createdAt: 1, updatedAt: 1 };
+      const note = await ctx.db.insert("notes", { ...common, title: "Note", content: "", tagIds: [id, keep] });
+      const canvas = await ctx.db.insert("canvases", { ...common, title: "Canvas", content: "", tagIds: [id], isDeleted: true });
+      const boardId = await ctx.db.insert("kanbanBoards", { ...common, title: "Board" });
+      const columnId = await ctx.db.insert("kanbanColumns", { boardId, userId: user._id, createdAt: 1, title: "Column", order: 0 });
+      const card = await ctx.db.insert("kanbanCards", { ...common, boardId, columnId, title: "Card", order: 0, tagIds: [id], isDeleted: true });
+      return { note, canvas, card };
+    });
+    await expect(other.mutation(api.tags.deleteTag, { id })).rejects.toThrow("unauthorized");
+    await owner.mutation(api.tags.deleteTag, { id });
+    await t.run(async (ctx) => {
+      expect(await ctx.db.get("tags", id)).toBeNull();
+      expect((await ctx.db.get("notes", records.note))?.tagIds).toEqual([keep]);
+      expect((await ctx.db.get("canvases", records.canvas))?.tagIds).toEqual([]);
+      expect((await ctx.db.get("kanbanCards", records.card))?.tagIds).toEqual([]);
+    });
+  });
 });
 
 describe("version restoration", () => {
