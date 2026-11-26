@@ -6,6 +6,15 @@ const nextConfig: NextConfig = {
   partialPrefetching: true,
   reactCompiler: true,
   turbopack: { root: process.cwd() },
+  async headers() {
+    return [
+      {
+        // Browsers must always see the latest worker so a new build replaces the cached offline editor.
+        source: "/sw.js",
+        headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
