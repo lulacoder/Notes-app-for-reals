@@ -9,10 +9,12 @@ export function SaveStatus({
   status,
   retry,
   quiet = false,
+  savedLabel = "Saved",
 }: {
   status: SaveState;
   retry: () => void;
   quiet?: boolean;
+  savedLabel?: string;
 }) {
   if (status === "error")
     return (
@@ -41,7 +43,7 @@ export function SaveStatus({
         />
       )}
       {status === "saved"
-        ? "Saved"
+        ? savedLabel
         : status === "saving"
           ? "Saving..."
           : "Unsaved changes"}

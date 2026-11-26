@@ -24,6 +24,8 @@ import { useImageUpload } from "@/lib/use-image-upload";
 import { extractTitleFromHtml } from "@/lib/html-utils";
 import { useAutosave } from "@/lib/use-autosave";
 import { optionLabel, useKeyboardPlatform } from "@/lib/use-keyboard-platform";
+import { acknowledgeDraft, cacheNote, discardDraft, rebaseDraft, recordSubmission, writeDraft, sameText } from "@/lib/offline-notes";
+import { holdDraft } from "@/lib/offline-sync";
 import { SaveStatus } from "@/components/SaveStatus";
 import { useToast } from "@/components/ui/toast-notification";
 
@@ -51,6 +53,7 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
   const liveNote = useQuery(api.notes.getNote, noteId && isAuthenticated ? { id: noteId } : "skip");
   const note = liveNote === undefined ? initialNote : liveNote;
   const isNoteReady = note != null;
+  const editingActiveNote = note?.isDeleted === false;
   const tags = useQuery(api.tags.listTags, isAuthenticated ? {} : "skip");
   const updateNote = useMutation(api.notes.updateNote);
   const togglePin = useMutation(api.notes.togglePin);
@@ -71,6 +74,42 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
   const [loadedNoteId, setLoadedNoteId] = useState(initialNote?._id ?? null);
   const [conflict, setConflict] = useState(false);
   const prevNoteIdRef = useRef<Id<"notes"> | null>(null);
+
+  const journal = useRef<string | null>(null);
+  const [localSave, setLocalSave] = useState<{ text: NoteDraft; failed: boolean } | null>(null);
+  const latestEdit = useRef<NoteDraft | null>(null);
+  const autosaveSettled = useRef<() => Promise<void>>(async () => {});
+  useEffect(() => {
+    if (!noteId || !window.indexedDB) return;
+    const key = crypto.randomUUID();
+    journal.current = key;
+    const release = holdDraft(key);
+    return () => {
+      // Autosave flushes the note being left in a later cleanup. Keep the draft
+      // until that write settles so reconnect sync cannot submit it a second time.
+      queueMicrotask(() => {
+        void autosaveSettled.current().finally(() => {
+          if (journal.current === key) journal.current = null;
+          release();
+        });
+      });
+    };
+  }, [noteId]);
+  useEffect(() => {
+    if (note && !note.isDeleted && window.indexedDB) {
+      void cacheNote(note.userId, note._id, note).catch(console.error);
+    }
+  }, [note]);
+
+  function persistEdit(nextTitle: string, nextContent: string) {
+    const key = journal.current;
+    if (!key || !note || note.isDeleted) return;
+    const text = { title: nextTitle || "Untitled", content: nextContent };
+    latestEdit.current = text;
+    void writeDraft(key, note.userId, note._id, lastSubmittedRef.current ?? note, text)
+      .then(() => { if (latestEdit.current === text) setLocalSave({ text, failed: false }); })
+      .catch(() => { if (latestEdit.current === text) setLocalSave({ text, failed: true }); });
+  }
 
   // Sync state when note changes - defer state updates to avoid synchronous setState
   useEffect(() => {
@@ -135,11 +174,17 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
       const updates: Partial<NoteDraft> = {};
       if (draft.title !== previous?.title) updates.title = draft.title;
       if (draft.content !== previous?.content) updates.content = draft.content;
-      if (updates.title === undefined && updates.content === undefined) return;
+      const key = journal.current;
+      if (updates.title === undefined && updates.content === undefined) {
+        if (key) await acknowledgeDraft(key, draft).catch(console.error);
+        return;
+      }
 
       lastSubmittedRef.current = draft;
       try {
-        await updateNote({ id: noteId, ...updates, expected: previous ?? undefined });
+        if (key) await recordSubmission(key, draft).catch(console.error);
+        await updateNote({ id: noteId, ...updates, activeOnly: editingActiveNote, expected: previous ?? undefined });
+        if (key) await acknowledgeDraft(key, draft).catch(console.error);
       } catch (error) {
         lastSubmittedRef.current = previous;
         if (error instanceof ConvexError && error.data === "NOTE_EDIT_CONFLICT") {
@@ -148,11 +193,14 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
         throw error;
       }
     },
-    [noteId, updateNote]
+    [noteId, updateNote, editingActiveNote]
   );
 
   const draft = useMemo(() => ({ title: title || "Untitled", content }), [title, content]);
   const autosave = useAutosave(draft, saveNote, isNoteReady && noteId !== null && loadedNoteId === noteId && !conflict && !restoring);
+  useEffect(() => {
+    autosaveSettled.current = autosave.settled;
+  }, [autosave.settled]);
 
   useEffect(() => {
     if (!liveNote || liveNote._id !== noteId || loadedNoteId !== noteId || conflict || restoring) return;
@@ -173,6 +221,10 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
     if (!liveNote) return;
     await autosave.discardPending();
     lastSubmittedRef.current = { title: liveNote.title, content: liveNote.content };
+    if (journal.current) {
+      if (keepLocal) await rebaseDraft(journal.current, liveNote).catch(console.error);
+      else await discardDraft(journal.current).catch(console.error);
+    }
     if (!keepLocal) {
       setTitle(liveNote.title);
       setContent(liveNote.content);
@@ -200,14 +252,12 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
   }, [title, content, saveVersion, restoring, conflict, noteId, isNoteReady]);
 
   const handleContentChange = (newContent: string) => {
+    const nextTitle = !title || title === "Untitled"
+      ? extractTitleFromHtml(newContent).substring(0, 100) || title
+      : title;
+    persistEdit(nextTitle, newContent);
     setContent(newContent);
-
-    if (!title || title === "Untitled") {
-      const extractedTitle = extractTitleFromHtml(newContent);
-      if (extractedTitle) {
-        setTitle(extractedTitle.substring(0, 100));
-      }
-    }
+    setTitle(nextTitle);
   };
 
   const handleTogglePin = async () => {
@@ -359,7 +409,7 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
             type="text"
             value={title}
             disabled={restoring}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => { persistEdit(e.target.value, content); setTitle(e.target.value); }}
             placeholder="Untitled"
             className="flex-1 min-w-0 text-xl sm:text-2xl font-bold outline-none border-none bg-transparent placeholder:text-muted-foreground/50 tracking-tight w-full"
           />
@@ -391,7 +441,11 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
             )}
 
             {/* Tag assigner */}
-            <SaveStatus status={autosave.status} retry={autosave.retry} quiet />
+            {localSave && sameText(localSave.text, draft) && (autosave.status === "saving" || autosave.status === "pending") ? (
+              <span role="status" className="text-xs text-muted-foreground">
+                {localSave.failed ? "Device storage unavailable" : "Saved on this device"}
+              </span>
+            ) : <SaveStatus status={autosave.status} retry={autosave.retry} savedLabel="Synced" quiet />}
             <TagAssigner
               disabled={restoring}
               selectedTagIds={note.tagIds || []}

@@ -22,20 +22,13 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Noteworthy",
   },
-  icons: {
-    icon: [
-      { url: "/logo.png", sizes: "any" },
-    ],
-    apple: [
-      { url: "/logo.png", sizes: "180x180" },
-    ],
-  },
 };
 
+// Match the --background tokens in globals.css so the browser UI blends with the page.
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+    { media: "(prefers-color-scheme: light)", color: "#fefdfc" },
+    { media: "(prefers-color-scheme: dark)", color: "#06070d" },
   ],
   width: "device-width",
   initialScale: 1,

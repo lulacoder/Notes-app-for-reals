@@ -139,6 +139,7 @@ export const updateNote = mutation({
     title: v.optional(v.string()),
     content: v.optional(v.string()),
     saveVersion: v.optional(v.boolean()),
+    activeOnly: v.optional(v.boolean()),
     expected: v.optional(v.object({ title: v.string(), content: v.string() })),
   },
   handler: async (ctx, args) => {
@@ -152,6 +153,7 @@ export const updateNote = mutation({
       throw new Error("Note not found or unauthorized");
     }
 
+    if (args.activeOnly && note.isDeleted) throw new ConvexError("NOTE_DELETED");
     if (args.expected && (args.expected.title !== note.title || args.expected.content !== note.content)) {
       throw new ConvexError("NOTE_EDIT_CONFLICT");
     }
