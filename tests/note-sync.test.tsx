@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import "fake-indexeddb/auto";
+import { listDrafts } from "@/lib/offline-notes";
 import { AppRouterContext, type AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -27,6 +29,14 @@ function useTestAuth() {
 async function settleAutosave() {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 2200));
+  });
+}
+
+// IndexedDB commits finish in a separate browser task after React flushes.
+async function waitForEditor(assertion: () => void | Promise<void>) {
+  await vi.waitFor(async () => {
+    await act(async () => {});
+    await assertion();
   });
 }
 
@@ -146,6 +156,7 @@ async function openEditors(withVersion = false) {
   return {
     containers,
     editors,
+    readDrafts: () => listDrafts(note.userId),
     readNote: () => owner.query(api.notes.getNote, { id }),
     readVersions: () => owner.query(api.versions.listVersions, { noteId: id }),
     changeBeforeRestore(content: string) { editBeforeRestore = content; },
@@ -206,9 +217,9 @@ it.each([0, 1])("client %i accepts a remote revert to the pre-save content after
     expect(session.editors[source].getHTML()).toBe("<p>First edit</p>");
 
     await act(async () => release());
-    expect(session.editors.map((editor) => editor.getHTML())).toEqual([ORIGINAL_CONTENT, ORIGINAL_CONTENT]);
+    await waitForEditor(() => expect(session.editors.map((editor) => editor.getHTML())).toEqual([ORIGINAL_CONTENT, ORIGINAL_CONTENT]));
     await settleAutosave();
-    expect(session.containers[source].querySelector('[role="status"]')?.textContent).toBe("Saved");
+    expect(session.containers[source].querySelector('[role="status"]')?.textContent).toBe("Synced");
     expect(session.containers[source].textContent).not.toContain("Choose which version to keep");
   } finally {
     await session.close();
@@ -237,6 +248,9 @@ it("preserves typing made while a save is in flight", async () => {
     await session.edit(0, "<p>Submitted edit</p>");
     await settleAutosave();
     await session.edit(0, "<p>Still typing</p>");
+    await vi.waitFor(async () => expect(await session.readDrafts()).toContainEqual(expect.objectContaining({
+      text: { title: "Title", content: "<p>Still typing</p>" },
+    })));
     await act(async () => release());
     expect(session.editors[0].getHTML()).toBe("<p>Still typing</p>");
     await settleAutosave();
@@ -258,6 +272,7 @@ it("preserves a conflicting draft until the user chooses to keep it", async () =
     expect(session.editors[1].getHTML()).toBe("<p>B edit</p>");
     expect(session.containers[1].textContent).toContain("Choose which version to keep");
     await session.choose(1, "Keep my version");
+    await waitForEditor(() => expect(session.containers[1].textContent).not.toContain("Choose which version to keep"));
     await settleAutosave();
     expect((await session.readNote())?.content).toBe("<p>B edit</p>");
     expect(session.editors.map((editor) => editor.getHTML())).toEqual(["<p>B edit</p>", "<p>B edit</p>"]);
@@ -279,7 +294,7 @@ it("restores after an in-flight save and snapshots the unsaved draft without a l
     expect(session.containers[0].textContent).toContain("Restoring...");
     expect(session.editors[0].isEditable).toBe(false);
     await act(async () => release());
-    expect((await session.readNote())?.content).toBe("<p>Earlier version</p>");
+    await waitForEditor(async () => expect((await session.readNote())?.content).toBe("<p>Earlier version</p>"));
     expect(await session.readVersions()).toContainEqual(expect.objectContaining({ content: "<p>Unsaved draft</p>" }));
     expect(session.editors[0].getHTML()).toBe("<p>Earlier version</p>");
     await settleAutosave();
@@ -297,6 +312,7 @@ it("keeps the local draft and reports a conflict when another device changes the
     await session.edit(0, "<p>Local draft</p>");
     session.changeBeforeRestore("<p>Remote change</p>");
     await session.restoreEarlierVersion(0);
+    await waitForEditor(() => expect(session.containers[0].textContent).toContain("Could not restore version"));
     expect((await session.readNote())?.content).toBe("<p>Remote change</p>");
     expect(session.editors[0].getHTML()).toBe("<p>Local draft</p>");
     expect(session.containers[0].textContent).toContain("Choose which version to keep");

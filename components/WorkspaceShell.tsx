@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { X } from "lucide-react";
 
-import { useMutation } from "convex/react";
+import { useMutation, useQuery, useConvexAuth } from "convex/react";
 import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
 
 import { useWorkspaceNavigation } from "@/providers/workspace-navigation";
@@ -15,6 +15,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { Sidebar } from "@/components/Sidebar";
 import { MobileNav, useSwipeGesture } from "@/components/MobileNav";
 import { useKeyboardShortcuts } from "@/components/KeyboardShortcuts";
+import { cacheCatalog } from "@/lib/offline-notes";
 import { useNotesData } from "@/providers/notes-provider";
 import { useNoteSummaries } from "@/lib/use-notes-queries";
 import { useNotesViewMode } from "@/lib/use-notes-view-mode";
@@ -25,11 +26,16 @@ const QuickSwitcher = dynamic(() =>
 );
 const EMPTY: never[] = [];
 
-export function WorkspaceShell({ children }: { children: ReactNode }) {
+export function WorkspaceShell({ children, owner }: { children: ReactNode; owner: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const data = useNotesData();
+  const { isAuthenticated } = useConvexAuth();
+  const account = useQuery(api.auth.getCurrentUser, isAuthenticated ? {} : "skip");
   const notes = useNoteSummaries(data.preloadedNotes);
+  useEffect(() => {
+    if (window.indexedDB && account?._id === owner && !account.banned) void cacheCatalog(owner, notes).catch(console.error);
+  }, [owner, account, notes]);
   const canvases = usePreloadedAuthQuery(data.preloadedCanvases) ?? EMPTY;
   const [viewMode, setViewMode] = useNotesViewMode();
   const [sidebarPath, setSidebarPath] = useState<string | null>(null);

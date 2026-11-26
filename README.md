@@ -106,3 +106,11 @@ MIT License - feel free to use this project for your own purposes.
 ---
 
 Built with ❤️ by [lulacoder](https://github.com/lulacoder)
+
+### Offline notes
+
+Open the production build online once and sign in. Noteworthy saves your note titles and the text of notes you open on that device. You can then reopen the site or a note URL offline, edit the text, and close the tab after “Saved on this device” appears. A note whose body has never been opened is labeled “Available online.” Images hosted on the network still require a connection.
+
+When the app is open and your account reconnects, pending edits sync to Convex. If the note also changed elsewhere, you can review the offline draft and choose which version to keep. Sign-out hides the account’s local notes. Clearing site data removes them, including pending edits.
+
+To exercise offline startup locally, use `npm run build` and `npm start`. The production service worker caches the offline editor on localhost or HTTPS.

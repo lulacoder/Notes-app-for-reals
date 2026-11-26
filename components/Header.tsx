@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { api } from "@/convex/_generated/api";
+import { setOfflineOwner } from "@/lib/offline-notes";
 import { signOut } from "@/lib/auth-client";
 import { getAuthHref, replaceAuthLocation } from "@/lib/auth-redirects";
 import { useToast } from "@/components/ui/toast-notification";
@@ -65,7 +66,9 @@ export function Header({ onOpenSearch, preloadedCurrentUser, signingOut, setSign
   useEffect(() => {
     if (navigating.current || isLoading || signingOut) return;
     if (!isAuthenticated || currentUser === null || currentUser?.banned) {
+      if (!navigator.onLine) return;
       navigating.current = true;
+      setOfflineOwner(null);
       const returnTo =
         window.location.pathname +
         window.location.search +
@@ -95,6 +98,7 @@ export function Header({ onOpenSearch, preloadedCurrentUser, signingOut, setSign
       if (result.error)
         throw new Error(result.error.message || "Please try again.");
       // Discard private route caches and keep expiry from racing manual sign-out.
+      setOfflineOwner(null);
       replaceAuthLocation("/");
     } catch (error) {
       console.error("Could not sign out", error);

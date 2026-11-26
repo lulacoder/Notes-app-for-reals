@@ -44,6 +44,14 @@ export function DocumentLink({ kind, id, onMouseEnter, onMouseLeave, onFocus, on
     <Link
       {...props}
       href={kind === "note" ? `/notes/${id}` : `/canvas/${id}`}
+      onNavigate={event => {
+        if (kind === "note" && !navigator.onLine) {
+          event.preventDefault();
+          // The offline shell is served by the worker on document navigations.
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+          window.location.assign(`/offline?note=${id}`);
+        } else props.onNavigate?.(event);
+      }}
       scroll={false}
       prefetch={active ? true : "auto"}
       onMouseEnter={(event) => { onMouseEnter?.(event); timer.current = setTimeout(warm, 100); }}

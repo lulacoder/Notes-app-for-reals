@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { OfflineSync } from "@/components/OfflineSync";
 import { DashboardShell } from "@/components/DashboardShell";
 import { requireAppSession } from "@/lib/auth-session";
 import { ConvexClientProvider } from "@/providers/convex-provider";
@@ -23,13 +24,13 @@ async function AuthenticatedDashboard({
 }: {
   children: React.ReactNode;
 }) {
-  const { token, preloadedCurrentUser } = await requireAppSession();
+  const { token, user, preloadedCurrentUser } = await requireAppSession();
 
   return (
     <ConvexClientProvider initialToken={token}>
       <ToastProvider>
         <WorkspaceNavigationProvider>
-          <DashboardShell preloadedCurrentUser={preloadedCurrentUser}>
+          <DashboardShell preloadedCurrentUser={preloadedCurrentUser} syncStatus={<OfflineSync key={user._id} owner={user._id} />}>
             {children}
           </DashboardShell>
         </WorkspaceNavigationProvider>

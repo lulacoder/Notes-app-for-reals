@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, useTransition, type FormEvent } fro
 import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ArrowRight, Eye, EyeOff, Loader2, X } from "lucide-react";
+import { setOfflineOwner } from "@/lib/offline-notes";
 import { signIn, signUp } from "@/lib/auth-client";
 import {
   getAuthHref,
@@ -35,6 +36,7 @@ export function AuthDialog({ mode, returnTo, notice, oauthError }: AuthDialogPro
   const firstField = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    setOfflineOwner(null);
     function recoverFromProvider(event: PageTransitionEvent) {
       if (!event.persisted) return;
       submitting.current = false;
