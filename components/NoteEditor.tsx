@@ -78,12 +78,22 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
   const journal = useRef<string | null>(null);
   const [localSave, setLocalSave] = useState<{ text: NoteDraft; failed: boolean } | null>(null);
   const latestEdit = useRef<NoteDraft | null>(null);
+  const autosaveSettled = useRef<() => Promise<void>>(async () => {});
   useEffect(() => {
     if (!noteId || !window.indexedDB) return;
     const key = crypto.randomUUID();
     journal.current = key;
     const release = holdDraft(key);
-    return () => { journal.current = null; release(); };
+    return () => {
+      // Autosave flushes the note being left in a later cleanup. Keep the draft
+      // until that write settles so reconnect sync cannot submit it a second time.
+      queueMicrotask(() => {
+        void autosaveSettled.current().finally(() => {
+          if (journal.current === key) journal.current = null;
+          release();
+        });
+      });
+    };
   }, [noteId]);
   useEffect(() => {
     if (note && !note.isDeleted && window.indexedDB) {
@@ -188,6 +198,9 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
 
   const draft = useMemo(() => ({ title: title || "Untitled", content }), [title, content]);
   const autosave = useAutosave(draft, saveNote, isNoteReady && noteId !== null && loadedNoteId === noteId && !conflict && !restoring);
+  useEffect(() => {
+    autosaveSettled.current = autosave.settled;
+  }, [autosave.settled]);
 
   useEffect(() => {
     if (!liveNote || liveNote._id !== noteId || loadedNoteId !== noteId || conflict || restoring) return;

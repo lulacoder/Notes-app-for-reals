@@ -71,6 +71,15 @@ export function useAutosave<T>(
     return queue.current;
   }, []);
 
+  // Resolve after every queued write, including any queued while waiting, has finished.
+  const settled = useCallback(async () => {
+    let current: Promise<void>;
+    do {
+      current = queue.current;
+      await current;
+    } while (current !== queue.current);
+  }, []);
+
   useEffect(() => {
     if (!enabled) {
       if (idleTimerRef.current !== null) clearTimeout(idleTimerRef.current);
@@ -112,5 +121,5 @@ export function useAutosave<T>(
     };
   }, [flush]);
 
-  return { status, retry: flush, flush, discardPending };
+  return { status, retry: flush, flush, discardPending, settled };
 }

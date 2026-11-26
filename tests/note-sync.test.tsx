@@ -137,6 +137,7 @@ async function openEditors(withVersion = false) {
   });
   const containers = clients.map(() => document.body.appendChild(document.createElement("div")));
   const roots = containers.map((container) => createRoot(container));
+  const left = new Set<number>();
   await act(async () => {
     roots.forEach((root, index) => root.render(
       <AppRouterContext.Provider value={router}>
@@ -190,9 +191,13 @@ async function openEditors(withVersion = false) {
       if (!button) throw new Error(`Missing button: ${label}`);
       await act(async () => button.click());
     },
+    async leave(index: number) {
+      left.add(index);
+      await act(async () => roots[index].unmount());
+    },
     async close() {
       releases.forEach((release) => release());
-      await act(async () => roots.forEach((root) => root.unmount()));
+      await act(async () => roots.forEach((root, index) => { if (!left.has(index)) root.unmount(); }));
       containers.forEach((container) => container.remove());
       await Promise.all(clients.map((client) => client.close()));
       vi.restoreAllMocks();
@@ -257,6 +262,26 @@ it("preserves typing made while a save is in flight", async () => {
     expect((await session.readNote())?.content).toBe("<p>Still typing</p>");
     expect(session.editors.map((editor) => editor.getHTML())).toEqual(["<p>Still typing</p>", "<p>Still typing</p>"]);
   } finally {
+    await session.close();
+  }
+});
+
+it("keeps the draft held until the save made on leaving a note settles", async () => {
+  const session = await openEditors();
+  const released = vi.fn();
+  window.addEventListener("noteworthy:draft-released", released);
+  try {
+    const release = session.holdNextSave(0);
+    await session.edit(0, "<p>Left mid-save</p>");
+    await vi.waitFor(async () => expect(await session.readDrafts()).toHaveLength(1));
+    await session.leave(0);
+    expect(released).not.toHaveBeenCalled();
+    await act(async () => release());
+    await vi.waitFor(() => expect(released).toHaveBeenCalledTimes(1));
+    expect((await session.readNote())?.content).toBe("<p>Left mid-save</p>");
+    expect(await session.readDrafts()).toEqual([]);
+  } finally {
+    window.removeEventListener("noteworthy:draft-released", released);
     await session.close();
   }
 });
