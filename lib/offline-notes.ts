@@ -99,6 +99,19 @@ export async function offlineLibrary(owner: string) {
   }
   return { titles: [...titles.values()], available: new Set(keys.map((key) => key[1])), drafts };
 }
+// Remove an account's notes from this device. Drafts are kept when the session
+// ended on its own, so unsynced writing can still sync after signing back in.
+export async function clearOfflineAccount(owner: string, { keepDrafts }: { keepDrafts: boolean }) {
+  const db = await database();
+  const tx = db.transaction(["catalogs", "notes", "drafts"], "readwrite");
+  void tx.objectStore("catalogs").delete(owner);
+  void tx.objectStore("notes").delete(IDBKeyRange.bound([owner], [owner, []]));
+  if (!keepDrafts) {
+    const drafts = tx.objectStore("drafts");
+    for (const key of await drafts.index("owner").getAllKeys(owner)) void drafts.delete(key);
+  }
+  await tx.done;
+}
 export async function readCachedNote(owner: string, id: Id<"notes">) {
   return (await database()).get("notes", [owner, id]);
 }
