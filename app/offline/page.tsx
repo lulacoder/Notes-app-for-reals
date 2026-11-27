@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, CloudOff, FileText } from "lucide-react";
 import { RichTextEditor } from "@/components/editor/RichTextEditor";
+import { Brand } from "@/components/marketing/Brand";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
   noteText,
@@ -11,6 +13,8 @@ import {
   writeDraft,
   type NoteText,
 } from "@/lib/offline-notes";
+import { getRelativeTime } from "@/lib/relative-time";
+import { cn } from "@/lib/utils";
 
 interface OpenNote {
   id: Id<"notes">;
@@ -145,28 +149,48 @@ export default function OfflinePage() {
   const draftsByNote = new Map(
     library?.drafts.toSorted((a, b) => a.updated - b.updated).map((draft) => [draft.id, draft]),
   );
+  const storageFailed = message.startsWith("Device storage failed");
   return (
-    <main className="mx-auto flex h-dvh max-w-4xl flex-col bg-background p-4 text-foreground">
-      <header className="flex items-center justify-between gap-4 border-b py-3">
-        <h1 className="text-lg font-semibold">Offline notes</h1>
-        {open && (
-          <a href="/offline" className="underline">
-            All notes
-          </a>
-        )}
+    <main className="mx-auto flex h-dvh max-w-4xl flex-col bg-background px-4 text-foreground">
+      <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border/40">
+        <div className="flex min-w-0 items-center gap-3">
+          {open && (
+            <a
+              href="/offline"
+              aria-label="All offline notes"
+              className="-ml-2 rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              <ArrowLeft className="size-4" />
+            </a>
+          )}
+          <Brand />
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+          <CloudOff className="size-3.5" />
+          Offline
+        </span>
       </header>
-      <p role="status" className="my-2 text-sm text-muted-foreground">
-        {message}
-      </p>
       {open ? (
         <>
-          <input
-            aria-label="Note title"
-            className="py-3 text-2xl font-semibold"
-            value={open.text.title}
-            onChange={(event) => change({ title: event.target.value })}
-          />
-          <div className="min-h-0 flex-1">
+          <div className="flex items-center gap-2 pt-4">
+            <input
+              aria-label="Note title"
+              placeholder="Untitled"
+              className="min-w-0 flex-1 border-none bg-transparent text-xl font-bold tracking-tight outline-none placeholder:text-muted-foreground/50 sm:text-2xl"
+              value={open.text.title}
+              onChange={(event) => change({ title: event.target.value })}
+            />
+            <p
+              role="status"
+              className={cn(
+                "shrink-0 text-xs",
+                storageFailed ? "text-destructive" : "whitespace-nowrap text-muted-foreground",
+              )}
+            >
+              {message}
+            </p>
+          </div>
+          <div className="min-h-0 flex-1 py-3">
             <RichTextEditor
               content={open.text.content}
               onChange={(content) => change({ content })}
@@ -174,25 +198,56 @@ export default function OfflinePage() {
           </div>
         </>
       ) : (
-        <ul className="overflow-auto">
-          {library?.titles.map((note) => {
-            const draft = draftsByNote.get(note._id);
-            const title = draft?.text.title || note.title || "Untitled";
-            return (
-              <li key={note._id} className="border-b py-3">
-                {library.available.has(note._id) || draft ? (
-                  <a className="block underline" href={`/offline?note=${note._id}`}>
-                    {title}
-                  </a>
-                ) : (
-                  <span className="text-muted-foreground">{title} · Available online</span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        <section className="min-h-0 flex-1 overflow-auto py-4">
+          <h1 className="px-2 text-sm font-medium text-muted-foreground">Notes on this device</h1>
+          {message && (
+            <p role="status" className="px-2 pt-2 text-sm text-muted-foreground">
+              {message}
+            </p>
+          )}
+          {library && !library.titles.length && (
+            <p className="px-2 pt-2 text-sm text-muted-foreground">No notes saved on this device yet.</p>
+          )}
+          <ul className="mt-2 space-y-0.5">
+            {library?.titles.map((note) => {
+              const draft = draftsByNote.get(note._id);
+              const title = draft?.text.title || note.title || "Untitled";
+              const readable = library.available.has(note._id) || !!draft;
+              return (
+                <li key={note._id}>
+                  {readable ? (
+                    <a
+                      className="flex items-center justify-between gap-3 rounded-md px-2 py-2.5 hover:bg-accent"
+                      href={`/offline?note=${note._id}`}
+                    >
+                      <span className="flex min-w-0 items-center gap-2 font-medium">
+                        <FileText className="size-4 shrink-0 text-muted-foreground" />
+                        <span className="truncate">{title}</span>
+                      </span>
+                      {draft && (
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          Edited offline {getRelativeTime(draft.updated)}
+                        </span>
+                      )}
+                    </a>
+                  ) : (
+                    <div
+                      className="flex items-center justify-between gap-3 px-2 py-2.5 text-muted-foreground"
+                      title="Open this note online once to read it offline"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <FileText className="size-4 shrink-0" />
+                        <span className="truncate">{title}</span>
+                      </span>
+                      <span className="shrink-0 text-xs">Needs connection</span>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       )}
-      {library && !library.titles.length && <p>No notes saved on this device yet.</p>}
     </main>
   );
 }
