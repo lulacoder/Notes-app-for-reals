@@ -5,6 +5,7 @@ import {
   acknowledgeDraft,
   cacheCatalog,
   cacheNote,
+  clearOfflineAccount,
   listDrafts,
   offlineLibrary,
   readCachedNote,
@@ -82,4 +83,21 @@ it("keeps conflicting writing until resolved and preserves drafts for deleted no
     client.mutation(api.notes.updateNote, { id, ...other, activeOnly: true }),
   ).rejects.toThrow();
   expect(await listDrafts(owner)).toHaveLength(1);
+});
+
+it("forgets an account's notes on sign-out and keeps drafts only when asked", async () => {
+  const { owner, id, edit } = await fixture();
+  await cacheCatalog(owner, [{ _id: id, title: base.title }]);
+  await cacheNote(owner, id, base);
+  await cacheNote("another-account", id, base);
+  await edit({ ...base, content: "Unsynced" });
+
+  await clearOfflineAccount(owner, { keepDrafts: true });
+  expect(await readCachedNote(owner, id)).toBeUndefined();
+  expect((await offlineLibrary(owner)).available.size).toBe(0);
+  expect(await listDrafts(owner)).toHaveLength(1);
+
+  await clearOfflineAccount(owner, { keepDrafts: false });
+  expect(await listDrafts(owner)).toEqual([]);
+  expect(await readCachedNote("another-account", id)).toMatchObject(base);
 });

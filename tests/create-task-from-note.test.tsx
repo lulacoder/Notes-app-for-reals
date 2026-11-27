@@ -78,6 +78,10 @@ it("creates a linked task from selected note text and stays in the note after sa
   // Replace the transport while using real subscriptions in React and real Convex mutations.
   const auth = vi.spyOn(client, "setAuth").mockImplementation((_fetch, notify) => notify?.(true));
   const clearAuth = vi.spyOn(client, "clearAuth").mockImplementation(() => {});
+  // The editor reads connection state; keep it connected without opening a socket.
+  const connected = { isWebSocketConnected: true } as ReturnType<typeof client.connectionState>;
+  vi.spyOn(client, "connectionState").mockReturnValue(connected);
+  vi.spyOn(client, "subscribeToConnectionState").mockReturnValue(() => {});
   const reads = new Map<string, unknown>([
     [JSON.stringify(["notes:getNote", { id: noteId }]), note],
     [JSON.stringify(["kanban:listBoards", {}]), boards],

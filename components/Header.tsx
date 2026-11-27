@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -16,11 +16,21 @@ import {
 } from "lucide-react";
 
 import { api } from "@/convex/_generated/api";
-import { setOfflineOwner } from "@/lib/offline-notes";
+import { clearOfflineAccount, listDrafts, offlineOwner, setOfflineOwner } from "@/lib/offline-notes";
 import { signOut } from "@/lib/auth-client";
 import { getAuthHref, replaceAuthLocation } from "@/lib/auth-redirects";
 import { useToast } from "@/components/ui/toast-notification";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -61,6 +71,7 @@ export function Header({ onOpenSearch, preloadedCurrentUser, signingOut, setSign
   const { isLoading, isAuthenticated } = useConvexAuth();
   const { error: showError } = useToast();
   const navigating = useRef(false);
+  const [unsyncedNotes, setUnsyncedNotes] = useState(0);
   const { isInstallable, install } = usePWAInstall();
 
   useEffect(() => {
@@ -68,6 +79,7 @@ export function Header({ onOpenSearch, preloadedCurrentUser, signingOut, setSign
     if (!isAuthenticated || currentUser === null || currentUser?.banned) {
       if (!navigator.onLine) return;
       navigating.current = true;
+      const owner = offlineOwner();
       setOfflineOwner(null);
       const returnTo =
         window.location.pathname +
@@ -78,19 +90,32 @@ export function Header({ onOpenSearch, preloadedCurrentUser, signingOut, setSign
         returnTo,
         currentUser?.banned ? "banned" : "expired",
       );
-      // Clear a suspended account's cookie before showing the sign-in form.
-      if (currentUser?.banned) {
-        void signOut()
-          .catch(() => {})
-          .finally(() => replaceAuthLocation(href));
-      } else {
-        replaceAuthLocation(href);
-      }
+      const banned = currentUser?.banned;
+      // Keep unsynced drafts so they can still sync after signing back in.
+      void forgetOfflineNotes(owner, true).finally(() => {
+        // Clear a suspended account's cookie before showing the sign-in form.
+        if (banned) {
+          void signOut()
+            .catch(() => {})
+            .finally(() => replaceAuthLocation(href));
+        } else {
+          replaceAuthLocation(href);
+        }
+      });
     }
   }, [currentUser, isLoading, isAuthenticated, signingOut]);
 
-  const handleSignOut = async () => {
+  const handleSignOut = async (discardUnsynced = false) => {
     if (navigating.current) return;
+    const owner = offlineOwner();
+    if (!discardUnsynced && owner && window.indexedDB) {
+      const drafts = await listDrafts(owner).catch(() => []);
+      const notes = new Set(drafts.map((draft) => draft.id)).size;
+      if (notes > 0) {
+        setUnsyncedNotes(notes);
+        return;
+      }
+    }
     navigating.current = true;
     setSigningOut(true);
     try {
@@ -98,6 +123,7 @@ export function Header({ onOpenSearch, preloadedCurrentUser, signingOut, setSign
       if (result.error)
         throw new Error(result.error.message || "Please try again.");
       // Discard private route caches and keep expiry from racing manual sign-out.
+      await forgetOfflineNotes(owner, false);
       setOfflineOwner(null);
       replaceAuthLocation("/");
     } catch (error) {
@@ -241,7 +267,7 @@ export function Header({ onOpenSearch, preloadedCurrentUser, signingOut, setSign
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={handleSignOut}
+                  onClick={() => void handleSignOut()}
                   disabled={signingOut}
                   className="text-destructive"
                 >
@@ -253,6 +279,31 @@ export function Header({ onOpenSearch, preloadedCurrentUser, signingOut, setSign
           </div>
         )}
       </div>
+      <AlertDialog open={unsyncedNotes > 0} onOpenChange={(open) => { if (!open) setUnsyncedNotes(0); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sign out and delete unsynced changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {unsyncedNotes === 1 ? "1 note has" : `${unsyncedNotes} notes have`} changes saved only
+              on this device. Signing out deletes them. Stay signed in and reconnect to sync them first.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Stay signed in</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { setUnsyncedNotes(0); void handleSignOut(true); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Sign out anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </header>
   );
+}
+
+async function forgetOfflineNotes(owner: string | null, keepDrafts: boolean) {
+  if (!owner || !window.indexedDB) return;
+  await clearOfflineAccount(owner, { keepDrafts }).catch(console.error);
 }

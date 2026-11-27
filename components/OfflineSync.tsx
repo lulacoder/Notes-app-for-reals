@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useConvex, useConvexAuth, useConvexConnectionState } from "convex/react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { resolveRecoveredDraft, offlineOwner, setOfflineOwner } from "@/lib/offline-notes";
 import { syncOfflineNotes, type DraftConflict } from "@/lib/offline-sync";
@@ -14,6 +15,9 @@ export function OfflineSync({ owner }: { owner: string }) {
   const [attempt, setAttempt] = useState(0);
   const [conflicts, setConflicts] = useState<DraftConflict[]>([]);
   const [failed, setFailed] = useState(false);
+  const [conflictIndex, setConflictIndex] = useState(0);
+  const browserOnline = useBrowserOnline();
+  const stalled = useStalledConnection(isWebSocketConnected);
 
   useEffect(() => {
     setOfflineOwner(owner);
@@ -59,12 +63,13 @@ export function OfflineSync({ owner }: { owner: string }) {
     };
   }, [isAuthenticated, isWebSocketConnected, owner, client, attempt]);
 
-  const conflict = conflicts[0];
+  const current = Math.min(conflictIndex, conflicts.length - 1);
+  const conflict = conflicts[current];
   async function resolve(keepLocal: boolean) {
     if (!conflict || offlineOwner() !== owner) return;
     try {
       await resolveRecoveredDraft(conflict.draft, keepLocal ? conflict.remote : null);
-      setConflicts((items) => items.slice(1));
+      setConflicts((items) => items.filter((item) => item !== conflict));
       setAttempt((n) => n + 1);
     } catch {
       setFailed(true);
@@ -73,8 +78,37 @@ export function OfflineSync({ owner }: { owner: string }) {
   if (conflict)
     return (
       <section role="alert" className="border-b bg-background p-3 text-sm">
-        <strong>{conflict.draft.text.title || "Untitled"}</strong>
-        <p>
+        <div className="flex items-center gap-2">
+          <strong className="min-w-0 flex-1 truncate">{conflict.draft.text.title || "Untitled"}</strong>
+          {conflicts.length > 1 && (
+            <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+              <span aria-live="polite">
+                {current + 1} of {conflicts.length}
+              </span>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="size-7"
+                aria-label="Previous note to review"
+                disabled={current === 0}
+                onClick={() => setConflictIndex(current - 1)}
+              >
+                <ChevronLeft className="size-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="size-7"
+                aria-label="Next note to review"
+                disabled={current === conflicts.length - 1}
+                onClick={() => setConflictIndex(current + 1)}
+              >
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+        <p className="text-muted-foreground">
           {conflict.remote
             ? "This note also changed on another device."
             : "This note is no longer available. You can copy your offline writing here."}
@@ -94,17 +128,21 @@ export function OfflineSync({ owner }: { owner: string }) {
             </p>
           </details>
         )}
-        {conflict.remote && (
-          <Button size="sm" onClick={() => void resolve(true)}>
-            Keep offline version
+        <div className="mt-2 flex flex-wrap gap-2">
+          {conflict.remote && (
+            <Button size="sm" onClick={() => void resolve(true)}>
+              Keep offline version
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={() => void resolve(false)}>
+            {conflict.remote ? "Use synced version" : "Discard recovered draft"}
           </Button>
-        )}
-        <Button size="sm" variant="outline" onClick={() => void resolve(false)}>
-          {conflict.remote ? "Use synced version" : "Discard recovered draft"}
-        </Button>
+        </div>
       </section>
     );
-  if (!isWebSocketConnected && typeof navigator !== "undefined" && !navigator.onLine)
+  // Show right away when the browser reports offline, or once the sync connection has been down a while
+  // (the browser can claim to be online on Wi-Fi with no internet).
+  if (!browserOnline || (!isWebSocketConnected && stalled))
     return (
       <a className="block bg-muted p-2 text-center text-sm underline" href="/offline">
         Open offline notes
@@ -117,4 +155,34 @@ export function OfflineSync({ owner }: { owner: string }) {
       </button>
     );
   return null;
+}
+
+const STALLED_CONNECTION_DELAY = 5000;
+
+function subscribeToNetwork(onChange: () => void) {
+  window.addEventListener("online", onChange);
+  window.addEventListener("offline", onChange);
+  return () => {
+    window.removeEventListener("online", onChange);
+    window.removeEventListener("offline", onChange);
+  };
+}
+
+// Re-renders as soon as the browser goes offline or comes back.
+function useBrowserOnline() {
+  return useSyncExternalStore(subscribeToNetwork, () => navigator.onLine, () => true);
+}
+
+// True once the sync connection has stayed down for STALLED_CONNECTION_DELAY.
+function useStalledConnection(connected: boolean) {
+  const [stalled, setStalled] = useState(false);
+  useEffect(() => {
+    if (connected) return;
+    const timer = setTimeout(() => setStalled(true), STALLED_CONNECTION_DELAY);
+    return () => {
+      clearTimeout(timer);
+      setStalled(false);
+    };
+  }, [connected]);
+  return !connected && stalled;
 }

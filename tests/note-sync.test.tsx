@@ -75,6 +75,10 @@ async function openEditors(withVersion = false) {
     const client = new ConvexReactClient(`https://note-sync-${index}.convex.cloud`);
     vi.spyOn(client, "setAuth").mockImplementation((_fetch, notify) => notify?.(true));
     vi.spyOn(client, "clearAuth").mockImplementation(() => {});
+    // The editor reads connection state; keep it connected without opening a socket.
+    const connected = { isWebSocketConnected: true } as ReturnType<typeof client.connectionState>;
+    vi.spyOn(client, "connectionState").mockReturnValue(connected);
+    vi.spyOn(client, "subscribeToConnectionState").mockReturnValue(() => {});
     vi.spyOn(client, "watchQuery").mockImplementation((query, ...[args]) => {
       const key = JSON.stringify([getFunctionName(query), args ?? {}]);
       const store = stores[index];
