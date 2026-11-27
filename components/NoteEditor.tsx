@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback, useRef, useMemo, ViewTransition } from "react";
-import { useQuery, useMutation, useConvexAuth } from "convex/react";
+import { useQuery, useMutation, useConvexAuth, useConvexConnectionState } from "convex/react";
 import { ConvexError } from "convex/values";
 import { api } from "@/convex/_generated/api";
 import type { Id, Doc } from "@/convex/_generated/dataModel";
@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { TagAssigner } from "@/components/TagManager";
 import { RichTextEditor } from "@/components/editor";
 import type { RichTextEditorRef } from "@/components/editor/RichTextEditor";
-import { Pin, History, Sparkles, MoreHorizontal, ArrowLeft } from "lucide-react";
+import { Pin, History, Sparkles, MoreHorizontal, ArrowLeft, X } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,12 +24,21 @@ import { useImageUpload } from "@/lib/use-image-upload";
 import { extractTitleFromHtml } from "@/lib/html-utils";
 import { useAutosave } from "@/lib/use-autosave";
 import { optionLabel, useKeyboardPlatform } from "@/lib/use-keyboard-platform";
-import { acknowledgeDraft, cacheNote, discardDraft, rebaseDraft, recordSubmission, writeDraft, sameText } from "@/lib/offline-notes";
+import { acknowledgeDraft, cacheNote, discardDraft, noteText, rebaseDraft, recordSubmission, writeDraft, type NoteText } from "@/lib/offline-notes";
 import { holdDraft } from "@/lib/offline-sync";
 import { SaveStatus } from "@/components/SaveStatus";
 import { useToast } from "@/components/ui/toast-notification";
 
 type NoteDraft = Pick<Doc<"notes">, "title" | "content">;
+// Device storage keeps at most this much typing unwritten.
+const DRAFT_WRITE_INTERVAL = 300;
+interface PendingDraft {
+  key: string;
+  owner: string;
+  id: Id<"notes">;
+  base: NoteText;
+  text: NoteText;
+}
 
 interface NoteEditorProps {
   noteId: Id<"notes"> | null;
@@ -50,6 +59,7 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
   const router = useRouter();
   const { toast } = useToast();
   const { isAuthenticated } = useConvexAuth();
+  const { isWebSocketConnected } = useConvexConnectionState();
   const liveNote = useQuery(api.notes.getNote, noteId && isAuthenticated ? { id: noteId } : "skip");
   const note = liveNote === undefined ? initialNote : liveNote;
   const isNoteReady = note != null;
@@ -76,39 +86,83 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
   const prevNoteIdRef = useRef<Id<"notes"> | null>(null);
 
   const journal = useRef<string | null>(null);
-  const [localSave, setLocalSave] = useState<{ text: NoteDraft; failed: boolean } | null>(null);
+  const [localSave, setLocalSave] = useState<{ id: Id<"notes">; failed: boolean } | null>(null);
   const latestEdit = useRef<NoteDraft | null>(null);
   const autosaveSettled = useRef<() => Promise<void>>(async () => {});
+  const pendingDraft = useRef<PendingDraft | null>(null);
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftWrites = useRef(Promise.resolve());
+  // Write the newest queued edit now. Writes run in order and never reject.
+  const flushDraft = useCallback(() => {
+    if (draftTimer.current !== null) clearTimeout(draftTimer.current);
+    draftTimer.current = null;
+    const pending = pendingDraft.current;
+    pendingDraft.current = null;
+    if (pending) {
+      const { key, owner, id, base, text } = pending;
+      draftWrites.current = draftWrites.current.then(() =>
+        writeDraft(key, owner, id, base, text)
+          .then(() => { if (latestEdit.current === text) setLocalSave({ id, failed: false }); })
+          .catch(() => { if (latestEdit.current === text) setLocalSave({ id, failed: true }); }),
+      );
+    }
+    return draftWrites.current;
+  }, []);
+  const dropPendingDraft = useCallback(() => {
+    if (draftTimer.current !== null) clearTimeout(draftTimer.current);
+    draftTimer.current = null;
+    pendingDraft.current = null;
+    return draftWrites.current;
+  }, []);
+  useEffect(() => {
+    function flushHidden() {
+      if (document.visibilityState === "hidden") void flushDraft();
+    }
+    document.addEventListener("visibilitychange", flushHidden);
+    window.addEventListener("pagehide", flushDraft);
+    return () => {
+      document.removeEventListener("visibilitychange", flushHidden);
+      window.removeEventListener("pagehide", flushDraft);
+    };
+  }, [flushDraft]);
   useEffect(() => {
     if (!noteId || !window.indexedDB) return;
     const key = crypto.randomUUID();
     journal.current = key;
     const release = holdDraft(key);
     return () => {
+      const written = flushDraft();
       // Autosave flushes the note being left in a later cleanup. Keep the draft
       // until that write settles so reconnect sync cannot submit it a second time.
       queueMicrotask(() => {
-        void autosaveSettled.current().finally(() => {
+        void Promise.all([written, autosaveSettled.current()]).finally(() => {
           if (journal.current === key) journal.current = null;
           release();
         });
       });
     };
-  }, [noteId]);
+  }, [noteId, flushDraft]);
   useEffect(() => {
     if (note && !note.isDeleted && window.indexedDB) {
       void cacheNote(note.userId, note._id, note).catch(console.error);
     }
   }, [note]);
 
+  // Copy edits to device storage at most once per DRAFT_WRITE_INTERVAL instead of on every keystroke.
   function persistEdit(nextTitle: string, nextContent: string) {
     const key = journal.current;
     if (!key || !note || note.isDeleted) return;
     const text = { title: nextTitle || "Untitled", content: nextContent };
     latestEdit.current = text;
-    void writeDraft(key, note.userId, note._id, lastSubmittedRef.current ?? note, text)
-      .then(() => { if (latestEdit.current === text) setLocalSave({ text, failed: false }); })
-      .catch(() => { if (latestEdit.current === text) setLocalSave({ text, failed: true }); });
+    const queued = pendingDraft.current?.key === key ? pendingDraft.current : null;
+    pendingDraft.current = {
+      key,
+      owner: note.userId,
+      id: note._id,
+      base: queued?.base ?? lastSubmittedRef.current ?? noteText(note),
+      text,
+    };
+    draftTimer.current ??= setTimeout(flushDraft, DRAFT_WRITE_INTERVAL);
   }
 
   // Sync state when note changes - defer state updates to avoid synchronous setState
@@ -175,6 +229,7 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
       if (draft.title !== previous?.title) updates.title = draft.title;
       if (draft.content !== previous?.content) updates.content = draft.content;
       const key = journal.current;
+      if (key) await flushDraft();
       if (updates.title === undefined && updates.content === undefined) {
         if (key) await acknowledgeDraft(key, draft).catch(console.error);
         return;
@@ -193,11 +248,15 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
         throw error;
       }
     },
-    [noteId, updateNote, editingActiveNote]
+    [noteId, updateNote, editingActiveNote, flushDraft]
   );
 
   const draft = useMemo(() => ({ title: title || "Untitled", content }), [title, content]);
   const autosave = useAutosave(draft, saveNote, isNoteReady && noteId !== null && loadedNoteId === noteId && !conflict && !restoring);
+  // Only mention device storage while disconnected; online saves sync within seconds.
+  const deviceSave = !isWebSocketConnected && localSave?.id === noteId && autosave.status !== "saved" && autosave.status !== "error"
+    ? localSave
+    : null;
   useEffect(() => {
     autosaveSettled.current = autosave.settled;
   }, [autosave.settled]);
@@ -222,8 +281,13 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
     await autosave.discardPending();
     lastSubmittedRef.current = { title: liveNote.title, content: liveNote.content };
     if (journal.current) {
-      if (keepLocal) await rebaseDraft(journal.current, liveNote).catch(console.error);
-      else await discardDraft(journal.current).catch(console.error);
+      if (keepLocal) {
+        await flushDraft();
+        await rebaseDraft(journal.current, liveNote).catch(console.error);
+      } else {
+        await dropPendingDraft();
+        await discardDraft(journal.current).catch(console.error);
+      }
     }
     if (!keepLocal) {
       setTitle(liveNote.title);
@@ -269,6 +333,15 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
     if (!noteId) return;
     await updateNoteTags({ id: noteId, tagIds });
   };
+
+  async function handleRemoveTag(tagId: Id<"tags">) {
+    try {
+      await handleUpdateTags((note?.tagIds ?? []).filter((id) => id !== tagId));
+    } catch (error) {
+      console.error("Failed to remove tag:", error);
+      toast({ type: "error", title: "Could not remove tag", description: "Please try again." });
+    }
+  }
 
   async function handleRestoreVersion(versionId: Id<"noteVersions">) {
     if (!noteId || conflict || restoringRef.current) return;
@@ -427,9 +500,19 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
                   className="hidden sm:block"
                 >
                   <Badge
-                    className={`${tag.color} text-white text-xs px-2 py-0.5`}
+                    className={`${tag.color} gap-0.5 text-white text-xs py-0.5 pl-2 pr-0.5`}
                   >
                     {tag.name}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${tag.name} tag`}
+                      title={`Remove ${tag.name}`}
+                      disabled={restoring}
+                      onClick={() => void handleRemoveTag(tag._id)}
+                      className="rounded-full p-0.5 opacity-70 hover:bg-black/20 hover:opacity-100 focus-visible:opacity-100 disabled:pointer-events-none"
+                    >
+                      <X className="size-3" />
+                    </button>
                   </Badge>
                 </motion.div>
               ))}
@@ -440,12 +523,15 @@ export function NoteEditor({ noteId, initialNote }: NoteEditorProps) {
               </span>
             )}
 
+            {/* Fixed slot so status changes never shift the toolbar */}
+            <div className="flex min-w-20 justify-end">
+              {deviceSave ? (
+                <span role="status" className="whitespace-nowrap text-xs text-muted-foreground">
+                  {deviceSave.failed ? "Can't save offline" : "Saved offline"}
+                </span>
+              ) : <SaveStatus status={autosave.status} retry={autosave.retry} savedLabel="Synced" quiet />}
+            </div>
             {/* Tag assigner */}
-            {localSave && sameText(localSave.text, draft) && (autosave.status === "saving" || autosave.status === "pending") ? (
-              <span role="status" className="text-xs text-muted-foreground">
-                {localSave.failed ? "Device storage unavailable" : "Saved on this device"}
-              </span>
-            ) : <SaveStatus status={autosave.status} retry={autosave.retry} savedLabel="Synced" quiet />}
             <TagAssigner
               disabled={restoring}
               selectedTagIds={note.tagIds || []}
